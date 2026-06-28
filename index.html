@@ -970,6 +970,7 @@ function abrirDoc(tipo, consulta){
   else if(tipo==='aditivo'){ renderFormAditivo(); }
   else if(tipo==='dispensa'){ renderFormDispensa(); }
   else if(tipo==='inexigibilidade'){ renderFormInexig(); }
+  else if(tipo==='precos'){ renderFormPrecos(); }
   else { renderFormGenerico(tipo); }
   injetarGuia(tipo);
   goto('workspace');
@@ -1386,6 +1387,7 @@ async function gerarDoc(){
   else if(DOC.tipo==='aditivo') html=gerarAditivo();
   else if(DOC.tipo==='dispensa') html=gerarDispensa();
   else if(DOC.tipo==='inexigibilidade') html=gerarInexig();
+  else if(DOC.tipo==='precos') html=gerarMapaPrecos();
   else html=gerarGenerico();
   if(html===false || html==null){ return; } // gerador barrou (ex.: ETP sem elemento obrigatório/justificativa)
   p.className='docpaper'; p.innerHTML=html;
@@ -1495,6 +1497,39 @@ function gerarTR(){
   H+=memoriaPrecos(itens);
   H+='<div class="assina">'+esc(ORG.nome)+'/'+ORG.uf+', ____ de __________ de 2026.<br><br>____________________________________________<br><b>'+esc(secNome||'[secretário(a) responsável]')+'</b><br>'+esc(sec)+(secCargo?'<br>'+esc(secCargo):'')+'</div>';
   H+='<div class="selo"><b>Minuta gerada pelo sistema</b> com base na Lei nº 14.133/2021 e no modelo do órgão. Documento sujeito à conferência, validação e assinatura do servidor responsável antes da publicação. As citações legais devem ser confirmadas pelo setor.</div>';
+  return H;
+}
+// Ferramenta avulsa: Mapa de Pesquisa de Preços (art. 23). Itens + busca PNCP + gera o documento.
+function renderFormPrecos(){
+  var secs=SECRETARIAS.map(function(s){return '<option>'+esc(s)+'</option>';}).join('');
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'precos\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Modelos do órgão para Pesquisa de Preços</button></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Identificação</div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Secretaria / setor</label><select id="f-secretaria">'+secs+'</select></div>';
+  h+='<div class="field"><label>Objeto</label><input id="f-objeto" placeholder="ex.: Aquisição de material de limpeza"></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Itens a pesquisar</div>';
+  h+='<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
+  h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
+  h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
+  h+='<div class="hint" style="margin-top:6px">Um clique: o sistema busca o preço real de cada item no PNCP e preenche a coluna de valor. Depois clique em <b>Gerar documento</b> para sair o Mapa de Pesquisa de Preços, com as fontes.</div>';
+  h+='<div id="precos-todos-res"></div><div id="precos-box"></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+  addLinha();
+}
+function gerarMapaPrecos(){
+  var obj=((document.getElementById('f-objeto')||{}).value||'').trim();
+  var sec=(document.getElementById('f-secretaria')||{}).value||'';
+  var itens=[]; document.querySelectorAll('#itab-body tr').forEach(function(tr){ var d=tr.querySelector('.i-d'); if(d&&d.value.trim()){ var q=Number(tr.querySelector('.i-q').value)||0; var v=Number(tr.querySelector('.i-v').value)||0; itens.push({d:d.value.trim(),u:(tr.querySelector('.i-u').value||'UN'),q:q,v:v,t:q*v}); } });
+  if(!itens.length) return '<div class="selo" style="border-color:#C62D45;background:#FBE9EC;color:#8E1B2E"><b>Adicione os itens primeiro.</b> Inclua ou importe os itens e clique em "Buscar preço oficial dos itens (PNCP)".</div>';
+  var H=docHeader('MAPA DE PESQUISA DE PREÇOS', esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+(sec?'<br>Interessado: '+esc(sec):'')+(obj?'<br>Objeto: '+esc(obj):''));
+  H+='<p>Pesquisa de preços realizada para estimativa do valor da contratação, nos termos do art. 23 da Lei nº 14.133/2021 e da IN SEGES/ME nº 65/2021. Cada preço de referência tem a sua fonte registrada e rastreável; o sistema não estima preço sem fonte.</p>';
+  H+='<h2>1. ITENS E PREÇOS ESTIMADOS</h2>';
+  var tot=0; var linhas=itens.map(function(it,i){ tot+=it.t; return '<tr><td>'+(i+1)+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>'+money(it.v)+'</td><td>'+money(it.t)+'</td></tr>'; }).join('');
+  H+='<table class="itab"><thead><tr><th>Item</th><th>Descrição</th><th>Unid.</th><th>Qtd</th><th>Valor unit. estimado</th><th>Total</th></tr></thead><tbody>'+linhas+'</tbody></table>';
+  H+='<p style="text-align:right;margin-top:8px"><b>Valor total estimado: '+money(tot)+'</b></p>';
+  var fontes=memoriaPrecos(itens);
+  H+= fontes || '<h2>2. FONTES</h2><p>Nenhuma fonte automática registrada. Clique em "Buscar preço oficial dos itens (PNCP)" antes de gerar, para que cada preço saia com a sua origem (art. 23).</p>';
+  H+='<div class="selo"><b>Mapa de pesquisa de preços gerado pelo sistema</b> a partir de fontes reais. Sujeito à conferência e validação do servidor responsável.</div>';
   return H;
 }
 function gerarGenerico(){
@@ -2090,7 +2125,7 @@ function dbSave(){ try{ localStorage.setItem('aop_demo_v1', JSON.stringify({docs
 function dataHoje(){ var d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
 function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
-function nomeTipo(t){ var m={tr:'Termo de Referência',etp:'ETP',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
+function nomeTipo(t){ var m={tr:'Termo de Referência',etp:'ETP',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
 async function registrarDoc(tipo, html){
   var objeto=((document.getElementById('f-objeto')||document.getElementById('g-objeto')||{}).value)||(PROC&&PROC.objeto)||'(sem objeto)';
