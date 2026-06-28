@@ -515,7 +515,7 @@ td .modd{font-size:12px;color:var(--slate)}
             <div class="f4a">➜</div>
             <div class="f4" onclick="abrirDoc('tr',false)"><div class="f4n">2</div><b>Termo de Referência</b><span>Puxa tudo do ETP. Você só confere.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('edital',false)"><div class="f4n">3</div><b>Edital</b><span>Puxa do TR, com as declarações em anexo.</span></div>
+            <div class="f4" onclick="abrirDoc('edital',false)"><div class="f4n">3</div><b>Edital</b><span>Puxa do TR. Já sai com a minuta do contrato e as declarações anexas.</span></div>
             <div class="f4a">➜</div>
             <div class="f4" onclick="abrirDoc('contrato',false)"><div class="f4n">4</div><b>Contrato</b><span>Puxa do edital. Sai pronto para assinar.</span></div>
           </div>
@@ -548,7 +548,7 @@ td .modd{font-size:12px;color:var(--slate)}
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
           <div class="flowstep"><div class="n">2</div><div><b>TR</b><span>Termo de Referência</span></div></div>
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
-          <div class="flowstep"><div class="n">3</div><div><b>Edital</b><span>com Minuta anexa</span></div></div>
+          <div class="flowstep"><div class="n">3</div><div><b>Edital</b><span>com a Minuta e os anexos</span></div></div>
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
           <div class="flowstep"><div class="n">4</div><div><b>Contrato</b><span>dados do vencedor</span></div></div>
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
@@ -1718,6 +1718,7 @@ function gerarEdital(){
   c=++K; H+='<h2>'+c+'. DOS ANEXOS</h2><p>São partes integrantes deste Edital: Anexo I, Termo de Referência; Anexo II, Minuta de Contrato'+(srp?'; Anexo III, Minuta de Ata de Registro de Preços':'')+'; e os modelos a seguir (proposta comercial e declarações'+(obra?', inclusive os termos de vistoria técnica':'')+'), que acompanham este Edital.</p>';
   H+='<div class="assina">'+esc(ORG.nome)+'/'+ORG.uf+', ____ de __________ de 2026.<br><br>____________________________________________<br>Pregoeiro / Autoridade de Licitação</div>';
   H+=memoriaPrecos(PROC.itens);
+  H+=contratoClausulas(null, true); // Anexo II, Minuta do Contrato embutida no edital (preenchida do TR)
   H+=anexosEdital(num, srp);
   H+='<div class="selo"><b>Minuta de edital gerada pelo sistema</b> a partir do Termo de Referência, no padrão da Lei nº 14.133/2021, com os modelos de proposta e declarações em anexo. Sujeita à validação do pregoeiro e do setor jurídico antes da publicação.</div>';
   return H;
@@ -1787,7 +1788,7 @@ function renderFormContrato(){
   h+='<div class="frow c3" style="margin-top:12px"><div class="field"><label>Vigência início</label><input id="c-vini" type="date"></div><div class="field"><label>Vigência fim</label><input id="c-vfim" type="date"></div><div class="field"><label>Fiscal do contrato</label><input id="c-fiscal"></div></div></div>';
   document.getElementById('ws-fields').innerHTML=h;
 }
-function contratoClausulas(v){
+function contratoClausulas(v, embed){
   var num=(v&&v.num)||'____/2026';
   var preg=(PROC&&PROC.numTR)||'____/2026';
   var obj=(PROC&&PROC.objeto)||'[objeto, vem do TR]';
@@ -1796,7 +1797,9 @@ function contratoClausulas(v){
   var razao=v?esc(v.razao||'__________'):'__________ (a qualificar no contrato)';
   var cnpj=v?esc(v.cnpj||'__________'):'__________';
   var rep=v?esc(v.rep||'__________'):'__________';
-  var H=docHeader((v?'CONTRATO':'MINUTA DE CONTRATO')+' Nº '+esc(num), esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+'<br>Vinculado ao '+(PROC&&PROC.modbase||'PREGÃO')+' Nº '+esc(preg));
+  var H = embed
+    ? '<h1 style="margin-top:34px">ANEXO II, MINUTA DO CONTRATO</h1><div class="dsub">'+esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', vinculada ao '+(PROC&&PROC.modbase||'PREGÃO')+' Nº '+esc(preg)+'</div>'
+    : docHeader((v?'CONTRATO':'MINUTA DE CONTRATO')+' Nº '+esc(num), esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+'<br>Vinculado ao '+(PROC&&PROC.modbase||'PREGÃO')+' Nº '+esc(preg));
   var cpf=(v&&v.cpf)?esc(v.cpf):'__________', end=(v&&v.end)?esc(v.end):'__________';
   var fisc=(v&&v.fiscal)?esc(v.fiscal):'servidor a ser designado pela Administração';
   var vigtxt=(v&&v.vini&&v.vfim)?('de '+v.vini+' a '+v.vfim):(esc(vig)+' (doze) meses, contados da assinatura');
