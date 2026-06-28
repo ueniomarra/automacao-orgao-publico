@@ -2067,16 +2067,17 @@ async function registrarDoc(tipo, html){
   var numero=((document.getElementById('f-numtr')||{}).value)||'';
   DB.seq=DB.seq||{};
   if(!numero){ DB.seq[tipo]=(DB.seq[tipo]||0)+1; numero=String(DB.seq[tipo]).padStart(3,'0')+'/2026'; }
-  var rec={id:DOC.id,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:dataHoje(),html:html};
+  var proc=(PROC&&PROC.objeto)?PROC:null; // guarda os dados do processo p/ o contrato puxar depois
+  var rec={id:DOC.id,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:dataHoje(),html:html,proc:proc};
   var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
   // Salva no banco (Supabase) por órgão; localStorage vira só cache/offline
   if(SB && CURRENT_USER){
     try{
       if(DOC.supaId){
-        await SB.from('documentos').update({tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:rec.data,html:html}).eq('id',DOC.supaId);
+        await SB.from('documentos').update({tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:rec.data,html:html,proc:proc}).eq('id',DOC.supaId);
       } else {
         var uid=(await SB.auth.getUser()).data.user; uid=uid&&uid.id;
-        var ins=await SB.from('documentos').insert({orgao_id:orgao,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:rec.data,html:html,criado_por:uid}).select('id').single();
+        var ins=await SB.from('documentos').insert({orgao_id:orgao,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:rec.data,html:html,proc:proc,criado_por:uid}).select('id').single();
         if(!ins.error && ins.data){ DOC.supaId=ins.data.id; }
       }
       if(DOC.supaId) rec.id=DOC.supaId;
@@ -2101,8 +2102,8 @@ async function registrarContrato(rec, orgao){
 async function carregarDoSupabase(){
   if(!SB || !CURRENT_USER) return;
   try{
-    var dd=await SB.from('documentos').select('id,tipo,numero,objeto,secretaria,data,html').order('created_at',{ascending:false});
-    if(!dd.error && dd.data){ DB.docs = dd.data.map(function(r){ return {id:r.id,tipo:r.tipo,numero:r.numero,objeto:r.objeto,secretaria:r.secretaria,data:r.data,html:r.html}; }); seedModelos(); }
+    var dd=await SB.from('documentos').select('id,tipo,numero,objeto,secretaria,data,html,proc').order('created_at',{ascending:false});
+    if(!dd.error && dd.data){ DB.docs = dd.data.map(function(r){ return {id:r.id,tipo:r.tipo,numero:r.numero,objeto:r.objeto,secretaria:r.secretaria,data:r.data,html:r.html,proc:r.proc}; }); seedModelos(); }
     var cc=await SB.from('contratos').select('id,numero,objeto,secretaria,vencimento,valor,status').order('created_at',{ascending:false});
     if(!cc.error && cc.data){ CONTRATOS = cc.data.map(function(r){ return {id:r.id,n:r.numero,obj:r.objeto,sec:r.secretaria,venc:r.vencimento||'a definir',valor:Number(r.valor)||0,status:r.status||'ativo'}; }); }
     var pp=await SB.from('perfis').select('email,nome,papel,perm,ativo,orgao_id');
@@ -2213,7 +2214,8 @@ function renderCentral(){
   body.innerHTML = docs.length? docs.map(function(d){
     var acao = d.tipo==='modelo'
       ? '<span class="chip c-ok" style="cursor:pointer" onclick="usarModelo(\''+d.id+'\')"><svg class="ic"><use href="#i-check"/></svg> Usar este modelo</span> <span style="cursor:pointer;color:#C62D45;font-size:11.5px;font-weight:700;margin-left:8px" onclick="excluirModelo(\''+d.id+'\')">excluir</span>'
-      : '<span class="chip c-edital" style="cursor:pointer" onclick="abrirDocSalvo(\''+d.id+'\')"><svg class="ic"><use href="#i-doc"/></svg> Abrir</span>';
+      : '<span class="chip c-edital" style="cursor:pointer" onclick="abrirDocSalvo(\''+d.id+'\')"><svg class="ic"><use href="#i-doc"/></svg> Abrir</span>'
+        + (d.tipo==='edital' ? ' <span class="chip c-ok" style="cursor:pointer;margin-left:6px" onclick="gerarContratoDoEdital(\''+d.id+'\')"><svg class="ic"><use href="#i-arrow"/></svg> Gerar contrato</span>' : '');
     return '<tr><td><div class="obj">'+esc(nomeTipo(d.tipo))+(d.numero?' '+esc(d.numero):'')+'</div></td><td>'+esc(d.objeto)+'</td><td>'+esc(d.data)+'</td><td>'+acao+'</td></tr>';
   }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:22px">Nenhum '+esc(nomeTipo(docTabAtual).toLowerCase())+' ainda. Os que você gerar ou importar aparecem aqui.</td></tr>';
 }
@@ -2225,6 +2227,15 @@ function abrirDocSalvo(id){
   document.getElementById('ws-fields').innerHTML='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-doc"/></svg><div>Documento salvo no sistema. Use <b>Exportar Word</b> para baixar.</div></div>';
   var p=document.getElementById('ws-preview'); p.className='docpaper'; p.removeAttribute('contenteditable'); p.innerHTML=d.html;
   goto('workspace');
+}
+// Mesmo dias depois (contrato sai após a licitação): puxa o edital salvo e abre o contrato já vinculado
+function gerarContratoDoEdital(id){
+  var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
+  if(!d) return;
+  if(!d.proc || !d.proc.objeto){ toast('Este edital foi gerado antes desta atualização. Para o contrato puxar sozinho, gere o edital de novo (ETP, TR, Edital).'); return; }
+  PROC = d.proc;
+  abrirDoc('contrato', false);
+  toast('Contrato vinculado ao edital '+(d.proc.numTR||d.numero||'')+'. Objeto, número e valor já vieram. Preencha só a empresa vencedora.');
 }
 // Importa um modelo do órgão de verdade: lê o conteúdo do Word (.docx) e guarda usável
 function importarModelo(prefixo){
