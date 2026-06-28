@@ -1378,7 +1378,7 @@ function coletaDot(){
 // ---- gerar documento ----
 async function gerarDoc(){
   var p=document.getElementById('ws-preview');
-  if(DOC.tipo==='modelo-uso'){ toast('Este é um modelo do órgão. Edite o texto direto no documento e clique em Exportar Word.'); return; }
+  if(DOC.modeloUso){ if(!confirm('Isto vai substituir o SEU modelo pelo texto automático do sistema. Deseja continuar?')) return; DOC.modeloUso=false; }
   if(DOC.tipo==='processo'){ toast('Aqui você baixa processos prontos. Use o botão "Baixar processo completo" da contratação na lista ao lado.'); return; }
   var html;
   if(DOC.tipo==='tr') html=gerarTR();
@@ -2365,13 +2365,29 @@ async function salvarModeloBanco(objeto, html){
 }
 function inserirModelo(){ importarModelo(''); }
 // Usar um modelo: abre o documento editável; o servidor ajusta o texto e exporta em Word
+function inferTipoModelo(s){ s=(s||'').toLowerCase();
+  if(/inexig/.test(s)) return 'inexigibilidade';
+  if(/disp/.test(s)) return 'dispensa';
+  if(/contrato/.test(s)) return 'contrato';
+  if(/minuta/.test(s)) return 'minuta';
+  if(/edital|preg[ãa]o|concorr/.test(s)) return 'edital';
+  if(/refer[êe]ncia|\btr\b|termo de ref/.test(s)) return 'tr';
+  if(/\betp\b|estudo t[ée]cnico/.test(s)) return 'etp';
+  if(/parecer/.test(s)) return 'parecer';
+  return 'oficio';
+}
+// Usar o modelo do órgão: vai para o gerador daquele tipo (edital, TR, etc.) já com o modelo carregado para editar e exportar.
 function usarModelo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
   if(!d) return;
-  DOC={tipo:'modelo-uso', consulta:false, itens:[], dot:[], id:null, baseModelo:d.objeto};
-  setTxt('ws-modulo','Usando modelo do órgão'); setTxt('ws-titulo','Documento a partir do modelo'); setTxt('ws-desc',d.objeto);
-  document.getElementById('ws-fields').innerHTML='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Como usar</div><div class="hint">Este é o modelo do órgão. <b>Edite o texto direto no documento ao lado</b> (clique e escreva), depois clique em <b>Exportar Word</b> para baixar pronto.</div></div>';
-  var p=document.getElementById('ws-preview'); p.className='docpaper'; p.innerHTML=d.html; p.setAttribute('contenteditable','true'); p.style.outline='none';
+  var tipoBase=inferTipoModelo(d.objeto);
+  abrirDoc(tipoBase, false);
+  DOC.modeloUso=true; DOC.consulta=false; DOC.id=null; DOC.supaId=null; DOC.baseModelo=d.objeto;
+  setTxt('ws-titulo','Usando o seu modelo de '+nomeTipo(tipoBase)); setTxt('ws-desc', d.objeto);
+  var ff=document.getElementById('ws-fields');
+  if(ff){ var g=ff.querySelector('.guia-box'); if(g) g.remove();
+    ff.insertAdjacentHTML('afterbegin','<div class="guia-box" style="margin:0 0 12px"><div class="guia-h"><svg class="ic" style="width:15px;height:15px;stroke:#0A2342"><use href="#i-check"/></svg> Usando o seu modelo</div><div class="guia-t">O seu modelo de <b>'+esc(nomeTipo(tipoBase))+'</b> está aberto no documento ao lado. <b>Clique no texto, edite o que precisa</b> e clique em <b>Exportar Word</b> para baixar pronto. O botão "Gerar documento" só serve se você quiser, no lugar do seu modelo, o texto automático do sistema.</div></div>'); }
+  var p=document.getElementById('ws-preview'); p.className='docpaper'; p.setAttribute('contenteditable','true'); p.style.outline='none'; p.innerHTML=d.html;
   var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
   goto('workspace');
 }
