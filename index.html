@@ -571,11 +571,7 @@ td .modd{font-size:12px;color:var(--slate)}
         <div class="pagehead"><div><div class="hello">Gestão</div><h1>Trilha de Auditoria</h1><p>Cada movimento fica registrado: quem fez, o quê e quando. Ninguém apaga o histórico. É o que protege o órgão numa fiscalização.</p></div></div>
         <div class="panel">
           <div class="ph"><h3>Movimentações</h3><a><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Filtrar</a></div>
-          <table><thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Item</th></tr></thead><tbody>
-            <tr><td>27/06 09:14</td><td>admin@tur</td><td><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg> Gerou</span></td><td>TR 045/2026 (merenda)</td></tr>
-            <tr><td>27/06 09:02</td><td>staff@tur</td><td><span class="chip c-edital"><svg class="ic"><use href="#i-file"/></svg> Editou</span></td><td>Pesquisa de preços 044/2026</td></tr>
-            <tr><td>27/06 08:50</td><td>admin@tur</td><td><span class="chip c-prc"><svg class="ic"><use href="#i-user"/></svg> Liberou</span></td><td>Permissão de Edital para staff</td></tr>
-          </tbody></table>
+          <table><thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Item</th></tr></thead><tbody id="aud-body"></tbody></table>
         </div>
       </div>
 
@@ -692,6 +688,7 @@ function show(pg){
   if(pg==='central') renderCentral();
   if(pg==='contratos') renderContratos();
   if(pg==='admin') renderAdmin();
+  if(pg==='auditoria') renderAuditoria();
 }
 
 // ---- login (demonstracao de navegacao; o login seguro entra via Supabase) ----
@@ -720,6 +717,7 @@ async function entrar(){
     CURRENT_USER={login:email, nome:perfil.nome||email, papel:perfil.papel||'staff', orgao:perfil.orgao_id||'tur', perm:perfil.perm};
     var oid=perfil.orgao_id||'tur';
     try{ var og=await SB.from('orgaos').select('*').eq('id',oid).single(); if(og.data){ ORG={nome:og.data.nome, uf:og.data.uf||'GO', cnpj:og.data.cnpj||'', endereco:(og.data.endereco||ORG.endereco), ordenador:og.data.gestor||'', cargo:og.data.cargo||'', brasao:(og.data.brasao||ORG.brasao), id:og.data.id}; } }catch(e){}
+    await carregarDoSupabase();
     abrirApp(email);
   }catch(e){ loginErro('Erro ao entrar. Tente de novo.'); }
   if(btn){ btn.disabled=false; btn.innerHTML=orig; }
@@ -1221,7 +1219,7 @@ function coletaDot(){
 }
 
 // ---- gerar documento ----
-function gerarDoc(){
+async function gerarDoc(){
   var p=document.getElementById('ws-preview');
   var html;
   if(DOC.tipo==='tr') html=gerarTR();
@@ -1236,7 +1234,7 @@ function gerarDoc(){
   if(html===false || html==null){ return; } // gerador barrou (ex.: ETP sem elemento obrigatório/justificativa)
   p.className='docpaper'; p.innerHTML=html;
   p.scrollTop=0;
-  if(!DOC.consulta) registrarDoc(DOC.tipo, html);
+  if(!DOC.consulta) await registrarDoc(DOC.tipo, html);
   atualizarChain();
 }
 var PROX_FLUXO={etp:'tr',tr:'edital',edital:'contrato'};
@@ -1899,22 +1897,68 @@ function dataHoje(){ var d=new Date(); return String(d.getDate()).padStart(2,'0'
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
 function nomeTipo(t){ var m={tr:'Termo de Referência',etp:'ETP',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
-function registrarDoc(tipo, html){
+async function registrarDoc(tipo, html){
   var objeto=((document.getElementById('f-objeto')||document.getElementById('g-objeto')||{}).value)||'(sem objeto)';
   var sec=((document.getElementById('f-secretaria')||document.getElementById('g-secretaria')||{}).value)||'';
   var numero=((document.getElementById('f-numtr')||{}).value)||'';
   DB.seq=DB.seq||{};
   if(!numero){ DB.seq[tipo]=(DB.seq[tipo]||0)+1; numero=String(DB.seq[tipo]).padStart(3,'0')+'/2026'; }
-  if(!DOC.id){ DB.seq._g=(DB.seq._g||0)+1; DOC.id='d'+DB.seq._g; }
   var rec={id:DOC.id,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:dataHoje(),html:html};
+  var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
+  // Salva no banco (Supabase) por órgão; localStorage vira só cache/offline
+  if(SB && CURRENT_USER){
+    try{
+      if(DOC.supaId){
+        await SB.from('documentos').update({tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:rec.data,html:html}).eq('id',DOC.supaId);
+      } else {
+        var uid=(await SB.auth.getUser()).data.user; uid=uid&&uid.id;
+        var ins=await SB.from('documentos').insert({orgao_id:orgao,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:rec.data,html:html,criado_por:uid}).select('id').single();
+        if(!ins.error && ins.data){ DOC.supaId=ins.data.id; }
+      }
+      if(DOC.supaId) rec.id=DOC.supaId;
+      registrarAud('Gerou '+nomeTipo(tipo)+' '+numero, objeto, orgao);
+    }catch(e){}
+  }
+  if(!rec.id){ if(!DOC.id){ DB.seq._g=(DB.seq._g||0)+1; DOC.id='d'+DB.seq._g; } rec.id=DOC.id; }
+  DOC.id=rec.id;
   var ix=-1; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===rec.id){ ix=i; break; } }
   if(ix>=0) DB.docs[ix]=rec; else DB.docs.unshift(rec);
-  if(tipo==='contrato') registrarContrato(rec);
+  if(tipo==='contrato') await registrarContrato(rec, orgao);
   dbSave();
 }
-function registrarContrato(rec){
+async function registrarContrato(rec, orgao){
   for(var i=0;i<CONTRATOS.length;i++){ if(CONTRATOS[i].n===rec.numero){ return; } }
-  CONTRATOS.unshift({n:rec.numero,obj:rec.objeto,sec:(rec.secretaria||'Administração').replace(/^Secretaria (de |Municipal de |de )?/,''),venc:'a definir',valor:0,status:'ativo'});
+  var sec=(rec.secretaria||'Administração').replace(/^Secretaria (de |Municipal de |de )?/,'');
+  var c={n:rec.numero,obj:rec.objeto,sec:sec,venc:'a definir',valor:0,status:'ativo'};
+  if(SB && CURRENT_USER){ try{ var ins=await SB.from('contratos').insert({orgao_id:orgao||'tur',numero:rec.numero,objeto:rec.objeto,secretaria:sec,vencimento:'a definir',valor:0,status:'ativo'}).select('id').single(); if(ins.data) c.id=ins.data.id; }catch(e){} }
+  CONTRATOS.unshift(c);
+}
+// Carrega documentos e contratos do órgão (Supabase é a fonte da verdade)
+async function carregarDoSupabase(){
+  if(!SB || !CURRENT_USER) return;
+  try{
+    var dd=await SB.from('documentos').select('id,tipo,numero,objeto,secretaria,data,html').order('created_at',{ascending:false});
+    if(!dd.error && dd.data){ DB.docs = dd.data.map(function(r){ return {id:r.id,tipo:r.tipo,numero:r.numero,objeto:r.objeto,secretaria:r.secretaria,data:r.data,html:r.html}; }); seedModelos(); }
+    var cc=await SB.from('contratos').select('id,numero,objeto,secretaria,vencimento,valor,status').order('created_at',{ascending:false});
+    if(!cc.error && cc.data){ CONTRATOS = cc.data.map(function(r){ return {id:r.id,n:r.numero,obj:r.objeto,sec:r.secretaria,venc:r.vencimento||'a definir',valor:Number(r.valor)||0,status:r.status||'ativo'}; }); }
+  }catch(e){}
+}
+async function registrarAud(acao, item, orgao){
+  if(!SB || !CURRENT_USER) return;
+  try{ await SB.from('auditoria').insert({orgao_id:orgao||'tur', email:CURRENT_USER.login, acao:acao, item:(item||'').slice(0,200)}); }catch(e){}
+}
+async function renderAuditoria(){
+  var body=document.getElementById('aud-body'); if(!body) return;
+  body.innerHTML='<tr><td colspan="4" style="color:var(--slate);padding:18px">Carregando a trilha...</td></tr>';
+  if(!SB){ body.innerHTML='<tr><td colspan="4" style="color:var(--slate);padding:18px">Trilha disponível no sistema publicado.</td></tr>'; return; }
+  try{
+    var r=await SB.from('auditoria').select('email,acao,item,created_at').order('created_at',{ascending:false}).limit(200);
+    var rows=(r.data||[]);
+    body.innerHTML = rows.length ? rows.map(function(a){
+      var d=a.created_at?String(a.created_at).slice(0,16).replace('T',' '):'';
+      return '<tr><td>'+esc(d)+'</td><td>'+esc(a.email||'')+'</td><td><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg> '+esc(a.acao||'')+'</span></td><td>'+esc(a.item||'')+'</td></tr>';
+    }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:18px">Ainda sem movimentações. Cada documento gerado entra aqui.</td></tr>';
+  }catch(e){ body.innerHTML='<tr><td colspan="4" style="color:var(--slate);padding:18px">Não consegui carregar a trilha agora.</td></tr>'; }
 }
 function renderDashboard(){
   if(!document.getElementById('m-docs')) return;
