@@ -601,6 +601,7 @@ td .modd{font-size:12px;color:var(--slate)}
             <div class="wsactions">
               <button class="btn-ghost" onclick="gerarDoc()"><svg class="ic" style="width:16px;height:16px"><use href="#i-doc"/></svg> Gerar documento</button>
               <button class="btn-gold" onclick="exportarWord()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-save"/></svg> Exportar Word</button>
+              <button class="btn-ghost" onclick="exportarProcesso()" title="Baixa ETP, TR, edital e contrato deste processo num único Word"><svg class="ic" style="width:16px;height:16px"><use href="#i-folder"/></svg> Processo completo</button>
               <button class="btn-primary" id="ws-chain" style="display:none;flex:1.4;justify-content:center" onclick="proximoDoFluxo()"></button>
             </div>
           </div>
@@ -1374,6 +1375,27 @@ function exportarWord(){
   var a=document.createElement('a'); a.href=url; a.download=titulo.replace(/[^a-zA-Z0-9]+/g,'_')+'.doc'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url)},1500);
 }
+// Exporta o PROCESSO INTEIRO (ETP, TR, edital, minuta e contrato do mesmo objeto) num Word só
+function exportarProcesso(){
+  var obj=(PROC&&PROC.objeto)|| (document.getElementById('f-objeto')&&document.getElementById('f-objeto').value) || '';
+  obj=(obj||'').trim();
+  if(!obj){ toast('Gere ao menos um documento do processo primeiro (ETP ou TR).'); return; }
+  var ordem={etp:1,tr:2,edital:3,minuta:4,contrato:5,dispensa:6,inexigibilidade:7};
+  var rotulo={etp:'ESTUDO TÉCNICO PRELIMINAR',tr:'TERMO DE REFERÊNCIA',edital:'EDITAL',minuta:'MINUTA DE CONTRATO',contrato:'CONTRATO',dispensa:'DISPENSA',inexigibilidade:'INEXIGIBILIDADE'};
+  var bundle=(DB.docs||[]).filter(function(d){ return ordem[d.tipo] && (d.objeto||'').trim()===obj; });
+  if(!bundle.length){ toast('Não encontrei documentos deste processo. Gere o ETP, o TR e o edital primeiro.'); return; }
+  bundle.sort(function(a,b){ return (ordem[a.tipo]||9)-(ordem[b.tipo]||9); });
+  var capa='<div style="text-align:center;margin-bottom:24pt"><h1 style="font-size:16pt">PROCESSO ADMINISTRATIVO</h1><div class="dsub">'+esc((ORG&&ORG.nome)||'')+'/'+((ORG&&ORG.uf)||'GO')+'</div><p style="font-size:12pt"><b>Objeto:</b> '+esc(obj)+'</p><p style="font-size:10pt;color:#444">Peças deste processo: '+bundle.map(function(d){return rotulo[d.tipo]||d.tipo;}).join(' · ')+'</p></div>';
+  var corpo=bundle.map(function(d){ return '<div style="page-break-before:always"></div><h2 style="font-size:13pt;color:#0A2342;border-bottom:2px solid #C9A961;padding-bottom:4pt">'+(rotulo[d.tipo]||d.tipo)+(d.numero?(' Nº '+esc(d.numero)):'')+'</h2>'+d.html; }).join('');
+  var css='body{font-family:Calibri,sans-serif;font-size:12pt;line-height:1.5;color:#000}h1{font-size:14pt;text-align:center}h2{font-size:12pt;color:#0A2342}.dsub{text-align:center;font-size:10pt;color:#444;margin-bottom:18pt}table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:4pt;font-size:10pt}.assina{text-align:center;margin-top:30pt}.selo{border:1px solid #d9b94f;background:#FBF3DF;padding:8pt;font-size:9pt;margin-top:16pt}';
+  var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+capa+corpo+'</body></html>';
+  var blob=new Blob(['﻿'+html],{type:'application/msword'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download='Processo_'+obj.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,40)+'.doc'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url)},1500);
+  try{ registrarAud('Exportou processo completo', obj); }catch(e){}
+  toast('Processo completo exportado em Word ('+bundle.length+' peças).');
+}
 
 // ===================== GESTÃO DE CONTRATOS =====================
 // status: 'ativo' | 'vence_breve' (vence em ate 30 dias) | 'vencido'. origem: 'manual' (implantacao) | 'sistema'.
@@ -1898,7 +1920,7 @@ function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v;
 function nomeTipo(t){ var m={tr:'Termo de Referência',etp:'ETP',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
 async function registrarDoc(tipo, html){
-  var objeto=((document.getElementById('f-objeto')||document.getElementById('g-objeto')||{}).value)||'(sem objeto)';
+  var objeto=((document.getElementById('f-objeto')||document.getElementById('g-objeto')||{}).value)||(PROC&&PROC.objeto)||'(sem objeto)';
   var sec=((document.getElementById('f-secretaria')||document.getElementById('g-secretaria')||{}).value)||'';
   var numero=((document.getElementById('f-numtr')||{}).value)||'';
   DB.seq=DB.seq||{};
