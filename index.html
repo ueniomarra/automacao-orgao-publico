@@ -681,7 +681,23 @@ function goto(pg){
   document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===pg); });
   show(pg);
 }
+function modulosPermitidos(){
+  var papel=(CURRENT_USER&&CURRENT_USER.papel)||'staff';
+  var perm=((CURRENT_USER&&CURRENT_USER.perm)||'').toLowerCase();
+  var full = papel==='admin' || papel==='superadmin' || perm.indexOf('total')>=0;
+  return { licitacao: full||/licita/.test(perm), compras: full||/compras/.test(perm), ambiente: full||/ambient|meio/.test(perm) };
+}
+function aplicarPermissoes(){
+  var pode=modulosPermitidos();
+  ['licitacao','compras','ambiente'].forEach(function(m){
+    var el=document.querySelector('.nav-i[data-pg="'+m+'"]'); if(el) el.style.display = pode[m]?'':'none';
+  });
+}
 function show(pg){
+  // trava de permissao: bloqueia modulo que o usuario nao tem
+  if(['licitacao','compras','ambiente'].indexOf(pg)>=0 && CURRENT_USER && !modulosPermitidos()[pg]){
+    toast('Você não tem permissão para este módulo. Fale com o administrador do órgão.'); pg='dashboard';
+  }
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
   var t=document.getElementById('pg-'+pg); if(t){t.classList.add('on');}
   document.querySelector('.content').scrollTop=0;
@@ -700,6 +716,7 @@ function abrirApp(email){
   document.getElementById('screen-app').classList.remove('hide');
   document.getElementById('fabs').classList.remove('hide');
   document.getElementById('avatar').textContent=(email[0]||'A').toUpperCase()+(email[1]||'D').toUpperCase();
+  aplicarPermissoes();
   renderDashboard(); renderCentral(); renderAdmin();
 }
 async function entrar(){
