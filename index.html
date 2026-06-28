@@ -287,6 +287,11 @@ td .modd{font-size:12px;color:var(--slate)}
 .precos-stats .ps span{font-size:11px;color:var(--slate);font-weight:600;display:block}
 .precos-stats .ps b{font-family:'Plus Jakarta Sans';font-size:16px;color:var(--ink);margin-top:3px;display:block}
 .precos-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--gold-soft);border:1px solid #ECDDB4;border-radius:10px;padding:11px 14px;margin-top:10px}
+.guia-box{background:#F4F8FE;border:1px solid #CFE0F5;border-left:4px solid #0A2342;border-radius:11px;padding:12px 14px;margin:0 0 14px}
+.guia-h{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;color:#0A2342;text-transform:uppercase;letter-spacing:.4px}
+.guia-t{font-size:13px;line-height:1.55;color:#28364d;margin-top:6px}
+.guia-t b{color:#0A2342}
+.guia-f{font-size:11.5px;line-height:1.45;color:var(--slate);margin-top:8px;padding-top:8px;border-top:1px dashed #CFE0F5}
 .precos-aviso{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;border-radius:9px;padding:8px 11px;margin-top:9px}
 .precos-aviso.av-warn{background:var(--amber-soft);color:#8a5e08}
 .precos-aviso.av-ok{background:#EAF0FB;color:var(--navy)}
@@ -898,8 +903,27 @@ function abrirDoc(tipo, consulta){
   else if(tipo==='dispensa'){ renderFormDispensa(); }
   else if(tipo==='inexigibilidade'){ renderFormInexig(); }
   else { renderFormGenerico(tipo); }
+  injetarGuia(tipo);
   goto('workspace');
   if(tipo==='tr' && ETP_DATA){ puxarDoETP(); }
+}
+// Guia de preenchimento no topo de TODO formulário (linguagem simples, à prova de erro)
+var GUIAS = {
+  etp:'<b>Comece por aqui.</b> O ETP é o estudo que justifica a compra. Preencha o <b>objeto</b> (o que vai comprar), a <b>necessidade</b> (por que precisa) e os <b>itens</b> com quantidade. Os pontos obrigatórios da lei já vêm marcados; se faltar algum, o sistema pede a justificativa. No fim, clique em <b>Gerar</b> e depois no botão que leva para o <b>TR</b>.',
+  tr:'O TR <b>já vem preenchido</b> com o que você colocou no ETP. Só <b>confira e complete</b>. Se a prefeitura tiver um modelo próprio, clique em <b>Modelo do órgão</b>. Marque <b>obra de engenharia</b> só se for obra.',
+  edital:'O edital <b>puxa do TR</b>. Confira a <b>modalidade</b> e o <b>critério de julgamento</b>. As <b>declarações já saem em anexo</b>. Se for obra de engenharia, ele sai no modelo de obra automaticamente.',
+  contrato:'O contrato <b>puxa do edital e do TR</b>. Preencha os <b>dados da empresa vencedora</b> (nome, CNPJ) e o <b>valor</b>. As cláusulas já vêm prontas no padrão da lei.',
+  dispensa:'Use para <b>compra direta</b> dentro do limite da lei. Preencha o <b>objeto</b>, o <b>motivo da dispensa</b> e os <b>itens com valor</b>. O sistema monta o ato.',
+  inexigibilidade:'Use quando <b>só existe um fornecedor possível</b>. Preencha o <b>objeto</b>, a <b>justificativa</b> e os <b>dados do fornecedor</b>.',
+  aditivo:'Use para <b>alterar um contrato que já existe</b>. Informe o <b>contrato</b>, o que muda (<b>prazo, valor ou quantidade</b>) e o <b>motivo</b>.'
+};
+function injetarGuia(tipo){
+  var ff=document.getElementById('ws-fields'); if(!ff) return;
+  if(DOC && DOC.consulta) return;
+  var txt = GUIAS[tipo] || 'Preencha só os campos ao lado e clique em <b>Gerar documento</b>. O sistema completa o resto no padrão da lei.';
+  var d=document.createElement('div'); d.className='guia-box';
+  d.innerHTML='<div class="guia-h"><svg class="ic" style="width:15px;height:15px;stroke:#0A2342"><use href="#i-doc"/></svg> Como preencher</div><div class="guia-t">'+txt+'</div><div class="guia-f">Preencha só o que o sistema pede. O resto sai pronto, no padrão da Lei 14.133/2021. A conferência final é do servidor responsável.</div>';
+  ff.insertBefore(d, ff.firstChild);
 }
 // TR puxa automaticamente do ETP: objeto, secretaria e itens (com quantidades e valor). Nada de redigitar.
 function puxarDoETP(){
