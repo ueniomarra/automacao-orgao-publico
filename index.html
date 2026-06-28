@@ -399,6 +399,7 @@ td .modd{font-size:12px;color:var(--slate)}
     <div class="nav-i" data-pg="licitacao" onclick="nav(this)"><svg class="ic"><use href="#i-gavel"/></svg> Licitações e Contratos</div>
     <div class="nav-i" data-pg="compras" onclick="nav(this)"><svg class="ic"><use href="#i-cart"/></svg> Compras</div>
     <div class="nav-i" data-pg="ambiente" onclick="nav(this)"><svg class="ic"><use href="#i-leaf"/></svg> Meio Ambiente</div>
+    <div class="nav-i" data-pg="analise" onclick="nav(this)"><svg class="ic"><use href="#i-shield"/></svg> Análise de Licitação Online</div>
 
     <div class="navlabel">Documentos</div>
     <div class="nav-i" data-pg="central" onclick="nav(this)"><svg class="ic"><use href="#i-folder"/></svg> Central de Documentos</div>
@@ -492,6 +493,23 @@ td .modd{font-size:12px;color:var(--slate)}
       <div class="page" id="pg-ambiente">
         <div class="pagehead"><div><div class="hello">Módulo 3</div><h1>Meio Ambiente</h1><p>ICMS Ecológico (receita para o órgão), autos de infração, pareceres e vistorias, ancorados na competência municipal de fiscalização.</p></div></div>
         <div class="toolgrid" id="grid-ambiente"></div>
+      </div>
+
+      <!-- ANÁLISE DE LICITAÇÃO ONLINE -->
+      <div class="page" id="pg-analise">
+        <div class="pagehead"><div><div class="hello">Módulo 4</div><h1>Análise de Licitação Online</h1><p>Apoio interno da prefeitura na licitação online, em todas as modalidades: confere e valida a documentação de habilitação, as propostas e a planilha orçamentária dos licitantes, apontando o que está certo e o que precisa de atenção.</p></div></div>
+        <div class="panel">
+          <div class="ph"><h3>O que este módulo vai fazer</h3></div>
+          <div style="padding:6px 2px">
+            <ul class="checks">
+              <li>Receber e organizar a documentação enviada na licitação online.</li>
+              <li>Conferir a habilitação (jurídica, fiscal, trabalhista, econômica e técnica), checando certidões e prazos.</li>
+              <li>Analisar a proposta e a planilha orçamentária após a fase de lances.</li>
+              <li>Apontar pendências e gerar um parecer de conformidade para o pregoeiro e a comissão.</li>
+            </ul>
+            <div class="precos-aviso av-warn" style="margin-top:14px"><svg class="ic" style="width:14px;height:14px"><use href="#i-alert"/></svg> Módulo em desenvolvimento. A estrutura já está reservada aqui; a construção começa em seguida.</div>
+          </div>
+        </div>
       </div>
 
       <!-- CENTRAL DE DOCUMENTOS -->
@@ -685,17 +703,17 @@ function modulosPermitidos(){
   var papel=(CURRENT_USER&&CURRENT_USER.papel)||'staff';
   var perm=((CURRENT_USER&&CURRENT_USER.perm)||'').toLowerCase();
   var full = papel==='admin' || papel==='superadmin' || perm.indexOf('total')>=0;
-  return { licitacao: full||/licita/.test(perm), compras: full||/compras/.test(perm), ambiente: full||/ambient|meio/.test(perm) };
+  return { licitacao: full||/contrato/.test(perm), compras: full||/compras/.test(perm), ambiente: full||/ambient|meio/.test(perm), analise: full||/an[aá]lise/.test(perm) };
 }
 function aplicarPermissoes(){
   var pode=modulosPermitidos();
-  ['licitacao','compras','ambiente'].forEach(function(m){
+  ['licitacao','compras','ambiente','analise'].forEach(function(m){
     var el=document.querySelector('.nav-i[data-pg="'+m+'"]'); if(el) el.style.display = pode[m]?'':'none';
   });
 }
 function show(pg){
   // trava de permissao: bloqueia modulo que o usuario nao tem
-  if(['licitacao','compras','ambiente'].indexOf(pg)>=0 && CURRENT_USER && !modulosPermitidos()[pg]){
+  if(['licitacao','compras','ambiente','analise'].indexOf(pg)>=0 && CURRENT_USER && !modulosPermitidos()[pg]){
     toast('Você não tem permissão para este módulo. Fale com o administrador do órgão.'); pg='dashboard';
   }
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
@@ -2126,9 +2144,10 @@ function liberarUsuario(email){
   var u=null; for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login===email){ u=DB.users[i]; break; } }
   var perm=((u&&u.perm)||'').toLowerCase(); var full=perm.indexOf('total')>=0;
   var mods=[
-    {k:'licitacao',l:'Licitações e Contratos',on: full||/licita/.test(perm)},
+    {k:'licitacao',l:'Licitações e Contratos',on: full||/contrato/.test(perm)},
     {k:'compras',l:'Compras (Dispensa e Inexigibilidade)',on: full||/compras/.test(perm)},
-    {k:'ambiente',l:'Meio Ambiente',on: full||/ambient|meio/.test(perm)}
+    {k:'ambiente',l:'Meio Ambiente',on: full||/ambient|meio/.test(perm)},
+    {k:'analise',l:'Análise de Licitação Online',on: full||/an[aá]lise/.test(perm)}
   ];
   var rows=mods.map(function(m){
     return '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1.5px solid var(--line);border-radius:11px;margin-bottom:9px;cursor:pointer;background:#FAFBFE"><span style="font-weight:600;color:var(--ink);font-size:14px">'+esc(m.l)+'</span><input type="checkbox" class="permchk" data-l="'+esc(m.l)+'" '+(m.on?'checked':'')+' style="width:22px;height:22px;accent-color:var(--royal);cursor:pointer"></label>';
@@ -2139,7 +2158,7 @@ function liberarUsuario(email){
 }
 async function salvarPermissao(email){
   var on=[]; document.querySelectorAll('.permchk').forEach(function(c){ if(c.checked) on.push(c.getAttribute('data-l')); });
-  var perm = on.length===0 ? 'Nenhuma (aguardando liberação)' : (on.length>=3 ? 'Acesso total' : on.join(', '));
+  var perm = on.length===0 ? 'Nenhuma (aguardando liberação)' : (on.length>=4 ? 'Acesso total' : on.join(', '));
   fecharModal();
   var r=await chamarAdmin({acao:'set_perm', email:email, perm:perm});
   if(r.error){ toast('Erro: '+r.error); return; }
