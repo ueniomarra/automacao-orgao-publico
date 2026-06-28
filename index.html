@@ -2026,9 +2026,13 @@ function renderAdmin(){
     var eu = (CURRENT_USER && u.login===CURRENT_USER.login)?' <span style="font-size:10px;color:var(--royal);font-weight:700">(você)</span>':'';
     var oculto = u.papel==='superadmin'?' <span style="font-size:10px;color:var(--slate-soft)">oculto p/ os órgãos</span>':'';
     var col4 = euSuper ? esc(u.papel==='superadmin'?'todos os órgãos':orgaoNome(u.orgao)) : esc(u.perm||'');
-    return '<tr><td><div class="obj">'+esc(u.login)+eu+'</div><div class="modd">'+esc(u.nome||'')+oculto+'</div></td>'+
+    var podeEditar = (euSuper || (CURRENT_USER&&CURRENT_USER.papel==='admin')) && u.papel!=='superadmin' && !(CURRENT_USER&&u.login===CURRENT_USER.login);
+    var lk='cursor:pointer;color:var(--royal);font-size:11px;font-weight:700;margin-left:9px';
+    var acoes = podeEditar ? '<span style="'+lk+'" onclick="liberarUsuario(\''+esc(u.login)+'\')">permissão</span><span style="'+lk+';color:'+(u.ativo?'#C62D45':'#1f7a33')+'" onclick="toggleAtivoUsuario(\''+esc(u.login)+'\','+(u.ativo?'false':'true')+')">'+(u.ativo?'desativar':'ativar')+'</span>' : '';
+    var stbadge = u.ativo?'<span class="st st-a"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Ativo</span>':'<span class="st st-b"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Inativo</span>';
+    return '<tr><td><div class="obj">'+esc(u.login)+eu+'</div><div class="modd">'+esc(u.nome||'')+oculto+(euSuper?'':'<br><span style="font-size:11px;color:var(--slate)">'+esc(u.perm||'')+'</span>')+'</div></td>'+
       '<td><span class="st '+pcls+'">'+papelLabel(u.papel)+'</span></td><td>'+col4+'</td>'+
-      '<td><span class="st st-a"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> '+(u.ativo?'Ativo':'Inativo')+'</span></td></tr>';
+      '<td>'+stbadge+acoes+'</td></tr>';
   }).join('');
 }
 function renderOrgaos(){
@@ -2043,33 +2047,54 @@ function renderOrgaos(){
 }
 function toggleNovoOrgao(show){ var f=document.getElementById('orgao-form'); if(f) f.style.display=show?'block':'none'; if(show){ var n=document.getElementById('o-nome'); if(n) n.focus(); } }
 function novoOrgaoId(nome){ var base=pncpNorm(nome).replace(/prefeitura|municipal|camara|de|do|da/g,'').replace(/[^a-z0-9]/g,'').slice(0,8)||'org'; var id=base, k=2; var existe=function(x){ for(var i=0;i<ORGAOS.length;i++){ if(ORGAOS[i].id===x) return true; } return false; }; while(existe(id)){ id=base+k; k++; } return id; }
+async function chamarAdmin(body){
+  if(!SB) return {error:'sem conexão'};
+  try{ var r=await SB.functions.invoke('admin-users',{body:body}); if(r.error){ var msg=r.error.message; try{ var ctx=await r.error.context.json(); if(ctx&&ctx.error) msg=ctx.error; }catch(e){} return {error:msg}; } if(r.data&&r.data.error) return {error:r.data.error}; return r.data||{ok:true}; }
+  catch(e){ return {error:String(e)}; }
+}
 async function salvarOrgao(){
   if(!(CURRENT_USER && CURRENT_USER.papel==='superadmin')){ toast('Só o superadmin cadastra órgão.'); return; }
   var v=function(id){ return (document.getElementById(id)||{}).value||''; };
   var nome=v('o-nome').trim(); if(!nome){ toast('Informe o nome do órgão.'); document.getElementById('o-nome').focus(); return; }
-  var login=v('o-adm-login').trim(); if(!login){ toast('Informe o login (email) do primeiro admin.'); document.getElementById('o-adm-login').focus(); return; }
+  var email=v('o-adm-login').trim(); if(!email||email.indexOf('@')<0){ toast('Informe um email válido para o admin.'); document.getElementById('o-adm-login').focus(); return; }
+  var senha=v('o-adm-senha').trim(); if(senha.length<6){ toast('Senha do admin: mínimo 6 caracteres.'); document.getElementById('o-adm-senha').focus(); return; }
   var id=novoOrgaoId(nome);
-  var dados={id:id,tipo:v('o-tipo')||'Prefeitura',nome:nome,uf:(v('o-uf')||'GO').toUpperCase().slice(0,2),cnpj:v('o-cnpj').trim(),gestor:v('o-gestor').trim(),cargo:v('o-cargo').trim()};
-  if(SB){
-    try{ var r=await SB.from('orgaos').insert(dados); if(r.error){ toast('Não consegui salvar o órgão: '+r.error.message); return; } }catch(e){ toast('Erro ao salvar o órgão.'); return; }
-    await carregarDoSupabase();
-  } else { ORGAOS.push(dados); }
-  toggleNovoOrgao(false); renderAdmin();
+  var orgao={id:id,tipo:v('o-tipo')||'Prefeitura',nome:nome,uf:(v('o-uf')||'GO').toUpperCase().slice(0,2),cnpj:v('o-cnpj').trim(),gestor:v('o-gestor').trim(),cargo:v('o-cargo').trim()};
+  toast('Implantando o órgão e criando o acesso do admin...');
+  var r=await chamarAdmin({acao:'criar_orgao', orgao:orgao, admin:{email:email, nome:v('o-adm-nome').trim(), senha:senha}});
+  if(r.error){ toast('Erro: '+r.error); return; }
+  await carregarDoSupabase(); toggleNovoOrgao(false); renderAdmin();
   ['o-nome','o-cnpj','o-gestor','o-cargo','o-adm-nome','o-adm-login','o-adm-senha'].forEach(function(x){ var e=document.getElementById(x); if(e) e.value=''; });
-  toast('Órgão "'+nome+'" cadastrado no banco. O acesso do admin ('+login+') é criado pelo servidor seguro (provisionamento), próximo passo.');
+  toast('Órgão "'+nome+'" implantado. O admin '+email+' já pode entrar com a senha definida.');
 }
-function novoUsuario(){
+async function novoUsuario(){
   if(CURRENT_USER && CURRENT_USER.papel==='staff'){ toast('Só o administrador cria usuários.'); return; }
-  var euSuper = CURRENT_USER && CURRENT_USER.papel==='superadmin';
-  if(euSuper){ toggleNovoOrgao(true); return; }
-  if(SB){ toast('A criação de logins é feita pelo servidor seguro (provisionamento de acesso), próximo passo. As senhas nunca passam pelo navegador.'); return; }
-  var login=prompt('Login do novo usuário (ex.: compras.licitacao):'); if(!login) return;
-  for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login===login.trim()){ toast('Já existe usuário com esse login.'); return; } }
-  var nome=prompt('Nome do servidor:')||login;
-  var papel=(prompt('Papel: digite "admin" ou "staff":','staff')||'staff').toLowerCase(); if(papel!=='admin') papel='staff';
-  // CARIMBO automático: o novo usuário herda o órgão de quem o criou
-  DB.users.push({login:login.trim(),nome:nome.trim(),papel:papel,perm:papel==='admin'?'Acesso total':'Nenhuma (aguardando liberação)',ativo:true,orgao:CURRENT_USER.orgao});
-  dbSave(); renderAdmin(); toast('Usuário "'+login.trim()+'" criado no seu órgão ('+orgaoNome(CURRENT_USER.orgao)+').');
+  if(CURRENT_USER && CURRENT_USER.papel==='superadmin'){ toggleNovoOrgao(true); return; }
+  var email=prompt('Email do novo servidor (será o login dele):'); if(!email) return; email=email.trim();
+  if(email.indexOf('@')<0){ toast('Informe um email válido.'); return; }
+  var nome=prompt('Nome do servidor:')||email;
+  var senha=prompt('Senha provisória (mínimo 6; ele troca no primeiro acesso):')||'';
+  if(senha.trim().length<6){ toast('A senha precisa de pelo menos 6 caracteres.'); return; }
+  toast('Criando o acesso...');
+  var r=await chamarAdmin({acao:'criar_usuario', email:email, nome:nome.trim(), senha:senha.trim(), papel:'staff'});
+  if(r.error){ toast('Erro: '+r.error); return; }
+  await carregarDoSupabase(); renderAdmin();
+  toast('Servidor '+email+' criado no seu órgão. Agora clique em "permissão" para liberar o que ele acessa.');
+}
+async function liberarUsuario(email){
+  var op=prompt('Permissão de '+email+'\\nDigite: total, licitacao, compras, ambiente ou nenhuma\\n(separe por vírgula para mais de um):','total');
+  if(op===null) return;
+  var map={total:'Acesso total',licitacao:'Licitações e Contratos',compras:'Compras (Dispensa e Inexigibilidade)',ambiente:'Meio Ambiente',nenhuma:'Nenhuma (aguardando liberação)'};
+  var parts=op.toLowerCase().split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var perm=parts.map(function(p){return map[p]||p;}).join(', ')||'Nenhuma (aguardando liberação)';
+  var r=await chamarAdmin({acao:'set_perm', email:email, perm:perm});
+  if(r.error){ toast('Erro: '+r.error); return; }
+  await carregarDoSupabase(); renderAdmin(); toast('Permissão de '+email+' atualizada: '+perm);
+}
+async function toggleAtivoUsuario(email, ativar){
+  var r=await chamarAdmin({acao:'set_ativo', email:email, ativo:ativar});
+  if(r.error){ toast('Erro: '+r.error); return; }
+  await carregarDoSupabase(); renderAdmin(); toast(email+(ativar?' ativado':' desativado')+'.');
 }
 function inserirModeloTipo(tipo){
   var inp=document.createElement('input'); inp.type='file'; inp.accept='.doc,.docx,.pdf';
