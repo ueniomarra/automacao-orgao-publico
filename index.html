@@ -314,6 +314,7 @@ td .modd{font-size:12px;color:var(--slate)}
 @media(max-width:1080px){.metrics,.bigstat{grid-template-columns:1fr 1fr}.grid2,.ws,.frow.c2,.frow.c3{grid-template-columns:1fr}.login{grid-template-columns:1fr}.login .left{display:none}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 </head>
 <body>
 
@@ -595,8 +596,8 @@ td .modd{font-size:12px;color:var(--slate)}
 
       <!-- RELATORIOS -->
       <div class="page" id="pg-relatorios">
-        <div class="pagehead"><div><div class="hello">Gestão</div><h1>Relatórios</h1><p>Painéis e exportações dos três módulos. Em construção nesta fase.</p></div></div>
-        <div class="emptybox"><svg class="ic"><use href="#i-chart"/></svg><div>Os relatórios entram depois que o motor de documentos estiver gerando dados reais.</div></div>
+        <div class="pagehead"><div><div class="hello">Gestão</div><h1>Relatórios</h1><p>Um resumo simples de tudo que o órgão já fez no sistema: documentos gerados, contratos e prazos.</p></div></div>
+        <div id="rel-body"></div>
       </div>
 
       <!-- BASE LEGAL -->
@@ -724,6 +725,7 @@ function show(pg){
   if(pg==='contratos') renderContratos();
   if(pg==='admin') renderAdmin();
   if(pg==='auditoria') renderAuditoria();
+  if(pg==='relatorios') renderRelatorios();
 }
 
 // ---- login (demonstracao de navegacao; o login seguro entra via Supabase) ----
@@ -764,7 +766,7 @@ async function sairConta(){ try{ if(SB) await SB.auth.signOut(); }catch(e){} sai
 function minhaConta(){
   if(!CURRENT_USER){ return; }
   var orgNome = (CURRENT_USER.papel==='superadmin') ? 'Todos os órgãos (superadmin)' : ((ORG&&ORG.nome)||CURRENT_USER.orgao||'');
-  var h='<div style="font-size:13.5px;line-height:1.9;color:var(--slate)"><b style="color:var(--ink)">'+esc(CURRENT_USER.nome||'')+'</b><br>'+esc(CURRENT_USER.login||'')+'<br>Perfil: '+papelLabel(CURRENT_USER.papel)+'<br>Órgão: '+esc(orgNome)+'</div>';
+  var h='<div style="font-size:13.5px;line-height:1.9;color:var(--slate)"><b style="color:var(--ink)">'+esc(CURRENT_USER.nome||'')+'</b><br>'+esc((CURRENT_USER.login||'').replace(/@queirozmarra\.com$/i,''))+'<br>Perfil: '+papelLabel(CURRENT_USER.papel)+'<br>Órgão: '+esc(orgNome)+'</div>';
   h+='<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn-ghost" type="button" onclick="trocarMeuNome()">Trocar meu nome</button><button class="btn-ghost" type="button" onclick="trocarMinhaSenha()">Trocar minha senha</button><button class="btn-gold" type="button" onclick="fecharModal();sairConta()">Sair</button></div>';
   abrirModal('Minha conta', h);
 }
@@ -909,7 +911,7 @@ function puxarDoETP(){
   if(ff && !document.getElementById('etp-puxado')){ var d=document.createElement('div'); d.id='etp-puxado'; d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px'; d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Objeto, secretaria e itens puxados do ETP. Confira e complete o restante do TR.'; ff.insertBefore(d, ff.firstChild); }
 }
 function voltarModulo(){ var m=DOCMETA[DOC.tipo]; var pg = m && m.mod==='Compras' ? 'compras' : (m && m.mod==='Meio Ambiente' ? 'ambiente' : 'licitacao'); goto(pg); }
-function resetPreview(){ var p=document.getElementById('ws-preview'); p.className='docpaper empty'; p.innerHTML='<svg class="ic"><use href="#i-doc"/></svg><div>Preencha os campos ao lado e clique em <b>Gerar documento</b>.<br>O texto sai pronto, no padrão da lei.</div>'; }
+function resetPreview(){ var p=document.getElementById('ws-preview'); p.removeAttribute('contenteditable'); p.className='docpaper empty'; p.innerHTML='<svg class="ic"><use href="#i-doc"/></svg><div>Preencha os campos ao lado e clique em <b>Gerar documento</b>.<br>O texto sai pronto, no padrão da lei.</div>'; }
 
 // ---- formulário do TR ----
 function renderFormTR(){
@@ -929,7 +931,7 @@ function renderFormTR(){
   h += '<div class="field" style="margin-bottom:12px"><label>Critério de julgamento</label><div id="crit-box"></div></div>';
   h += '<div class="field" style="margin-bottom:12px"><label>Forma de julgamento do objeto</label>'+pills('formajulg',FORMASJULG,'Por item')+'</div>';
   h += '<div id="mod-extra"></div>';
-  h += '<div class="field" style="margin-top:12px"><label>Objeto é obra ou serviço de engenharia?</label>'+pills('engenharia',['Não','Sim'],'Não')+'</div>';
+  h += '<div class="field" style="margin-top:12px"><label>Objeto é obra ou serviço de engenharia?</label>'+pills('engenharia',['Não','Sim'],'Não')+'<div class="hint" style="margin-top:6px">Marque <b>Não</b> para compras e serviços comuns. Marque <b>Sim</b> só para obra/engenharia: o edital sai no modelo de obra, com regime de execução, vistoria técnica, garantia e matriz de riscos.</div></div>';
   h += '<div id="regime-box"></div></div>';
 
   h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Objeto e justificativa</div>';
@@ -1259,6 +1261,7 @@ function coletaDot(){
 // ---- gerar documento ----
 async function gerarDoc(){
   var p=document.getElementById('ws-preview');
+  if(DOC.tipo==='modelo-uso'){ toast('Este é um modelo do órgão. Edite o texto direto no documento e clique em Exportar Word.'); return; }
   var html;
   if(DOC.tipo==='tr') html=gerarTR();
   else if(DOC.tipo==='etp') html=gerarETP();
@@ -1937,18 +1940,7 @@ var ORGAOS=ORGAOS_SEED.slice();
 var DB={docs:[],seq:{},users:USERS_SEED.slice()};
 var CURRENT_USER={login:'ueniomarra',papel:'superadmin'};
 // Modelos reais enviados pela Prefeitura de Turvelândia (semeados na biblioteca)
-var MODELOS_SEED=[
-  {id:'seed_tr_acad',tipo:'modelo',numero:'57/2026',objeto:'TR, Aquisição de Academia ao Ar Livre',secretaria:'Secretaria de Infraestrutura e Serviços Urbanos',data:'30/01/2026',html:'<h1>Termo de Referência (modelo real de Turvelândia)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO, Processo 57/2026</div><p><b>Objeto:</b> Aquisição de academia ao ar livre.</p><p>Modelo real, com texto completo extraído. Base do gerador de TR, no padrão da Lei 14.133/2021.</p>'},
-  {id:'seed_tr_educ',tipo:'modelo',numero:'3377/2026',objeto:'TR, Equipamentos, eletrodomésticos e mobiliários para unidades escolares',secretaria:'Secretaria Municipal de Educação e Cultura',data:'17/04/2026',html:'<h1>Termo de Referência, Equipamentos e Mobiliários Escolares (modelo real)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO, Processo 3377/2026, emenda parlamentar</div><p><b>Objeto:</b> Aquisição de equipamentos, eletrodomésticos e mobiliários para as unidades escolares. Assina: Secretária Municipal de Educação e Cultura (Decreto 2198/2025).</p><p>Modelo real (digitalizado e lido por completo). Tem as 15 cláusulas: objeto e quantitativos (com coluna de imagem do item), justificativa, requisitos, forma e critérios (pregão eletrônico, menor preço por item), dotação, métodos de fornecimento e recebimento, vigência, obrigações, garantia do produto, pagamento (com certidões), fiscalização, garantia de execução, reajuste e sanções.</p>'},
-  {id:'seed_tr_anexo',tipo:'modelo',numero:'',objeto:'TR, Anexo I (modelo digitalizado)',secretaria:'',data:'2026',html:'<h1>Termo de Referência, Anexo I (modelo real digitalizado)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO</div><p>Modelo real de TR usado como Anexo I de edital. Documento digitalizado (imagem). Estrutura no padrão da Lei 14.133/2021.</p>'},
-  {id:'seed_ed11',tipo:'modelo',numero:'11/2026',objeto:'Edital de Pregão Eletrônico 11/2026',secretaria:'',data:'2026',html:'<h1>Edital de Pregão Eletrônico 11/2026 (modelo real)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO</div><p>Modelo real, texto completo lido. Traz os anexos: II ME/EPP (regime de tributação), III idoneidade, IV fatos impeditivos, V não integra empregado público, VI responsabilidade, VII proposta comercial, VIII não emprega menor, IX minuta contratual, X minuta de ata. Base das declarações que saem com o edital.</p>'},
-  {id:'seed_ed10',tipo:'modelo',numero:'10/2026',objeto:'Edital de Pregão Eletrônico 10/2026, eventos',secretaria:'',data:'2026',html:'<h1>Edital de Pregão Eletrônico 10/2026 (modelo real)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO, Processo 3757/2026</div><p><b>Objeto:</b> Registro de preços para realização de eventos promovidos pelo Município. Anexos: II Declarações Unificadas, III ME/EPP, IV proposta comercial, V minuta. Base do modelo de Declarações Unificadas.</p>'},
-  {id:'seed_ed03',tipo:'modelo',numero:'03/2026',objeto:'Edital de Pregão Presencial 03/2026',secretaria:'',data:'2026',html:'<h1>Edital de Pregão Presencial 03/2026 (modelo real)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO</div><p>Modelo real, texto completo lido, modalidade presencial. Mesmo conjunto de declarações em anexo.</p>'},
-  {id:'seed_ed02',tipo:'modelo',numero:'02/2026',objeto:'Edital de Pregão Eletrônico 02/2026',secretaria:'',data:'2026',html:'<h1>Edital de Pregão Eletrônico 02/2026 (modelo real digitalizado)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO</div><p>Modelo real (documento digitalizado, 29 páginas). Referência adicional de edital eletrônico.</p>'},
-  {id:'seed_ct119',tipo:'modelo',numero:'119/2026',objeto:'Contrato 119/2026, Somar Produções e Eventos Ltda',secretaria:'',data:'2026',html:'<h1>Contrato nº 119/2026 (modelo real)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO</div><p><b>Contratada:</b> Somar Produções e Eventos Ltda. Modelo real de contrato, texto completo lido. Base do gerador de contratos, art. 92 da Lei 14.133/2021.</p>'},
-  {id:'seed_ct112',tipo:'modelo',numero:'112',objeto:'Contrato 112, assinado',secretaria:'',data:'2026',html:'<h1>Contrato nº 112 (modelo real digitalizado)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO</div><p>Modelo real de contrato assinado (documento digitalizado). Referência para a geração de contratos.</p>'},
-  {id:'seed_disp',tipo:'modelo',numero:'25395/2026',objeto:'Termo de Dispensa 25395, material de limpeza',secretaria:'Secretaria Municipal de Transportes',data:'26/06/2026',html:'<h1>Ato de Dispensa de Licitação nº 25395 (modelo real)</h1><div class="dsub">Prefeitura Municipal de Turvelândia/GO, Processo 5721/2026</div><p><b>Objeto:</b> Aquisição de material de limpeza (art. 75, II, da Lei 14.133/2021). Fornecedor: Martins Oliveira Ltda. Base do gerador de dispensas.</p>'}
-];
+var MODELOS_SEED=[];
 function seedModelos(){ MODELOS_SEED.forEach(function(m){ var found=false; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===m.id){ DB.docs[i]=m; found=true; break; } } if(!found) DB.docs.push(m); }); }
 function dbLoad(){ try{ var s=localStorage.getItem('aop_demo_v1'); if(s){ var o=JSON.parse(s); DB.docs=o.docs||[]; DB.seq=o.seq||{}; DB.users=(o.users&&o.users.length)?o.users:USERS_SEED.slice(); if(o.contratos&&o.contratos.length) CONTRATOS=o.contratos; if(o.orgaos&&o.orgaos.length) ORGAOS=o.orgaos; } }catch(e){} seedModelos(); }
 function dbSave(){ try{ localStorage.setItem('aop_demo_v1', JSON.stringify({docs:DB.docs,seq:DB.seq,contratos:CONTRATOS,users:DB.users,orgaos:ORGAOS})); }catch(e){} }
@@ -2023,6 +2015,22 @@ async function renderAuditoria(){
     }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:18px">Ainda sem movimentações. Cada documento gerado entra aqui.</td></tr>';
   }catch(e){ body.innerHTML='<tr><td colspan="4" style="color:var(--slate);padding:18px">Não consegui carregar a trilha agora.</td></tr>'; }
 }
+function renderRelatorios(){
+  var body=document.getElementById('rel-body'); if(!body) return;
+  var docs=(DB.docs||[]).filter(function(d){return d.tipo!=='modelo';});
+  var c={}; ['etp','tr','edital','contrato','minuta','dispensa','inexigibilidade','aditivo'].forEach(function(t){c[t]=0;});
+  docs.forEach(function(d){ if(c[d.tipo]!=null) c[d.tipo]++; });
+  var ativos=(CONTRATOS||[]).filter(function(x){return x.status!=='vencido';}).length;
+  var breve=(CONTRATOS||[]).filter(function(x){return x.status==='vence_breve';}).length;
+  var venc=(CONTRATOS||[]).filter(function(x){return x.status==='vencido';}).length;
+  var valor=(CONTRATOS||[]).reduce(function(a,x){return a+(Number(x.valor)||0);},0);
+  function card(n,l,cor){ return '<div style="flex:1;min-width:120px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center"><div style="font-size:28px;font-weight:800;color:'+(cor||'var(--navy)')+'">'+n+'</div><div style="font-size:12.5px;color:var(--slate);font-weight:600;margin-top:4px">'+l+'</div></div>'; }
+  var h='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+card(docs.length,'documentos gerados')+card((c.etp+c.tr),'ETP e TR')+card(c.edital,'editais')+card((c.contrato+c.minuta),'contratos e minutas')+card((c.dispensa+c.inexigibilidade),'dispensas/inexig.')+'</div>';
+  h+='<div class="panel"><div class="ph"><h3>Contratos</h3></div><div style="display:flex;gap:12px;flex-wrap:wrap;padding:6px 2px">'+card(ativos,'ativos','#1E7D44')+card(breve,'vencem em breve','#9a6a0a')+card(venc,'vencidos','#C62D45')+card(money(valor),'valor total')+'</div></div>';
+  var rows=''; [['etp','ETP'],['tr','Termo de Referência'],['edital','Edital'],['minuta','Minuta de Contrato'],['contrato','Contrato'],['dispensa','Dispensa'],['inexigibilidade','Inexigibilidade'],['aditivo','Aditivo']].forEach(function(t){ rows+='<tr><td>'+t[1]+'</td><td style="text-align:right">'+(c[t[0]]||0)+'</td></tr>'; });
+  h+='<div class="panel"><div class="ph"><h3>Documentos por tipo</h3></div><table><thead><tr><th>Tipo</th><th style="text-align:right">Quantidade</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  body.innerHTML=h;
+}
 function renderDashboard(){
   if(!document.getElementById('m-docs')) return;
   var docs=DB.docs||[];
@@ -2041,7 +2049,12 @@ function renderDashboard(){
 function renderCentral(){
   var body=document.getElementById('central-body'); if(!body) return;
   var docs=(DB.docs||[]).filter(function(d){return d.tipo===docTabAtual;});
-  body.innerHTML = docs.length? docs.map(function(d){ return '<tr><td><div class="obj">'+esc(nomeTipo(d.tipo))+(d.numero?' '+esc(d.numero):'')+'</div></td><td>'+esc(d.objeto)+'</td><td>'+esc(d.data)+'</td><td><span class="chip c-edital" style="cursor:pointer" onclick="abrirDocSalvo(\''+d.id+'\')"><svg class="ic"><use href="#i-doc"/></svg> Abrir</span></td></tr>'; }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:22px">Nenhum '+esc(nomeTipo(docTabAtual).toLowerCase())+' ainda. Os que você gerar ou importar aparecem aqui.</td></tr>';
+  body.innerHTML = docs.length? docs.map(function(d){
+    var acao = d.tipo==='modelo'
+      ? '<span class="chip c-ok" style="cursor:pointer" onclick="usarModelo(\''+d.id+'\')"><svg class="ic"><use href="#i-check"/></svg> Usar este modelo</span> <span style="cursor:pointer;color:#C62D45;font-size:11.5px;font-weight:700;margin-left:8px" onclick="excluirModelo(\''+d.id+'\')">excluir</span>'
+      : '<span class="chip c-edital" style="cursor:pointer" onclick="abrirDocSalvo(\''+d.id+'\')"><svg class="ic"><use href="#i-doc"/></svg> Abrir</span>';
+    return '<tr><td><div class="obj">'+esc(nomeTipo(d.tipo))+(d.numero?' '+esc(d.numero):'')+'</div></td><td>'+esc(d.objeto)+'</td><td>'+esc(d.data)+'</td><td>'+acao+'</td></tr>';
+  }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:22px">Nenhum '+esc(nomeTipo(docTabAtual).toLowerCase())+' ainda. Os que você gerar ou importar aparecem aqui.</td></tr>';
 }
 function abrirDocSalvo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
@@ -2049,13 +2062,56 @@ function abrirDocSalvo(id){
   DOC={tipo:d.tipo,consulta:true,itens:[],dot:[],id:d.id};
   setTxt('ws-modulo','Documento salvo'); setTxt('ws-titulo',nomeTipo(d.tipo)+(d.numero?' '+d.numero:'')); setTxt('ws-desc',d.objeto);
   document.getElementById('ws-fields').innerHTML='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-doc"/></svg><div>Documento salvo no sistema. Use <b>Exportar Word</b> para baixar.</div></div>';
-  var p=document.getElementById('ws-preview'); p.className='docpaper'; p.innerHTML=d.html;
+  var p=document.getElementById('ws-preview'); p.className='docpaper'; p.removeAttribute('contenteditable'); p.innerHTML=d.html;
   goto('workspace');
 }
-function inserirModelo(){
-  var inp=document.createElement('input'); inp.type='file'; inp.accept='.doc,.docx,.pdf';
-  inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return; DB.seq=DB.seq||{}; DB.seq._g=(DB.seq._g||0)+1; DB.docs.unshift({id:'d'+DB.seq._g,tipo:'modelo',numero:'',objeto:f.name,secretaria:'',data:dataHoje(),html:'<h1>Modelo do órgão</h1><p>Arquivo enviado: '+esc(f.name)+'.</p><p>Na publicação, o sistema passa a gerar os documentos no timbre e no texto deste modelo do seu órgão (substitui a base). Por enquanto fica registrado aqui na Central.</p>'}); dbSave(); toast('Modelo "'+f.name+'" enviado. Veja na Central, aba Modelos importados.'); if(document.getElementById('pg-central').classList.contains('on')) renderCentral(); };
+// Importa um modelo do órgão de verdade: lê o conteúdo do Word (.docx) e guarda usável
+function importarModelo(prefixo){
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.docx,.doc,.pdf';
+  inp.onchange=async function(){
+    var f=inp.files&&inp.files[0]; if(!f) return;
+    var nome=(prefixo?prefixo+': ':'')+f.name;
+    var ext=(f.name.split('.').pop()||'').toLowerCase();
+    toast('Importando "'+f.name+'"...');
+    var html='';
+    if(ext==='docx' && window.mammoth){
+      try{ var ab=await f.arrayBuffer(); var res=await window.mammoth.convertToHtml({arrayBuffer:ab}); html=res.value||''; }catch(e){ html=''; }
+    }
+    if(html){ html='<div class="dsub">Modelo do órgão: '+esc(f.name)+'</div>'+html; }
+    else { html='<h1>'+esc(f.name)+'</h1><p>Modelo do órgão importado como referência. Para <b>editar e reutilizar</b> dentro do sistema, envie em <b>Word (.docx)</b>; PDF e .doc antigos entram só para consulta.</p>'; }
+    await salvarModeloBanco(nome, html);
+  };
   inp.click();
+}
+async function salvarModeloBanco(objeto, html){
+  var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
+  var id=null;
+  if(SB && CURRENT_USER){ try{ var ins=await SB.from('documentos').insert({orgao_id:orgao,tipo:'modelo',numero:'',objeto:objeto,data:dataHoje(),html:html}).select('id').single(); if(ins.data) id=ins.data.id; }catch(e){} }
+  if(!id){ DB.seq=DB.seq||{}; DB.seq._g=(DB.seq._g||0)+1; id='d'+DB.seq._g; }
+  DB.docs.unshift({id:id,tipo:'modelo',numero:'',objeto:objeto,secretaria:'',data:dataHoje(),html:html});
+  dbSave(); try{ registrarAud('Importou modelo', objeto, orgao); }catch(e){}
+  docTabAtual='modelo'; if(document.getElementById('pg-central').classList.contains('on')) renderCentral();
+  toast('Modelo "'+objeto+'" importado. Está na Central, aba Modelos importados. Clique em "Usar este modelo".');
+}
+function inserirModelo(){ importarModelo(''); }
+// Usar um modelo: abre o documento editável; o servidor ajusta o texto e exporta em Word
+function usarModelo(id){
+  var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
+  if(!d) return;
+  DOC={tipo:'modelo-uso', consulta:false, itens:[], dot:[], id:null, baseModelo:d.objeto};
+  setTxt('ws-modulo','Usando modelo do órgão'); setTxt('ws-titulo','Documento a partir do modelo'); setTxt('ws-desc',d.objeto);
+  document.getElementById('ws-fields').innerHTML='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Como usar</div><div class="hint">Este é o modelo do órgão. <b>Edite o texto direto no documento ao lado</b> (clique e escreva), depois clique em <b>Exportar Word</b> para baixar pronto.</div></div>';
+  var p=document.getElementById('ws-preview'); p.className='docpaper'; p.innerHTML=d.html; p.setAttribute('contenteditable','true'); p.style.outline='none';
+  var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
+  goto('workspace');
+}
+async function excluirModelo(id){
+  var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
+  if(!d) return;
+  if(!confirm('Excluir o modelo "'+(d.objeto||'')+'"? Essa ação não pode ser desfeita.')) return;
+  if(SB && CURRENT_USER){ try{ await SB.from('documentos').delete().eq('id',id); registrarAud('Excluiu modelo', d.objeto, (CURRENT_USER.orgao!=='*'?CURRENT_USER.orgao:'tur')); }catch(e){} }
+  DB.docs = (DB.docs||[]).filter(function(x){ return x.id!==id; });
+  dbSave(); renderCentral(); toast('Modelo excluído.');
 }
 function salvarAlteracoes(){
   var p=document.getElementById('ws-preview');
@@ -2089,7 +2145,7 @@ function renderAdmin(){
     var lk='cursor:pointer;color:var(--royal);font-size:11px;font-weight:700;margin-left:9px';
     var acoes = podeEditar ? '<span style="'+lk+'" onclick="liberarUsuario(\''+esc(u.login)+'\')">permissão</span><span style="'+lk+';color:'+(u.ativo?'#C62D45':'#1f7a33')+'" onclick="toggleAtivoUsuario(\''+esc(u.login)+'\','+(u.ativo?'false':'true')+')">'+(u.ativo?'desativar':'ativar')+'</span>' : '';
     var stbadge = u.ativo?'<span class="st st-a"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Ativo</span>':'<span class="st st-b"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Inativo</span>';
-    return '<tr><td><div class="obj">'+esc(u.login)+eu+'</div><div class="modd">'+esc(u.nome||'')+oculto+(euSuper?'':'<br><span style="font-size:11px;color:var(--slate)">'+esc(u.perm||'')+'</span>')+'</div></td>'+
+    return '<tr><td><div class="obj">'+esc((u.login||'').replace(/@queirozmarra\.com$/i,''))+eu+'</div><div class="modd">'+esc(u.nome||'')+oculto+(euSuper?'':'<br><span style="font-size:11px;color:var(--slate)">'+esc(u.perm||'')+'</span>')+'</div></td>'+
       '<td><span class="st '+pcls+'">'+papelLabel(u.papel)+'</span></td><td>'+col4+'</td>'+
       '<td>'+stbadge+acoes+'</td></tr>';
   }).join('');
@@ -2169,11 +2225,13 @@ async function toggleAtivoUsuario(email, ativar){
   if(r.error){ toast('Erro: '+r.error); return; }
   await carregarDoSupabase(); renderAdmin(); toast(email+(ativar?' ativado':' desativado')+'.');
 }
-function inserirModeloTipo(tipo){
-  var inp=document.createElement('input'); inp.type='file'; inp.accept='.doc,.docx,.pdf';
-  inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return; DB.seq=DB.seq||{}; DB.seq._g=(DB.seq._g||0)+1; DB.docs.unshift({id:'d'+DB.seq._g,tipo:'modelo',numero:'',objeto:f.name+' (modelo de '+nomeTipo(tipo)+')',secretaria:'',data:dataHoje(),html:'<h1>Modelo do órgão</h1><p>Modelo de <b>'+esc(nomeTipo(tipo))+'</b> enviado: '+esc(f.name)+'.</p><p>Na publicação, o sistema passa a gerar o '+esc(nomeTipo(tipo))+' no timbre e no texto deste modelo do seu órgão.</p>'}); dbSave(); toast('Modelo de '+nomeTipo(tipo)+' enviado. Está na Central, aba Modelos importados.'); };
-  inp.click();
+function openModelos(tipo){
+  var ms=(DB.docs||[]).filter(function(d){return d.tipo==='modelo';});
+  var lista = ms.length ? ms.map(function(m){ return '<div class="modal-row" style="cursor:pointer" onclick="fecharModal();usarModelo(\''+m.id+'\')"><b>'+esc(nomeTipo(m.tipo))+(m.numero?' '+esc(m.numero):'')+'</b><span>'+esc(m.objeto)+'</span></div>'; }).join('') : '<p style="color:var(--slate);font-size:13px;margin:0">Nenhum modelo do órgão salvo ainda. Envie o primeiro abaixo.</p>';
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">Use um modelo do órgão já salvo (clique nele), ou envie um novo em Word (.docx):</p>'+lista+'<div style="margin-top:16px"><button class="btn-gold" type="button" onclick="fecharModal();importarModelo(\''+(tipo?esc(nomeTipo(tipo)):'')+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Enviar novo modelo (Word)</button></div>';
+  abrirModal('Modelos do órgão', h);
 }
+function inserirModeloTipo(tipo){ openModelos(tipo); }
 function buscaGlobal(){
   var q=((document.getElementById('busca-global')||{}).value||'').trim(); if(!q) return;
   var nq=pncpNorm(q);
