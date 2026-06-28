@@ -526,13 +526,14 @@ td .modd{font-size:12px;color:var(--slate)}
 
       <!-- GESTAO DE CONTRATOS -->
       <div class="page" id="pg-contratos">
-        <div class="pagehead"><div><div class="hello">Documentos</div><h1>Gestão de Contratos</h1><p>Todos os contratos vivos, com alerta antes de vencer. Status, vigência, valor e secretaria num painel só. Os contratos gerados no sistema entram aqui sozinhos; os antigos você lança na implantação.</p></div></div>
+        <div class="pagehead"><div><div class="hello">Documentos</div><h1>Gestão de Contratos</h1><p>Todos os contratos vivos, com alerta antes de vencer. Status, vigência, valor e secretaria num painel só. Os contratos gerados no sistema entram aqui sozinhos; os antigos você lança no botão ao lado.</p></div>
+          <button class="btn-gold" onclick="novoContratoManual()"><svg class="ic" style="width:18px;height:18px;stroke:#3a2c06"><use href="#i-plus"/></svg> Novo contrato (manual)</button></div>
         <div class="bigstat" id="ct-stats"></div>
         <div class="grid2">
           <div class="panel">
             <div class="ph"><h3>Contratos por secretaria e fundo</h3>
               <select id="ct-filtro" onchange="renderContratos()" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-family:inherit;font-size:13px;color:var(--ink);background:#fff;font-weight:600"></select></div>
-            <table><thead><tr><th>Contrato</th><th>Objeto</th><th>Secretaria/Fundo</th><th>Vigência</th><th>Status</th></tr></thead><tbody id="ct-body"></tbody></table>
+            <table><thead><tr><th>Contrato</th><th>Objeto</th><th>Secretaria/Fundo</th><th>Vigência</th><th>Valor</th><th>Status</th></tr></thead><tbody id="ct-body"></tbody></table>
           </div>
           <div class="panel">
             <div class="ph"><h3>Alertas automáticos do mês</h3><span class="chip c-jur"><svg class="ic"><use href="#i-bell"/></svg> Junho/2026</span></div>
@@ -1448,6 +1449,30 @@ var CONTRATOS = [
   {n:'015/2025',obj:'Material de expediente',sec:'Administração',venc:'01/09/2026',valor:360000,status:'ativo'}
 ];
 function fmtMilhao(v){ return v>=1000000 ? ('R$ '+(v/1000000).toFixed(1).replace('.',',')+' mi') : money(v); }
+function novoContratoManual(){
+  var opt=SECRETARIAS.map(function(s){return '<option>'+esc(s)+'</option>';}).join('');
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">Lance aqui os contratos antigos que já existem, para o sistema controlar o vencimento. Os contratos gerados no sistema entram sozinhos.</p>'+
+    '<div class="field"><label>Número do contrato</label><input id="nc-num" placeholder="ex: 012/2025"></div>'+
+    '<div class="field" style="margin-top:10px"><label>Objeto (o que foi contratado)</label><input id="nc-obj" placeholder="ex: Coleta de resíduos sólidos"></div>'+
+    '<div class="field" style="margin-top:10px"><label>Secretaria ou fundo</label><select id="nc-sec">'+opt+'</select></div>'+
+    '<div class="field" style="margin-top:10px"><label>Vigência até (data de vencimento)</label><input id="nc-venc" type="date"></div>'+
+    '<div class="field" style="margin-top:10px"><label>Valor do contrato (R$)</label><input id="nc-val" type="number" min="0" step="0.01" placeholder="ex: 432000"></div>'+
+    '<div class="field" style="margin-top:10px"><label>Situação</label><select id="nc-st"><option value="ativo">Ativo</option><option value="vence_breve">Vence em breve</option><option value="vencido">Vencido</option></select></div>'+
+    '<button class="btn-gold" style="width:100%;justify-content:center;margin-top:14px" onclick="salvarContratoManual()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Salvar contrato</button>';
+  abrirModal('Novo contrato (manual)', h);
+}
+async function salvarContratoManual(){
+  function gv(id){ var e=document.getElementById(id); return e?e.value:''; }
+  var num=(gv('nc-num')||'').trim(), obj=(gv('nc-obj')||'').trim(), sec=gv('nc-sec'), vd=gv('nc-venc'), valor=Number(gv('nc-val'))||0, st=gv('nc-st')||'ativo';
+  if(!num||!obj){ toast('Preencha pelo menos o número e o objeto do contrato.'); return; }
+  for(var i=0;i<CONTRATOS.length;i++){ if(CONTRATOS[i].n===num){ toast('Já existe um contrato com o número '+num+'.'); return; } }
+  var venc = vd ? vd.split('-').reverse().join('/') : 'a definir';
+  var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
+  var c={n:num,obj:obj,sec:sec,venc:venc,valor:valor,status:st};
+  if(SB && CURRENT_USER){ try{ var ins=await SB.from('contratos').insert({orgao_id:orgao,numero:num,objeto:obj,secretaria:sec,vencimento:venc,valor:valor,status:st}).select('id').single(); if(ins.data) c.id=ins.data.id; registrarAud('Cadastrou contrato', num+', '+obj, orgao); }catch(e){} }
+  CONTRATOS.unshift(c);
+  fecharModal(); renderContratos(); if(typeof renderDashboard==='function') renderDashboard(); toast('Contrato '+num+' cadastrado na gestão de contratos.');
+}
 function stTag(s){
   if(s==='vencido') return '<span class="st st-v"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Vencido</span>';
   if(s==='vence_breve') return '<span class="st st-b"><svg class="ic" style="width:13px;height:13px"><use href="#i-clock"/></svg> Vence em breve</span>';
@@ -1455,10 +1480,11 @@ function stTag(s){
 }
 function renderContratos(){
   var filtroEl=document.getElementById('ct-filtro'); if(!filtroEl) return;
-  if(!filtroEl.options.length){
-    var secs=['Todas as secretarias e fundos']; CONTRATOS.forEach(function(c){ if(secs.indexOf(c.sec)<0) secs.push(c.sec); });
-    filtroEl.innerHTML=secs.map(function(s){return '<option>'+s+'</option>';}).join('');
-  }
+  var selAtual=filtroEl.value;
+  var secs=['Todas as secretarias e fundos'].concat(SECRETARIAS);
+  CONTRATOS.forEach(function(c){ if(c.sec && secs.indexOf(c.sec)<0) secs.push(c.sec); });
+  filtroEl.innerHTML=secs.map(function(s){return '<option>'+esc(s)+'</option>';}).join('');
+  if(selAtual && secs.indexOf(selAtual)>=0) filtroEl.value=selAtual;
   var f=filtroEl.value; var todos = !f || /Todas/.test(f);
   var lista = CONTRATOS.filter(function(c){ return todos || c.sec===f; });
   // stats (sempre sobre o total, nao sobre o filtro)
@@ -1472,8 +1498,8 @@ function renderContratos(){
     '<div class="bcard bad"><div class="bi"><svg class="ic" style="width:24px;height:24px;stroke:#fff"><use href="#i-alert"/></svg></div><div class="bval">'+vencidos+'</div><div class="blbl">Vencidos para rescisão</div></div>';
   // tabela
   document.getElementById('ct-body').innerHTML = lista.map(function(c){
-    return '<tr><td><div class="obj">'+c.n+'</div></td><td>'+esc(c.obj)+'</td><td>'+esc(c.sec)+'</td><td>'+c.venc+'</td><td>'+stTag(c.status)+'</td></tr>';
-  }).join('') || '<tr><td colspan="5" style="color:var(--slate)">Nenhum contrato nesta secretaria.</td></tr>';
+    return '<tr><td><div class="obj">'+c.n+'</div></td><td>'+esc(c.obj)+'</td><td>'+esc(c.sec)+'</td><td>'+c.venc+'</td><td>'+money(c.valor)+'</td><td>'+stTag(c.status)+'</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="color:var(--slate)">Nenhum contrato nesta secretaria.</td></tr>';
   // alertas do mes (junho/2026): vence_breve e vencido
   var al=CONTRATOS.filter(function(c){return c.status!=='ativo'});
   document.getElementById('ct-alertas').innerHTML = al.map(function(c){
@@ -1979,7 +2005,7 @@ async function registrarDoc(tipo, html){
 }
 async function registrarContrato(rec, orgao){
   for(var i=0;i<CONTRATOS.length;i++){ if(CONTRATOS[i].n===rec.numero){ return; } }
-  var sec=(rec.secretaria||'Administração').replace(/^Secretaria (de |Municipal de |de )?/,'');
+  var sec=(rec.secretaria||'Secretaria de Administração');
   var c={n:rec.numero,obj:rec.objeto,sec:sec,venc:'a definir',valor:0,status:'ativo'};
   if(SB && CURRENT_USER){ try{ var ins=await SB.from('contratos').insert({orgao_id:orgao||'tur',numero:rec.numero,objeto:rec.objeto,secretaria:sec,vencimento:'a definir',valor:0,status:'ativo'}).select('id').single(); if(ins.data) c.id=ins.data.id; }catch(e){} }
   CONTRATOS.unshift(c);
