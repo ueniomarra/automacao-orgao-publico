@@ -313,6 +313,7 @@ td .modd{font-size:12px;color:var(--slate)}
 .modal-row span{display:block;font-size:12px;color:var(--slate);margin-top:2px}
 @media(max-width:1080px){.metrics,.bigstat{grid-template-columns:1fr 1fr}.grid2,.ws,.frow.c2,.frow.c3{grid-template-columns:1fr}.login{grid-template-columns:1fr}.login .left{display:none}}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -370,7 +371,7 @@ td .modd{font-size:12px;color:var(--slate)}
       <div class="loginerr" id="loginerr"><svg class="ic" style="width:16px;height:16px"><use href="#i-alert"/></svg> Usuário ou senha inválidos. Confira e tente de novo.</div>
       <div class="fld">
         <label>Usuário</label>
-        <div class="inp"><svg class="ic"><use href="#i-user"/></svg><input id="in-user" type="text" placeholder="ex.: admin@tur" autocomplete="username"></div>
+        <div class="inp"><svg class="ic"><use href="#i-user"/></svg><input id="in-user" type="text" placeholder="ex.: admin@tur.gov.br" autocomplete="username"></div>
       </div>
       <div class="fld">
         <label>Senha</label>
@@ -380,7 +381,7 @@ td .modd{font-size:12px;color:var(--slate)}
         <span class="chkbox"><i></i> Manter conectado</span>
         <a class="link" href="#">Esqueci a senha</a>
       </div>
-      <button class="btn-primary" onclick="entrar()">Entrar <svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#i-arrow"/></svg></button>
+      <button class="btn-primary" id="btn-entrar" onclick="entrar()">Entrar <svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#i-arrow"/></svg></button>
       <div class="foot-login"><svg class="ic" style="width:15px;height:15px"><use href="#i-lock"/></svg> Ambiente de demonstração de navegação</div>
     </div>
   </div>
@@ -422,8 +423,8 @@ td .modd{font-size:12px;color:var(--slate)}
         <button class="iconbtn" title="Buscar" onclick="buscaGlobal()" style="width:42px"><svg class="ic" style="width:18px;height:18px"><use href="#i-search"/></svg></button>
         <button class="btn-save" onclick="salvarAlteracoes()"><svg class="ic" style="width:17px;height:17px;stroke:#3a2c06"><use href="#i-save"/></svg> Salvar alterações</button>
         <div class="iconbtn" onclick="abrirAlertas()" title="Alertas"><svg class="ic" style="width:19px;height:19px"><use href="#i-bell"/></svg><span class="dot"></span></div>
-        <div class="avatar" id="avatar">AD</div>
-        <div class="iconbtn" title="Sair" onclick="sair()"><svg class="ic" style="width:18px;height:18px"><use href="#i-logout"/></svg></div>
+        <div class="avatar" id="avatar" title="Minha conta" style="cursor:pointer" onclick="minhaConta()">AD</div>
+        <div class="iconbtn" title="Sair" onclick="sairConta()"><svg class="ic" style="width:18px;height:18px"><use href="#i-logout"/></svg></div>
       </div>
     </header>
 
@@ -626,6 +627,10 @@ td .modd{font-size:12px;color:var(--slate)}
 </div>
 
 <script>
+// ---- Supabase: login real e separacao por orgao (chave publica, protegida por RLS no banco) ----
+var SB_URL='https://sabgaxgsxakfnzcncled.supabase.co';
+var SB_KEY='sb_publishable_iroA-3hx3ZI1nxokJIxbrQ_SQhLwPNz';
+var SB=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_KEY):null;
 // ---- catalogo de ferramentas por modulo (estrutura travada dos documentos) ----
 var TOOLS = {
   licitacao:[
@@ -690,19 +695,55 @@ function show(pg){
 }
 
 // ---- login (demonstracao de navegacao; o login seguro entra via Supabase) ----
-function entrar(){
-  var u=document.getElementById('in-user').value.trim();
-  var p=document.getElementById('in-pass').value.trim();
-  if(!u || !p){ document.getElementById('loginerr').style.display='flex'; return; }
+function loginErro(msg){ var e=document.getElementById('loginerr'); if(e){ e.style.display='flex'; e.innerHTML='<svg class="ic" style="width:16px;height:16px"><use href="#i-alert"/></svg> '+msg; } }
+function abrirApp(email){
   document.getElementById('loginerr').style.display='none';
   document.getElementById('screen-login').classList.add('hide');
   document.getElementById('screen-app').classList.remove('hide');
   document.getElementById('fabs').classList.remove('hide');
-  // identifica visualmente o perfil pela inicial do usuario
-  document.getElementById('avatar').textContent = (u[0]||'A').toUpperCase()+(u[1]||'D').toUpperCase();
-  var found=null; for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login.toLowerCase()===u.toLowerCase()){ found=DB.users[i]; break; } }
-  CURRENT_USER = found || {login:u,nome:u,papel:'admin',orgao:'tur'};
+  document.getElementById('avatar').textContent=(email[0]||'A').toUpperCase()+(email[1]||'D').toUpperCase();
   renderDashboard(); renderCentral(); renderAdmin();
+}
+async function entrar(){
+  var u=document.getElementById('in-user').value.trim();
+  var p=document.getElementById('in-pass').value.trim();
+  if(!u || !p){ loginErro('Informe usuário e senha.'); return; }
+  if(!SB){ loginErro('Sem conexão com o servidor de login. Verifique a internet.'); return; }
+  var btn=document.getElementById('btn-entrar'); var orig=btn?btn.innerHTML:''; if(btn){ btn.disabled=true; btn.innerHTML='Entrando...'; }
+  try{
+    var resp=await SB.auth.signInWithPassword({email:u, password:p});
+    if(resp.error){ loginErro('Usuário ou senha inválidos. Confira e tente de novo.'); if(btn){btn.disabled=false;btn.innerHTML=orig;} return; }
+    var uid=resp.data.user.id, email=resp.data.user.email;
+    var pf=await SB.from('perfis').select('papel,orgao_id,nome,perm,ativo').eq('id',uid).single();
+    var perfil=pf.data||{papel:'staff',orgao_id:'tur'};
+    if(perfil.ativo===false){ await SB.auth.signOut(); loginErro('Acesso inativo. Procure o administrador do órgão.'); if(btn){btn.disabled=false;btn.innerHTML=orig;} return; }
+    CURRENT_USER={login:email, nome:perfil.nome||email, papel:perfil.papel||'staff', orgao:perfil.orgao_id||'tur', perm:perfil.perm};
+    var oid=perfil.orgao_id||'tur';
+    try{ var og=await SB.from('orgaos').select('*').eq('id',oid).single(); if(og.data){ ORG={nome:og.data.nome, uf:og.data.uf||'GO', cnpj:og.data.cnpj||'', endereco:(og.data.endereco||ORG.endereco), ordenador:og.data.gestor||'', cargo:og.data.cargo||'', brasao:(og.data.brasao||ORG.brasao), id:og.data.id}; } }catch(e){}
+    abrirApp(email);
+  }catch(e){ loginErro('Erro ao entrar. Tente de novo.'); }
+  if(btn){ btn.disabled=false; btn.innerHTML=orig; }
+}
+async function sairConta(){ try{ if(SB) await SB.auth.signOut(); }catch(e){} sair(); }
+function minhaConta(){
+  if(!CURRENT_USER){ return; }
+  var orgNome = (CURRENT_USER.papel==='superadmin') ? 'Todos os órgãos (superadmin)' : ((ORG&&ORG.nome)||CURRENT_USER.orgao||'');
+  var h='<div style="font-size:13.5px;line-height:1.9;color:var(--slate)"><b style="color:var(--ink)">'+esc(CURRENT_USER.nome||'')+'</b><br>'+esc(CURRENT_USER.login||'')+'<br>Perfil: '+papelLabel(CURRENT_USER.papel)+'<br>Órgão: '+esc(orgNome)+'</div>';
+  h+='<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn-ghost" type="button" onclick="trocarMeuNome()">Trocar meu nome</button><button class="btn-ghost" type="button" onclick="trocarMinhaSenha()">Trocar minha senha</button><button class="btn-gold" type="button" onclick="fecharModal();sairConta()">Sair</button></div>';
+  abrirModal('Minha conta', h);
+}
+async function trocarMinhaSenha(){
+  if(!SB||!CURRENT_USER){ return; }
+  var nova=prompt('Digite a nova senha (mínimo 6 caracteres):'); if(!nova) return;
+  if(nova.length<6){ toast('A senha precisa de pelo menos 6 caracteres.'); return; }
+  var r=await SB.auth.updateUser({password:nova});
+  if(r.error){ toast('Não consegui trocar a senha: '+r.error.message); } else { toast('Senha alterada com sucesso.'); }
+}
+async function trocarMeuNome(){
+  if(!SB||!CURRENT_USER){ return; }
+  var nome=prompt('Seu nome de exibição:', CURRENT_USER.nome||''); if(!nome) return;
+  var r=await SB.from('perfis').update({nome:nome.trim()}).eq('email',CURRENT_USER.login);
+  if(r.error){ toast('Não consegui salvar o nome.'); } else { CURRENT_USER.nome=nome.trim(); toast('Nome atualizado.'); renderAdmin(); }
 }
 function sair(){
   document.getElementById('screen-app').classList.add('hide');
@@ -1827,9 +1868,9 @@ function gerarInexig(){
 
 // ===================== BANCO LOCAL (conecta dashboard, central e contratos) =====================
 var USERS_SEED=[
-  {login:'ueniomarra',nome:'Uenio Marra (Queiroz Marra)',papel:'superadmin',perm:'Acesso total (oculto)',ativo:true,orgao:'*'},
-  {login:'admin@tur',nome:'Administrador do órgão',papel:'admin',perm:'Acesso total',ativo:true,orgao:'tur'},
-  {login:'staff@tur',nome:'Operador',papel:'staff',perm:'Nenhuma (aguardando liberação)',ativo:true,orgao:'tur'}
+  {login:'ueniomarra@queirozmarra.com',nome:'Uenio Marra (Queiroz Marra)',papel:'superadmin',perm:'Acesso total (oculto)',ativo:true,orgao:'*'},
+  {login:'admin@tur.gov.br',nome:'Administrador de Turvelândia',papel:'admin',perm:'Acesso total',ativo:true,orgao:'tur'},
+  {login:'staff@tur.gov.br',nome:'Operador de Turvelândia',papel:'staff',perm:'Nenhuma (aguardando liberação)',ativo:true,orgao:'tur'}
 ];
 // Órgãos atendidos (cada um é uma "caixa" isolada). Turvelândia é o piloto.
 var ORGAOS_SEED=[
