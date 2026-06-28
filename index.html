@@ -313,6 +313,14 @@ td .modd{font-size:12px;color:var(--slate)}
 .precos-stats .ps span{font-size:11px;color:var(--slate);font-weight:600;display:block}
 .precos-stats .ps b{font-family:'Plus Jakarta Sans';font-size:16px;color:var(--ink);margin-top:3px;display:block}
 .precos-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--gold-soft);border:1px solid #ECDDB4;border-radius:10px;padding:11px 14px;margin-top:10px}
+.passo-card{background:#fff;border:2px solid #C9A961;border-radius:16px;overflow:hidden;margin-bottom:18px;box-shadow:0 16px 36px -20px rgba(10,35,66,.45)}
+.passo-h{background:linear-gradient(120deg,#0A2342,#163a63 70%,#1A4488);padding:18px 22px;color:#fff;position:relative}
+.passo-h:after{content:"";position:absolute;right:-50px;top:-50px;width:180px;height:180px;border-radius:50%;background:rgba(201,169,97,.12)}
+.passo-badge{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(90deg,#E8A020,#C9A961);color:#3a2c06;font-weight:800;font-size:11px;letter-spacing:1px;padding:5px 13px;border-radius:20px;margin-bottom:9px}
+.passo-h h3{font-size:20px;color:#fff;margin:0;position:relative;z-index:2}
+.passo-h p{color:#C6D7EC;font-size:13px;margin:6px 0 0;max-width:74ch;line-height:1.5;position:relative;z-index:2}
+.passo-card .fluxo4{padding:16px 18px 4px;margin-top:0}
+.passo-foot{padding:6px 20px 16px;color:var(--slate);font-size:12px;line-height:1.5}
 .fluxo4{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin-top:8px}
 .f4{flex:1;min-width:140px;background:#F4F8FE;border:1px solid #CFE0F5;border-radius:12px;padding:13px;cursor:pointer;transition:border-color .15s,background .15s}
 .f4:hover{border-color:#0A2342;background:#EAF1FC}
@@ -487,19 +495,12 @@ td .modd{font-size:12px;color:var(--slate)}
           <div class="metric"><div class="mt"><div class="mi gold"><svg class="ic" style="width:22px;height:22px"><use href="#i-doc"/></svg></div></div><div class="val" id="m-docs">0</div><div class="lbl">Documentos gerados</div></div>
           <div class="metric"><div class="mt"><div class="mi amber"><svg class="ic" style="width:22px;height:22px"><use href="#i-clock"/></svg></div><span class="trend warn" id="m-prazos-tag" style="display:none">Atenção</span></div><div class="val" id="m-prazos">0</div><div class="lbl">Prazos vencem em 30 dias</div></div>
         </div>
-        <div class="charts2">
-          <div class="panel">
-            <div class="ph"><h3>Contratos por situação</h3><a onclick="goto('contratos')">Ver contratos <svg class="ic" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
-            <div class="donutwrap" id="dash-donut"></div>
+        <div class="passo-card">
+          <div class="passo-h">
+            <span class="passo-badge"><svg class="ic" style="width:13px;height:13px;stroke:#3a2c06"><use href="#i-check"/></svg> COMECE AQUI</span>
+            <h3>Como montar um processo, passo a passo</h3>
+            <p>Siga os 4 passos na ordem. Cada passo já vem preenchido com o anterior: você só confere e completa. Clique no passo para começar.</p>
           </div>
-          <div class="panel">
-            <div class="ph"><h3>Documentos por tipo</h3><a onclick="goto('central')">Ver todos <svg class="ic" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
-            <div class="bars" id="dash-bars"></div>
-          </div>
-        </div>
-        <div class="panel" style="margin-bottom:16px;border-left:4px solid #C9A961">
-          <div class="ph"><h3>Como montar um processo (passo a passo)</h3></div>
-          <div style="padding:4px 4px 0;color:var(--slate);font-size:13px">Siga os 4 passos na ordem. Cada passo já vem preenchido com o anterior: você só confere e completa. Clique no passo para começar.</div>
           <div class="fluxo4">
             <div class="f4" onclick="abrirDoc('etp',false)"><div class="f4n">1</div><b>ETP</b><span>O estudo que justifica a compra. Comece por aqui.</span></div>
             <div class="f4a">➜</div>
@@ -509,7 +510,11 @@ td .modd{font-size:12px;color:var(--slate)}
             <div class="f4a">➜</div>
             <div class="f4" onclick="abrirDoc('contrato',false)"><div class="f4n">4</div><b>Contrato</b><span>Puxa do edital. Sai pronto para assinar.</span></div>
           </div>
-          <div style="padding:10px 4px 2px;color:var(--slate);font-size:12px">Ao gerar cada documento, aparece um <b>botão azul</b> que leva direto ao próximo passo, já preenchido. A conferência final é sempre do servidor responsável.</div>
+          <div class="passo-foot">Ao gerar cada documento, aparece um <b>botão azul</b> que leva direto ao próximo passo, já preenchido. A conferência final é sempre do servidor responsável.</div>
+        </div>
+        <div class="panel" style="margin-bottom:16px">
+          <div class="ph"><h3>Documentos por tipo</h3><a onclick="goto('central')">Ver todos <svg class="ic" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
+          <div class="bars" id="dash-bars"></div>
         </div>
         <div class="grid2">
           <div class="panel">
