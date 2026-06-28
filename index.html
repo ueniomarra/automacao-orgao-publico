@@ -1941,6 +1941,10 @@ async function carregarDoSupabase(){
     if(!dd.error && dd.data){ DB.docs = dd.data.map(function(r){ return {id:r.id,tipo:r.tipo,numero:r.numero,objeto:r.objeto,secretaria:r.secretaria,data:r.data,html:r.html}; }); seedModelos(); }
     var cc=await SB.from('contratos').select('id,numero,objeto,secretaria,vencimento,valor,status').order('created_at',{ascending:false});
     if(!cc.error && cc.data){ CONTRATOS = cc.data.map(function(r){ return {id:r.id,n:r.numero,obj:r.objeto,sec:r.secretaria,venc:r.vencimento||'a definir',valor:Number(r.valor)||0,status:r.status||'ativo'}; }); }
+    var pp=await SB.from('perfis').select('email,nome,papel,perm,ativo,orgao_id');
+    if(!pp.error && pp.data){ DB.users = pp.data.map(function(r){ return {login:r.email,nome:r.nome,papel:r.papel,perm:r.perm,ativo:r.ativo!==false,orgao:r.orgao_id||'*'}; }); }
+    var oo=await SB.from('orgaos').select('id,tipo,nome,uf,cnpj,gestor,cargo');
+    if(!oo.error && oo.data && oo.data.length){ ORGAOS = oo.data.map(function(r){ return {id:r.id,tipo:r.tipo,nome:r.nome,uf:r.uf,cnpj:r.cnpj,gestor:r.gestor,cargo:r.cargo}; }); }
   }catch(e){}
 }
 async function registrarAud(acao, item, orgao){
@@ -2039,24 +2043,26 @@ function renderOrgaos(){
 }
 function toggleNovoOrgao(show){ var f=document.getElementById('orgao-form'); if(f) f.style.display=show?'block':'none'; if(show){ var n=document.getElementById('o-nome'); if(n) n.focus(); } }
 function novoOrgaoId(nome){ var base=pncpNorm(nome).replace(/prefeitura|municipal|camara|de|do|da/g,'').replace(/[^a-z0-9]/g,'').slice(0,8)||'org'; var id=base, k=2; var existe=function(x){ for(var i=0;i<ORGAOS.length;i++){ if(ORGAOS[i].id===x) return true; } return false; }; while(existe(id)){ id=base+k; k++; } return id; }
-function salvarOrgao(){
+async function salvarOrgao(){
   if(!(CURRENT_USER && CURRENT_USER.papel==='superadmin')){ toast('Só o superadmin cadastra órgão.'); return; }
   var v=function(id){ return (document.getElementById(id)||{}).value||''; };
   var nome=v('o-nome').trim(); if(!nome){ toast('Informe o nome do órgão.'); document.getElementById('o-nome').focus(); return; }
-  var login=v('o-adm-login').trim(); if(!login){ toast('Informe o login do primeiro admin.'); document.getElementById('o-adm-login').focus(); return; }
-  for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login===login){ toast('Já existe um usuário com esse login.'); return; } }
+  var login=v('o-adm-login').trim(); if(!login){ toast('Informe o login (email) do primeiro admin.'); document.getElementById('o-adm-login').focus(); return; }
   var id=novoOrgaoId(nome);
-  ORGAOS.push({id:id,tipo:v('o-tipo')||'Prefeitura',nome:nome,uf:(v('o-uf')||'GO').toUpperCase().slice(0,2),cnpj:v('o-cnpj').trim(),gestor:v('o-gestor').trim(),cargo:v('o-cargo').trim()});
-  DB.seq=DB.seq||{}; var ini=parseInt(v('o-seq'),10); if(ini>1) DB.seq['_orgseq_'+id]=ini-1;
-  DB.users.push({login:login,nome:v('o-adm-nome').trim()||login,papel:'admin',perm:'Acesso total',ativo:true,orgao:id,senha:(v('o-adm-senha')||'').trim(),trocarSenha:true});
-  dbSave(); toggleNovoOrgao(false); renderAdmin();
+  var dados={id:id,tipo:v('o-tipo')||'Prefeitura',nome:nome,uf:(v('o-uf')||'GO').toUpperCase().slice(0,2),cnpj:v('o-cnpj').trim(),gestor:v('o-gestor').trim(),cargo:v('o-cargo').trim()};
+  if(SB){
+    try{ var r=await SB.from('orgaos').insert(dados); if(r.error){ toast('Não consegui salvar o órgão: '+r.error.message); return; } }catch(e){ toast('Erro ao salvar o órgão.'); return; }
+    await carregarDoSupabase();
+  } else { ORGAOS.push(dados); }
+  toggleNovoOrgao(false); renderAdmin();
   ['o-nome','o-cnpj','o-gestor','o-cargo','o-adm-nome','o-adm-login','o-adm-senha'].forEach(function(x){ var e=document.getElementById(x); if(e) e.value=''; });
-  toast('Órgão "'+nome+'" implantado. Admin "'+login+'" criado e carimbado nesse órgão.');
+  toast('Órgão "'+nome+'" cadastrado no banco. O acesso do admin ('+login+') é criado pelo servidor seguro (provisionamento), próximo passo.');
 }
 function novoUsuario(){
   if(CURRENT_USER && CURRENT_USER.papel==='staff'){ toast('Só o administrador cria usuários.'); return; }
   var euSuper = CURRENT_USER && CURRENT_USER.papel==='superadmin';
-  if(euSuper){ toast('Como superadmin, cadastre pelo botão "Novo órgão" (cria o órgão e o admin dele).'); toggleNovoOrgao(true); return; }
+  if(euSuper){ toggleNovoOrgao(true); return; }
+  if(SB){ toast('A criação de logins é feita pelo servidor seguro (provisionamento de acesso), próximo passo. As senhas nunca passam pelo navegador.'); return; }
   var login=prompt('Login do novo usuário (ex.: compras.licitacao):'); if(!login) return;
   for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login===login.trim()){ toast('Já existe usuário com esse login.'); return; } }
   var nome=prompt('Nome do servidor:')||login;
