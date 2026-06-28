@@ -371,7 +371,7 @@ td .modd{font-size:12px;color:var(--slate)}
       <div class="loginerr" id="loginerr"><svg class="ic" style="width:16px;height:16px"><use href="#i-alert"/></svg> Usuário ou senha inválidos. Confira e tente de novo.</div>
       <div class="fld">
         <label>Usuário</label>
-        <div class="inp"><svg class="ic"><use href="#i-user"/></svg><input id="in-user" type="text" placeholder="ex.: admin@tur.gov.br" autocomplete="username"></div>
+        <div class="inp"><svg class="ic"><use href="#i-user"/></svg><input id="in-user" type="text" placeholder="usuário ou email (ex.: ueniomarra)" autocomplete="username"></div>
       </div>
       <div class="fld">
         <label>Senha</label>
@@ -723,6 +723,8 @@ async function entrar(){
   var u=document.getElementById('in-user').value.trim();
   var p=document.getElementById('in-pass').value.trim();
   if(!u || !p){ loginErro('Informe usuário e senha.'); return; }
+  // permite login por usuário simples (sem @): vira email interno
+  if(u.indexOf('@')<0) u = u.toLowerCase()+'@queirozmarra.com';
   if(!SB){ loginErro('Sem conexão com o servidor de login. Verifique a internet.'); return; }
   var btn=document.getElementById('btn-entrar'); var orig=btn?btn.innerHTML:''; if(btn){ btn.disabled=true; btn.innerHTML='Entrando...'; }
   try{
@@ -2120,15 +2122,28 @@ async function novoUsuario(){
   await carregarDoSupabase(); renderAdmin();
   toast('Servidor '+email+' criado no seu órgão. Agora clique em "permissão" para liberar o que ele acessa.');
 }
-async function liberarUsuario(email){
-  var op=prompt('Permissão de '+email+'\\nDigite: total, licitacao, compras, ambiente ou nenhuma\\n(separe por vírgula para mais de um):','total');
-  if(op===null) return;
-  var map={total:'Acesso total',licitacao:'Licitações e Contratos',compras:'Compras (Dispensa e Inexigibilidade)',ambiente:'Meio Ambiente',nenhuma:'Nenhuma (aguardando liberação)'};
-  var parts=op.toLowerCase().split(',').map(function(s){return s.trim();}).filter(Boolean);
-  var perm=parts.map(function(p){return map[p]||p;}).join(', ')||'Nenhuma (aguardando liberação)';
+function liberarUsuario(email){
+  var u=null; for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login===email){ u=DB.users[i]; break; } }
+  var perm=((u&&u.perm)||'').toLowerCase(); var full=perm.indexOf('total')>=0;
+  var mods=[
+    {k:'licitacao',l:'Licitações e Contratos',on: full||/licita/.test(perm)},
+    {k:'compras',l:'Compras (Dispensa e Inexigibilidade)',on: full||/compras/.test(perm)},
+    {k:'ambiente',l:'Meio Ambiente',on: full||/ambient|meio/.test(perm)}
+  ];
+  var rows=mods.map(function(m){
+    return '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1.5px solid var(--line);border-radius:11px;margin-bottom:9px;cursor:pointer;background:#FAFBFE"><span style="font-weight:600;color:var(--ink);font-size:14px">'+esc(m.l)+'</span><input type="checkbox" class="permchk" data-l="'+esc(m.l)+'" '+(m.on?'checked':'')+' style="width:22px;height:22px;accent-color:var(--royal);cursor:pointer"></label>';
+  }).join('');
+  var h='<p style="color:var(--slate);font-size:13.5px;margin:0 0 14px">Marque os módulos que <b style="color:var(--ink)">'+esc(email)+'</b> pode acessar. O que ficar desmarcado some pra ele.</p>'+rows+
+    '<div style="display:flex;gap:10px;margin-top:16px"><button class="btn-gold" type="button" onclick="salvarPermissao(\''+esc(email)+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Salvar permissões</button><button class="btn-ghost" type="button" onclick="fecharModal()">Cancelar</button></div>';
+  abrirModal('Permissões de acesso', h);
+}
+async function salvarPermissao(email){
+  var on=[]; document.querySelectorAll('.permchk').forEach(function(c){ if(c.checked) on.push(c.getAttribute('data-l')); });
+  var perm = on.length===0 ? 'Nenhuma (aguardando liberação)' : (on.length>=3 ? 'Acesso total' : on.join(', '));
+  fecharModal();
   var r=await chamarAdmin({acao:'set_perm', email:email, perm:perm});
   if(r.error){ toast('Erro: '+r.error); return; }
-  await carregarDoSupabase(); renderAdmin(); toast('Permissão de '+email+' atualizada: '+perm);
+  await carregarDoSupabase(); renderAdmin(); toast('Permissões de '+email+' salvas: '+perm);
 }
 async function toggleAtivoUsuario(email, ativar){
   var r=await chamarAdmin({acao:'set_ativo', email:email, ativo:ativar});
