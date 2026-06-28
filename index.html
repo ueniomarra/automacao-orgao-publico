@@ -180,6 +180,15 @@ td .modd{font-size:12px;color:var(--slate)}
 .prazo.prz-red{background:#FBE9EC;border-left:4px solid #C62D45}
 .prazo.prz-amb{background:var(--amber-soft);border-left:4px solid var(--gold-bright)}
 .prazo.prz-blue{background:var(--royal-soft);border-left:4px solid var(--royal)}
+.prazo{cursor:pointer;transition:filter .15s}
+.prazo:hover{filter:brightness(.97)}
+.prz-top{display:flex;gap:8px;flex-wrap:wrap;padding:14px 22px 2px}
+.prz-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;padding:6px 12px;border-radius:20px}
+.prz-pill.v{background:#FBE9EC;color:#a11d33;border:1px solid #F3C2CC}
+.prz-pill.b{background:var(--amber-soft);color:#9a6a0a;border:1px solid #F0D9A6}
+.prz-lbl{font-size:11.5px;font-weight:800;margin-top:3px;display:inline-flex;align-items:center;gap:4px}
+.prz-lbl.v{color:#C62D45}
+.prz-lbl.b{color:#9a6a0a}
 
 /* fluxo + cards de ferramenta */
 .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;box-shadow:var(--sh-sm);margin-bottom:20px}
@@ -511,10 +520,6 @@ td .modd{font-size:12px;color:var(--slate)}
             <div class="f4" onclick="abrirDoc('contrato',false)"><div class="f4n">4</div><b>Contrato</b><span>Puxa do edital. Sai pronto para assinar.</span></div>
           </div>
           <div class="passo-foot">Ao gerar cada documento, aparece um <b>botão azul</b> que leva direto ao próximo passo, já preenchido. A conferência final é sempre do servidor responsável.</div>
-        </div>
-        <div class="panel" style="margin-bottom:16px">
-          <div class="ph"><h3>Documentos por tipo</h3><a onclick="goto('central')">Ver todos <svg class="ic" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
-          <div class="bars" id="dash-bars"></div>
         </div>
         <div class="grid2">
           <div class="panel">
@@ -2058,6 +2063,7 @@ function seedModelos(){ MODELOS_SEED.forEach(function(m){ var found=false; for(v
 function dbLoad(){ try{ var s=localStorage.getItem('aop_demo_v1'); if(s){ var o=JSON.parse(s); DB.docs=o.docs||[]; DB.seq=o.seq||{}; DB.users=(o.users&&o.users.length)?o.users:USERS_SEED.slice(); if(o.contratos&&o.contratos.length) CONTRATOS=o.contratos; if(o.orgaos&&o.orgaos.length) ORGAOS=o.orgaos; } }catch(e){} seedModelos(); }
 function dbSave(){ try{ localStorage.setItem('aop_demo_v1', JSON.stringify({docs:DB.docs,seq:DB.seq,contratos:CONTRATOS,users:DB.users,orgaos:ORGAOS})); }catch(e){} }
 function dataHoje(){ var d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
 function nomeTipo(t){ var m={tr:'Termo de Referência',etp:'ETP',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
@@ -2187,7 +2193,19 @@ function renderDashboard(){
   if(rb) rb.innerHTML = ger.length? ger.slice(0,5).map(function(d){ return '<tr><td><div class="obj">'+esc(d.objeto)+'</div><div class="modd">'+esc(nomeTipo(d.tipo))+' '+esc(d.numero)+'</div></td><td>'+esc(nomeTipo(d.tipo))+'</td><td>'+esc(d.data)+'</td></tr>'; }).join('') : '<tr><td colspan="3" style="color:var(--slate);padding:18px">Nenhum documento gerado ainda. Comece em Licitações e Contratos.</td></tr>';
   var pz=CONTRATOS.filter(function(c){return c.status!=='ativo';});
   var dp=document.getElementById('dash-prazos');
-  if(dp) dp.innerHTML = pz.length? pz.map(function(c){ var venc=c.status==='vencido'; return '<div class="prazo '+(venc?'prz-red':'prz-amb')+'"><div class="pi" style="background:'+(venc?'#C62D45':'var(--gold-bright)')+';color:#fff"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg></div><div><div class="pt">Contrato '+esc(c.n)+'</div><div class="pd">'+esc(c.obj)+(venc?', vencido':', vence em breve')+'</div></div><div class="pday" style="color:'+(venc?'#a11d33':'#9a6a0a')+';font-size:13px">'+esc(String(c.venc).slice(0,5))+'<small>VENC.</small></div></div>'; }).join('') : '<div class="emptybox" style="margin:0;padding:26px">Sem prazos críticos no momento.</div>';
+  if(dp){
+    if(!pz.length){ dp.innerHTML='<div class="emptybox" style="margin:0;padding:26px"><svg class="ic" style="stroke:#1E7D44"><use href="#i-check"/></svg><div>Nenhum contrato vencendo. Está tudo em dia.</div></div>'; }
+    else{
+      var nV=pz.filter(function(c){return c.status==='vencido';}).length, nB=pz.filter(function(c){return c.status==='vence_breve';}).length;
+      var topo='<div class="prz-top">'+
+        (nV?'<span class="prz-pill v"><svg class="ic" style="width:13px;height:13px;stroke:#a11d33"><use href="#i-alert"/></svg> '+nV+' vencido(s)</span>':'')+
+        (nB?'<span class="prz-pill b"><svg class="ic" style="width:13px;height:13px;stroke:#9a6a0a"><use href="#i-clock"/></svg> '+nB+' vencem em breve</span>':'')+'</div>';
+      var itens=pz.map(function(c){ var venc=c.status==='vencido'; var dias=diasAte(c.venc);
+        var rotulo = venc ? ('VENCIDO'+(dias!=null?' há '+Math.abs(dias)+' dia(s)':'')) : ('Vence em '+(dias!=null?dias+' dia(s)':'breve'));
+        return '<div class="prazo '+(venc?'prz-red':'prz-amb')+'" onclick="goto(\'contratos\')" title="Abrir Gestão de Contratos"><div class="pi" style="background:'+(venc?'#C62D45':'#E8A020')+';color:#fff"><svg class="ic" style="width:20px;height:20px;stroke:#fff"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg></div><div style="flex:1"><div class="pt">Contrato '+esc(c.n)+'</div><div class="pd">'+esc(c.obj)+'</div><div class="prz-lbl '+(venc?'v':'b')+'"><svg class="ic" style="width:12px;height:12px;stroke:'+(venc?'#C62D45':'#9a6a0a')+'"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg> '+rotulo+'</div></div><div class="pday" style="color:'+(venc?'#a11d33':'#9a6a0a')+'">'+esc(String(c.venc).slice(0,5))+'<small>VENC.</small></div></div>'; }).join('');
+      dp.innerHTML=topo+itens;
+    }
+  }
   var dn=document.getElementById('dash-donut');
   if(dn){ var qA=CONTRATOS.filter(function(c){return c.status==='ativo';}).length, qB=CONTRATOS.filter(function(c){return c.status==='vence_breve';}).length, qV=CONTRATOS.filter(function(c){return c.status==='vencido';}).length;
     dn.innerHTML=donutHTML([{l:'Ativos',v:qA,c:'#0A2342'},{l:'Vencem em breve',v:qB,c:'#E8A020'},{l:'Vencidos',v:qV,c:'#C62D45'}], CONTRATOS.length, 'contratos'); }
