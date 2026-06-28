@@ -971,6 +971,7 @@ function abrirDoc(tipo, consulta){
   else if(tipo==='dispensa'){ renderFormDispensa(); }
   else if(tipo==='inexigibilidade'){ renderFormInexig(); }
   else if(tipo==='precos'){ renderFormPrecos(); }
+  else if(tipo==='processo'){ renderFormProcesso(); }
   else { renderFormGenerico(tipo); }
   injetarGuia(tipo);
   goto('workspace');
@@ -1378,6 +1379,7 @@ function coletaDot(){
 async function gerarDoc(){
   var p=document.getElementById('ws-preview');
   if(DOC.tipo==='modelo-uso'){ toast('Este é um modelo do órgão. Edite o texto direto no documento e clique em Exportar Word.'); return; }
+  if(DOC.tipo==='processo'){ toast('Aqui você baixa processos prontos. Use o botão "Baixar processo completo" da contratação na lista ao lado.'); return; }
   var html;
   if(DOC.tipo==='tr') html=gerarTR();
   else if(DOC.tipo==='etp') html=gerarETP();
@@ -1542,6 +1544,23 @@ function gerarGenerico(){
   H+='<div class="selo" style="border-color:#C62D45;background:#FBE9EC;color:#8E1B2E"><b>ATENÇÃO: NÃO UTILIZAR COMO DOCUMENTO FINAL.</b> Este é um rascunho estrutural. O corpo jurídico completo de '+esc(m.t)+' ainda está em finalização (no mesmo motor do Termo de Referência). Até a liberação, gere por aqui apenas para visualizar a estrutura. Base legal de referência: '+esc(m.d)+'</div>';
   return H;
 }
+// Processos: agrupa os documentos de uma mesma contratação (mesmo objeto) e baixa o processo inteiro.
+function renderFormProcesso(){
+  var ff=document.getElementById('ws-fields'); if(!ff) return;
+  var ordem={etp:1,tr:2,edital:3,minuta:4,contrato:5,dispensa:6,inexigibilidade:7};
+  var grupos={};
+  (DB.docs||[]).forEach(function(d){ if(!ordem[d.tipo]) return; var o=(d.objeto||'').trim()||'(sem objeto)'; (grupos[o]=grupos[o]||[]).push(d); });
+  var chaves=Object.keys(grupos);
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Processos por contratação</div><div class="hint">Cada contratação reúne suas peças (ETP, TR, Edital, Minuta, Contrato). Baixe o processo inteiro em um único Word.</div></div>';
+  if(!chaves.length){ h+='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-folder"/></svg><div>Nenhum processo ainda. Gere um ETP ou TR e ele aparece aqui, agrupado pela contratação.</div></div>'; }
+  else { h+=chaves.map(function(o){
+    var ps=grupos[o].slice().sort(function(a,b){return (ordem[a.tipo]||9)-(ordem[b.tipo]||9);});
+    var chips=ps.map(function(d){return '<span class="chip c-ok" style="margin:2px 4px 2px 0">'+esc(nomeTipo(d.tipo))+(d.numero?(' '+esc(d.numero)):'')+'</span>';}).join('');
+    return '<div class="fgroup"><div style="font-weight:700;color:var(--navy);margin-bottom:7px">'+esc(o)+'</div><div style="margin-bottom:11px">'+chips+'</div><button class="btn-gold" type="button" data-obj="'+esc(o)+'" onclick="baixarProcessoDe(this)"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-folder"/></svg> Baixar processo completo (Word)</button></div>';
+  }).join(''); }
+  ff.innerHTML=h;
+  var p=document.getElementById('ws-preview'); if(p){ p.className='docpaper empty'; p.removeAttribute('contenteditable'); p.innerHTML='<svg class="ic"><use href="#i-folder"/></svg><div>Selecione uma contratação ao lado e clique em <b>Baixar processo completo</b>.<br>Ele junta ETP, TR, edital, minuta e contrato do mesmo objeto num Word só.</div>'; }
+}
 function renderFormGenerico(tipo){
   var m=DOCMETA[tipo];
   var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\''+tipo+'\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para '+esc(m.t)+'</button></div>';
@@ -1566,8 +1585,9 @@ function exportarWord(){
   setTimeout(function(){URL.revokeObjectURL(url)},1500);
 }
 // Exporta o PROCESSO INTEIRO (ETP, TR, edital, minuta e contrato do mesmo objeto) num Word só
-function exportarProcesso(){
-  var obj=(PROC&&PROC.objeto)|| (document.getElementById('f-objeto')&&document.getElementById('f-objeto').value) || '';
+function baixarProcessoDe(btn){ exportarProcesso(btn.getAttribute('data-obj')||''); }
+function exportarProcesso(objArg){
+  var obj=objArg || (PROC&&PROC.objeto)|| (document.getElementById('f-objeto')&&document.getElementById('f-objeto').value) || '';
   obj=(obj||'').trim();
   if(!obj){ toast('Gere ao menos um documento do processo primeiro (ETP ou TR).'); return; }
   var ordem={etp:1,tr:2,edital:3,minuta:4,contrato:5,dispensa:6,inexigibilidade:7};
