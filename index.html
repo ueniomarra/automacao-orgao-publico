@@ -111,7 +111,33 @@ h1,h2,h3,h4,.ff{font-family:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif}
 #orgao-form input,#orgao-form select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13.5px;color:var(--ink);background:#FAFBFE;outline:0}
 
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:22px}
-.metric{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:var(--sh-sm);position:relative;overflow:hidden}
+.metric{background:linear-gradient(160deg,#fff,#FBFCFE);border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:var(--sh-sm);position:relative;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease}
+.metric:before{content:"";position:absolute;left:0;top:0;height:100%;width:4px;background:linear-gradient(180deg,var(--gold-bright),#C9A961)}
+.metric:hover{transform:translateY(-3px);box-shadow:0 16px 34px -18px rgba(10,35,66,.45)}
+.metric:after{content:"";position:absolute;right:-40px;bottom:-40px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.06),transparent 70%)}
+/* graficos do dashboard */
+.charts2{display:grid;grid-template-columns:1fr 1.4fr;gap:18px;margin-bottom:22px}
+@media(max-width:900px){.charts2{grid-template-columns:1fr}}
+.donutwrap{display:flex;align-items:center;gap:18px;padding:8px 18px 18px;flex-wrap:wrap}
+.donut-c{position:relative;width:150px;height:150px;flex:0 0 auto}
+.donut-c .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.donut-c .center b{font-size:30px;font-weight:800;color:var(--navy);font-family:'Plus Jakarta Sans';line-height:1}
+.donut-c .center span{font-size:11px;color:var(--slate);margin-top:2px}
+.dleg{display:flex;flex-direction:column;gap:9px;flex:1;min-width:150px}
+.dleg .it{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink)}
+.dleg .dot{width:12px;height:12px;border-radius:4px;flex:0 0 auto}
+.dleg .it b{margin-left:auto;font-weight:800;color:var(--navy)}
+.bars{padding:6px 18px 18px;display:flex;flex-direction:column;gap:11px}
+.barrow{display:flex;align-items:center;gap:12px}
+.barrow .bl{font-size:12.5px;color:var(--ink);width:140px;flex:0 0 auto;font-weight:600}
+.barrow .btrack{flex:1;height:22px;background:#EEF2F8;border-radius:7px;overflow:hidden}
+.barrow .bfill{height:100%;border-radius:7px;background:linear-gradient(90deg,#0A2342,#2563EB);min-width:2px}
+.barrow .bv{font-size:13px;font-weight:800;color:var(--navy);width:30px;text-align:right;flex:0 0 auto}
+.rstats{display:flex;gap:14px;flex-wrap:wrap}
+.rstat{flex:1;min-width:130px;background:linear-gradient(160deg,#fff,#FBFCFE);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center;position:relative;overflow:hidden}
+.rstat:before{content:"";position:absolute;left:0;top:0;width:100%;height:3px;background:linear-gradient(90deg,#0A2342,#C9A961)}
+.rstat .rn{font-size:25px;font-weight:800;color:var(--navy);font-family:'Plus Jakarta Sans';line-height:1}
+.rstat .rl{font-size:12px;color:var(--slate);font-weight:600;margin-top:6px}
 .metric .mt{display:flex;align-items:center;justify-content:space-between}
 .metric .mi{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center}
 .mi.blue{background:var(--royal-soft);color:var(--royal)}
@@ -460,6 +486,16 @@ td .modd{font-size:12px;color:var(--slate)}
           <div class="metric"><div class="mt"><div class="mi navy"><svg class="ic" style="width:22px;height:22px"><use href="#i-contract"/></svg></div></div><div class="val" id="m-contr">0</div><div class="lbl">Contratos ativos</div></div>
           <div class="metric"><div class="mt"><div class="mi gold"><svg class="ic" style="width:22px;height:22px"><use href="#i-doc"/></svg></div></div><div class="val" id="m-docs">0</div><div class="lbl">Documentos gerados</div></div>
           <div class="metric"><div class="mt"><div class="mi amber"><svg class="ic" style="width:22px;height:22px"><use href="#i-clock"/></svg></div><span class="trend warn" id="m-prazos-tag" style="display:none">Atenção</span></div><div class="val" id="m-prazos">0</div><div class="lbl">Prazos vencem em 30 dias</div></div>
+        </div>
+        <div class="charts2">
+          <div class="panel">
+            <div class="ph"><h3>Contratos por situação</h3><a onclick="goto('contratos')">Ver contratos <svg class="ic" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
+            <div class="donutwrap" id="dash-donut"></div>
+          </div>
+          <div class="panel">
+            <div class="ph"><h3>Documentos por tipo</h3><a onclick="goto('central')">Ver todos <svg class="ic" style="width:14px;height:14px"><use href="#i-arrow"/></svg></a></div>
+            <div class="bars" id="dash-bars"></div>
+          </div>
         </div>
         <div class="panel" style="margin-bottom:16px;border-left:4px solid #C9A961">
           <div class="ph"><h3>Como montar um processo (passo a passo)</h3></div>
@@ -2087,21 +2123,50 @@ async function renderAuditoria(){
     }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:18px">Ainda sem movimentações. Cada documento gerado entra aqui.</td></tr>';
   }catch(e){ body.innerHTML='<tr><td colspan="4" style="color:var(--slate);padding:18px">Não consegui carregar a trilha agora.</td></tr>'; }
 }
+var TIPOS_REL=[['etp','ETP'],['tr','Termo de Referência'],['edital','Edital'],['minuta','Minuta de Contrato'],['contrato','Contrato'],['dispensa','Dispensa'],['inexigibilidade','Inexigibilidade'],['aditivo','Aditivo']];
+function dadosRelatorio(){
+  var docs=(DB.docs||[]).filter(function(d){return d.tipo!=='modelo';});
+  var c={}; TIPOS_REL.forEach(function(t){c[t[0]]=0;}); docs.forEach(function(d){ if(c[d.tipo]!=null) c[d.tipo]++; });
+  return { docs:docs, c:c,
+    qA:(CONTRATOS||[]).filter(function(x){return x.status==='ativo';}).length,
+    qB:(CONTRATOS||[]).filter(function(x){return x.status==='vence_breve';}).length,
+    qV:(CONTRATOS||[]).filter(function(x){return x.status==='vencido';}).length,
+    nContr:(CONTRATOS||[]).length,
+    valor:(CONTRATOS||[]).reduce(function(a,x){return a+(Number(x.valor)||0);},0) };
+}
+function statCard(n,l){ return '<div class="rstat"><div class="rn">'+n+'</div><div class="rl">'+l+'</div></div>'; }
 function renderRelatorios(){
   var body=document.getElementById('rel-body'); if(!body) return;
-  var docs=(DB.docs||[]).filter(function(d){return d.tipo!=='modelo';});
-  var c={}; ['etp','tr','edital','contrato','minuta','dispensa','inexigibilidade','aditivo'].forEach(function(t){c[t]=0;});
-  docs.forEach(function(d){ if(c[d.tipo]!=null) c[d.tipo]++; });
-  var ativos=(CONTRATOS||[]).filter(function(x){return x.status!=='vencido';}).length;
-  var breve=(CONTRATOS||[]).filter(function(x){return x.status==='vence_breve';}).length;
-  var venc=(CONTRATOS||[]).filter(function(x){return x.status==='vencido';}).length;
-  var valor=(CONTRATOS||[]).reduce(function(a,x){return a+(Number(x.valor)||0);},0);
-  function card(n,l,cor){ return '<div style="flex:1;min-width:120px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center"><div style="font-size:28px;font-weight:800;color:'+(cor||'var(--navy)')+'">'+n+'</div><div style="font-size:12.5px;color:var(--slate);font-weight:600;margin-top:4px">'+l+'</div></div>'; }
-  var h='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+card(docs.length,'documentos gerados')+card((c.etp+c.tr),'ETP e TR')+card(c.edital,'editais')+card((c.contrato+c.minuta),'contratos e minutas')+card((c.dispensa+c.inexigibilidade),'dispensas/inexig.')+'</div>';
-  h+='<div class="panel"><div class="ph"><h3>Contratos</h3></div><div style="display:flex;gap:12px;flex-wrap:wrap;padding:6px 2px">'+card(ativos,'ativos','#1E7D44')+card(breve,'vencem em breve','#9a6a0a')+card(venc,'vencidos','#C62D45')+card(money(valor),'valor total')+'</div></div>';
-  var rows=''; [['etp','ETP'],['tr','Termo de Referência'],['edital','Edital'],['minuta','Minuta de Contrato'],['contrato','Contrato'],['dispensa','Dispensa'],['inexigibilidade','Inexigibilidade'],['aditivo','Aditivo']].forEach(function(t){ rows+='<tr><td>'+t[1]+'</td><td style="text-align:right">'+(c[t[0]]||0)+'</td></tr>'; });
-  h+='<div class="panel"><div class="ph"><h3>Documentos por tipo</h3></div><table><thead><tr><th>Tipo</th><th style="text-align:right">Quantidade</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var D=dadosRelatorio(), c=D.c;
+  var h='<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn-gold" onclick="exportarRelatorioPDF()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-doc"/></svg> Exportar relatório em PDF</button></div>';
+  h+='<div class="rstats">'+statCard(D.docs.length,'documentos gerados')+statCard(c.etp+c.tr,'ETP e TR')+statCard(c.edital,'editais')+statCard(c.contrato+c.minuta,'contratos e minutas')+statCard(c.dispensa+c.inexigibilidade,'dispensas / inexig.')+'</div>';
+  h+='<div class="charts2" style="margin-top:18px"><div class="panel"><div class="ph"><h3>Contratos por situação</h3></div><div class="donutwrap">'+donutHTML([{l:'Ativos',v:D.qA,c:'#0A2342'},{l:'Vencem em breve',v:D.qB,c:'#E8A020'},{l:'Vencidos',v:D.qV,c:'#C62D45'}],D.nContr,'contratos')+'</div></div>';
+  h+='<div class="panel"><div class="ph"><h3>Documentos por tipo</h3></div><div class="bars">'+barsHTML(TIPOS_REL.map(function(t){return {l:t[1],v:c[t[0]]};}))+'</div></div></div>';
+  h+='<div class="panel" style="margin-top:18px"><div class="ph"><h3>Resumo de contratos</h3></div><div class="rstats" style="padding:6px 16px 16px;margin:0">'+statCard(D.qA,'ativos')+statCard(D.qB,'vencem em breve')+statCard(D.qV,'vencidos')+statCard(money(D.valor),'valor total')+'</div></div>';
   body.innerHTML=h;
+}
+function exportarRelatorioPDF(){
+  var D=dadosRelatorio(), c=D.c;
+  var orgaoNome=(CURRENT_USER&&CURRENT_USER.orgaoNome)|| (ORGAOS[0]&&ORGAOS[0].nome) || 'Órgão';
+  var hoje=new Date().toLocaleDateString('pt-BR');
+  var linhas=TIPOS_REL.map(function(t){return '<tr><td>'+t[1]+'</td><td style="text-align:right">'+(c[t[0]]||0)+'</td></tr>';}).join('');
+  var card=function(n,l){return '<div class="pc"><div class="pn">'+n+'</div><div class="pl">'+l+'</div></div>';};
+  var html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório, '+esc(orgaoNome)+'</title>'+
+   '<style>body{font-family:Calibri,Segoe UI,Arial,sans-serif;color:#10203a;margin:34px}'+
+   'h1{color:#0A2342;font-size:22px;margin:0 0 2px}.sub{color:#5A6B85;font-size:13px;margin-bottom:18px;border-bottom:2px solid #C9A961;padding-bottom:10px}'+
+   '.row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.pc{flex:1;min-width:120px;border:1px solid #E6EBF2;border-radius:10px;padding:13px;text-align:center}'+
+   '.pn{font-size:24px;font-weight:800;color:#0A2342}.pl{font-size:11.5px;color:#5A6B85;margin-top:3px}'+
+   'h2{color:#0A2342;font-size:15px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;font-size:13px}'+
+   'th,td{border:1px solid #E6EBF2;padding:7px 10px;text-align:left}th{background:#0A2342;color:#fff}'+
+   '.foot{margin-top:24px;color:#5A6B85;font-size:11px;border-top:1px solid #E6EBF2;padding-top:8px}@media print{body{margin:14mm}}</style></head><body>'+
+   '<h1>Relatório de Gestão</h1><div class="sub">'+esc(orgaoNome)+' · Emitido em '+hoje+'</div>'+
+   '<h2>Documentos</h2><div class="row">'+card(D.docs.length,'gerados')+card(c.etp+c.tr,'ETP e TR')+card(c.edital,'editais')+card(c.contrato+c.minuta,'contratos/minutas')+card(c.dispensa+c.inexigibilidade,'dispensas/inexig.')+'</div>'+
+   '<h2>Contratos</h2><div class="row">'+card(D.qA,'ativos')+card(D.qB,'vencem em breve')+card(D.qV,'vencidos')+card(money(D.valor),'valor total')+'</div>'+
+   '<h2>Documentos por tipo</h2><table><thead><tr><th>Tipo</th><th style="text-align:right">Quantidade</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
+   '<div class="foot">Sistema de Automação de Órgãos Públicos · Queiroz Marra Soluções Integradas. Os números refletem o uso registrado no sistema.</div>'+
+   '<script>window.onload=function(){window.print();}<\/script></body></html>';
+  var w=window.open('','_blank'); if(!w){ toast('Permita pop-up para exportar o PDF.'); return; }
+  w.document.write(html); w.document.close();
 }
 function renderDashboard(){
   if(!document.getElementById('m-docs')) return;
@@ -2117,6 +2182,25 @@ function renderDashboard(){
   var pz=CONTRATOS.filter(function(c){return c.status!=='ativo';});
   var dp=document.getElementById('dash-prazos');
   if(dp) dp.innerHTML = pz.length? pz.map(function(c){ var venc=c.status==='vencido'; return '<div class="prazo '+(venc?'prz-red':'prz-amb')+'"><div class="pi" style="background:'+(venc?'#C62D45':'var(--gold-bright)')+';color:#fff"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg></div><div><div class="pt">Contrato '+esc(c.n)+'</div><div class="pd">'+esc(c.obj)+(venc?', vencido':', vence em breve')+'</div></div><div class="pday" style="color:'+(venc?'#a11d33':'#9a6a0a')+';font-size:13px">'+esc(String(c.venc).slice(0,5))+'<small>VENC.</small></div></div>'; }).join('') : '<div class="emptybox" style="margin:0;padding:26px">Sem prazos críticos no momento.</div>';
+  var dn=document.getElementById('dash-donut');
+  if(dn){ var qA=CONTRATOS.filter(function(c){return c.status==='ativo';}).length, qB=CONTRATOS.filter(function(c){return c.status==='vence_breve';}).length, qV=CONTRATOS.filter(function(c){return c.status==='vencido';}).length;
+    dn.innerHTML=donutHTML([{l:'Ativos',v:qA,c:'#0A2342'},{l:'Vencem em breve',v:qB,c:'#E8A020'},{l:'Vencidos',v:qV,c:'#C62D45'}], CONTRATOS.length, 'contratos'); }
+  var db=document.getElementById('dash-bars');
+  if(db){ var tp=[['etp','ETP'],['tr','Termo de Referência'],['edital','Edital'],['contrato','Contrato'],['minuta','Minuta'],['dispensa','Dispensa'],['inexigibilidade','Inexigibilidade'],['aditivo','Aditivo']];
+    var cc={}; tp.forEach(function(t){cc[t[0]]=0;}); ger.forEach(function(d){ if(cc[d.tipo]!=null)cc[d.tipo]++; });
+    db.innerHTML=barsHTML(tp.map(function(t){return {l:t[1],v:cc[t[0]]};})); }
+}
+function donutHTML(segs, total, unidade){
+  var C=2*Math.PI*60, off=0, circ='';
+  if(!total){ circ='<circle cx="75" cy="75" r="60" fill="none" stroke="#E6EBF2" stroke-width="22"/>'; }
+  else segs.forEach(function(s){ if(s.v>0){ var len=s.v/total*C; circ+='<circle cx="75" cy="75" r="60" fill="none" stroke="'+s.c+'" stroke-width="22" stroke-linecap="butt" stroke-dasharray="'+len+' '+(C-len)+'" stroke-dashoffset="'+(-off)+'" transform="rotate(-90 75 75)"><title>'+s.l+': '+s.v+'</title></circle>'; off+=len; } });
+  var leg=segs.map(function(s){ return '<div class="it"><span class="dot" style="background:'+s.c+'"></span>'+s.l+'<b>'+s.v+'</b></div>'; }).join('');
+  return '<div class="donut-c"><svg viewBox="0 0 150 150" width="150" height="150">'+circ+'</svg><div class="center"><b>'+(total||0)+'</b><span>'+unidade+'</span></div></div><div class="dleg">'+leg+'</div>';
+}
+function barsHTML(items){
+  var max=1; items.forEach(function(i){ if(i.v>max)max=i.v; });
+  if(!items.some(function(i){return i.v>0;})) return '<div class="emptybox" style="margin:0;padding:24px"><svg class="ic"><use href="#i-doc"/></svg><div>Nenhum documento gerado ainda. Comece pelo ETP.</div></div>';
+  return items.map(function(i){ var w=Math.round(i.v/max*100); return '<div class="barrow"><div class="bl">'+i.l+'</div><div class="btrack"><div class="bfill" style="width:'+w+'%"></div></div><div class="bv">'+i.v+'</div></div>'; }).join('');
 }
 function renderCentral(){
   var body=document.getElementById('central-body'); if(!body) return;
