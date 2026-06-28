@@ -1034,7 +1034,7 @@ function renderFormTR(){
 
   h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens</div>';
   h += '<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h += '<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button>';
+  h += '<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
   h += '<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h += '<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h += '<div class="hint" style="margin-top:6px">Um clique: o sistema busca o preço real de cada item no PNCP e preenche a coluna de valor. Ele preenche os que acha com segurança e lista os que você precisa revisar.</div>';
@@ -1318,6 +1318,28 @@ function addLinha(d,u,q,v){
     '<td class="tdtot">R$ 0,00</td>'+
     '<td><button class="del" onclick="this.closest(\'tr\').remove();calcTotal()">✕</button></td>';
   tb.appendChild(tr); calcTotal();
+}
+// Importar muitos itens de uma vez (essencial p/ medicamento: centenas de itens). Cola da planilha do Excel.
+function importarItensPlanilha(){
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 10px">Cole aqui os itens copiados da sua planilha do Excel. <b>Um item por linha.</b> A ordem das colunas é: <b>descrição</b>, unidade, quantidade, valor unitário (as três últimas são opcionais). É só selecionar no Excel e colar (Ctrl+V).</p>'+
+    '<textarea id="imp-itens" style="width:100%;height:210px;font-family:monospace;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="Dipirona sódica 500mg comprimido&#9;comp&#9;50000&#9;0,18&#10;Paracetamol 750mg comprimido&#9;comp&#9;200000&#9;0,12"></textarea>'+
+    '<div class="hint" style="margin-top:6px">Os números seguem o formato do Brasil (vírgula no decimal). A pesquisa de preço continua sendo por item, depois de importar.</div>'+
+    '<button class="btn-gold" style="width:100%;justify-content:center;margin-top:12px" onclick="processarImportItens()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Importar itens</button>';
+  abrirModal('Importar itens da planilha', h);
+}
+function impNum(s){ if(s==null) return ''; s=String(s).trim(); if(!s) return ''; s=s.replace(/\./g,'').replace(',','.').replace(/[^0-9.]/g,''); var n=parseFloat(s); return isNaN(n)?'':n; }
+function processarImportItens(){
+  var txt=((document.getElementById('imp-itens')||{}).value||'');
+  var linhas=txt.split(/\r?\n/).map(function(l){return l.replace(/\s+$/,'');}).filter(function(l){return l.trim();});
+  if(!linhas.length){ toast('Cole os itens da planilha primeiro.'); return; }
+  var n=0;
+  linhas.forEach(function(l){
+    var cols=l.split(/\t|;|\|/);
+    var d=(cols[0]||'').trim(); if(!d) return;
+    var u=(cols[1]||'UN').trim()||'UN';
+    addLinha(d, u, impNum(cols[2]), impNum(cols[3])); n++;
+  });
+  calcTotal(); fecharModal(); toast(n+' item(ns) importado(s) na tabela. Confira e pesquise os preços.');
 }
 function addDot(){
   var tb=document.getElementById('dot-body');
@@ -1843,7 +1865,7 @@ function renderFormDispensa(){
   h+='<div class="field" style="margin:12px 0"><label>Objeto</label><input id="d-obj" placeholder="o que será adquirido"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens</div>';
   h+='<table class="itab"><thead><tr><th style="width:40%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
   h+='<div class="totbar"><span>Valor total</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">Os itens entram no ato de dispensa. O valor total é somado da tabela.</div><div id="precos-todos-res"></div><div id="precos-box"></div></div>';
@@ -1912,7 +1934,7 @@ function renderFormETP(){
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens (alimenta os incisos IV e VI)</div>';
   h+='<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">As quantidades viram a memória de cálculo do inciso IV; o total e as fontes viram o inciso VI (art. 23).</div>';
