@@ -864,7 +864,7 @@ function renderFormTR(){
   h += '<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
   h += '<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button>';
   h += '<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
-  h += '<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço de TODOS os itens no PNCP</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
+  h += '<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h += '<div class="hint" style="margin-top:6px">Um clique: o sistema busca o preço real de cada item no PNCP e preenche a coluna de valor. Ele preenche os que acha com segurança e lista os que você precisa revisar.</div>';
   h += '<div id="precos-todos-res"></div>';
   h += '<div id="precos-box"></div></div>';
@@ -1014,7 +1014,7 @@ async function buscarPrecosTodos(){
   if(btn){ btn.innerHTML=orig; btn.disabled=false; }
   var box=document.getElementById('precos-todos-res');
   if(box){
-    var h='<div class="precos-card" style="margin-top:10px"><div class="precos-h"><div><b>Resultado da busca no PNCP</b><span>'+ok+' de '+rows.length+' itens precificados; '+sem+' para você revisar</span></div></div>';
+    var h='<div class="precos-card" style="margin-top:10px"><div class="precos-h"><div><b>Preços oficiais (PNCP, Governo Federal)</b><span>'+ok+' de '+rows.length+' itens precificados; '+sem+' para você revisar</span></div></div>';
     h+=linhas.map(function(l){
       var topo='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0 4px"><div style="font-size:13px;color:var(--ink);font-weight:600">'+esc(l.d)+'</div>'+(l.v!=null?('<span class="st st-a" style="white-space:nowrap"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> '+money(l.v)+' ('+l.n+' fontes)</span>'):'<span class="st st-b" style="white-space:nowrap"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> revisar (sem preço claro)</span>')+'</div>';
       var fontes='';
@@ -1623,7 +1623,7 @@ function renderFormDispensa(){
   h+='<table class="itab"><thead><tr><th style="width:40%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
   h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button>';
   h+='<div class="totbar"><span>Valor total</span><b id="f-total">R$ 0,00</b></div>';
-  h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço de TODOS os itens no PNCP</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
+  h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">Os itens entram no ato de dispensa. O valor total é somado da tabela.</div><div id="precos-todos-res"></div><div id="precos-box"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-users"/></svg> Fornecedor e preço</div>';
   h+='<div class="frow c2"><div class="field"><label>Contratada (razão social)</label><input id="d-razao"></div><div class="field"><label>CNPJ</label><input id="d-cnpj"></div></div>';
@@ -1692,7 +1692,7 @@ function renderFormETP(){
   h+='<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
   h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
-  h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço de TODOS os itens no PNCP</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
+  h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">As quantidades viram a memória de cálculo do inciso IV; o total e as fontes viram o inciso VI (art. 23).</div>';
   h+='<div id="precos-todos-res"></div><div id="precos-box"></div></div>';
 
