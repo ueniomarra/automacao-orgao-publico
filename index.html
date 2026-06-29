@@ -470,6 +470,7 @@ td .modd{font-size:12px;color:var(--slate)}
     <div class="nav-i" data-pg="auditoria" onclick="nav(this)"><svg class="ic"><use href="#i-shield"/></svg> Trilha de Auditoria</div>
     <div class="nav-i" data-pg="relatorios" onclick="nav(this)"><svg class="ic"><use href="#i-chart"/></svg> Relatórios</div>
     <div class="nav-i" data-pg="baselegal" onclick="nav(this)"><svg class="ic"><use href="#i-scale"/></svg> Base Legal</div>
+    <div class="nav-i" data-pg="secretarias" onclick="nav(this)"><svg class="ic"><use href="#i-grid"/></svg> Secretarias / Fundos</div>
 
   </aside>
 
@@ -684,6 +685,18 @@ td .modd{font-size:12px;color:var(--slate)}
         <div id="bl-lista"></div>
       </div>
 
+      <!-- SECRETARIAS / FUNDOS -->
+      <div class="page" id="pg-secretarias">
+        <div class="pagehead"><div><div class="hello">Gestão</div><h1>Secretarias e Fundos</h1><p>Cadastre as secretarias e os fundos do seu órgão. Eles aparecem para seleção ao gerar TR, Edital, Contrato e os demais documentos. Cada órgão tem os seus.</p></div></div>
+        <div class="panel" style="max-width:700px">
+          <div class="ph"><h3 id="sec-titulo">Secretarias e fundos cadastrados</h3></div>
+          <div style="padding:14px 18px">
+            <div style="display:flex;gap:8px;margin-bottom:14px"><input id="sec-nova" placeholder="Nome da secretaria ou fundo" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-family:inherit;font-size:14px" onkeydown="if(event.key==='Enter')addSecretaria()"><button class="btn-gold" type="button" onclick="addSecretaria()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Adicionar</button></div>
+            <div id="sec-lista"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- WORKSPACE DE DOCUMENTO -->
       <div class="page" id="pg-workspace">
         <div class="wsback" onclick="voltarModulo()"><svg class="ic" style="width:16px;height:16px;transform:rotate(180deg)"><use href="#i-arrow"/></svg> Voltar</div>
@@ -803,6 +816,33 @@ function show(pg){
   if(pg==='admin') renderAdmin();
   if(pg==='auditoria') renderAuditoria();
   if(pg==='relatorios') renderRelatorios();
+  if(pg==='baselegal') renderBaseLegal();
+  if(pg==='secretarias') renderSecretarias();
+}
+// ===== Secretarias / Fundos do órgão (alimentam os campos de seleção dos documentos) =====
+function renderSecretarias(){
+  var box=document.getElementById('sec-lista'); if(!box) return;
+  var tit=document.getElementById('sec-titulo'); if(tit) tit.textContent='Secretarias e fundos cadastrados ('+SECRETARIAS.length+')';
+  box.innerHTML = SECRETARIAS.length ? SECRETARIAS.map(function(s,i){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><svg class="ic" style="width:15px;height:15px;stroke:var(--navy)"><use href="#i-folder"/></svg><div style="flex:1;font-size:14px;color:var(--ink)">'+esc(s)+'</div><span style="cursor:pointer;color:var(--royal);font-size:12px;font-weight:700" onclick="editSecretaria('+i+')">editar</span><span style="cursor:pointer;color:#C62D45;font-size:12px;font-weight:700" onclick="excluirSecretaria('+i+')">excluir</span></div>';
+  }).join('') : '<div class="hint">Nenhuma secretaria cadastrada ainda. Adicione no campo acima.</div>';
+}
+function salvarSecretarias(){
+  dbSave();
+  try{ if(SB && CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; SB.from('org_secretarias').upsert({orgao_id:org, lista:SECRETARIAS}).then(function(){},function(){}); } }catch(e){}
+}
+function addSecretaria(){
+  var inp=document.getElementById('sec-nova'); if(!inp) return; var v=(inp.value||'').trim(); if(!v) return;
+  if(SECRETARIAS.some(function(s){return s.toLowerCase()===v.toLowerCase();})){ toast('Essa secretaria/fundo já está na lista.'); return; }
+  SECRETARIAS.push(v); inp.value=''; salvarSecretarias(); renderSecretarias(); toast('Adicionada. Já aparece na seleção dos documentos.');
+}
+function editSecretaria(i){
+  var atual=SECRETARIAS[i]; if(atual==null) return; var nv=prompt('Editar nome da secretaria/fundo:', atual); if(nv==null) return; nv=nv.trim(); if(!nv) return;
+  SECRETARIAS[i]=nv; salvarSecretarias(); renderSecretarias(); toast('Atualizada.');
+}
+function excluirSecretaria(i){
+  if(SECRETARIAS[i]==null) return; if(!confirm('Excluir "'+SECRETARIAS[i]+'" da lista?')) return;
+  SECRETARIAS.splice(i,1); salvarSecretarias(); renderSecretarias(); toast('Excluída.');
 }
 
 // ---- login (demonstracao de navegacao; o login seguro entra via Supabase) ----
@@ -833,7 +873,7 @@ async function entrar(){
     if(perfil.ativo===false){ await SB.auth.signOut(); loginErro('Acesso inativo. Procure o administrador do órgão.'); if(btn){btn.disabled=false;btn.innerHTML=orig;} return; }
     CURRENT_USER={login:email, nome:perfil.nome||email, papel:perfil.papel||'staff', orgao:perfil.orgao_id||'tur', perm:perfil.perm};
     var oid=perfil.orgao_id||'tur';
-    try{ var og=await SB.from('orgaos').select('*').eq('id',oid).single(); if(og.data){ ORG={nome:og.data.nome, uf:og.data.uf||'GO', cnpj:og.data.cnpj||'', endereco:(og.data.endereco||ORG.endereco), ordenador:og.data.gestor||'', cargo:og.data.cargo||'', brasao:(og.data.brasao||ORG.brasao), id:og.data.id}; } }catch(e){}
+    try{ var og=await SB.from('orgaos').select('*').eq('id',oid).single(); if(og.data){ ORG={nome:og.data.nome, uf:og.data.uf||'GO', cnpj:og.data.cnpj||'', endereco:(og.data.endereco||ORG.endereco), ordenador:og.data.gestor||'', cargo:og.data.cargo||'', brasao:(og.data.brasao||ORG.brasao), id:og.data.id}; if(og.data.secretarias && og.data.secretarias.length) SECRETARIAS=og.data.secretarias; } }catch(e){}
     await carregarDoSupabase();
     abrirApp(email);
   }catch(e){ loginErro('Erro ao entrar. Tente de novo.'); }
@@ -878,7 +918,8 @@ var ORG = {
 };
 function docHeader(titulo, sub){ return '<div style="text-align:center;margin-bottom:14px"><img src="'+ORG.brasao+'" style="height:50px;width:auto;margin-bottom:6px"></div><h1>'+titulo+'</h1><div class="dsub">'+sub+'</div>'; }
 var PROC={};
-var SECRETARIAS = ['Prefeitura','Secretaria de Administração','Secretaria de Finanças','CIRETRAN (Circunscrição Regional de Trânsito)','Secretaria de Educação e Cultura','Secretaria Municipal de Saúde','Secretaria de Transporte','Secretaria de Esporte, Turismo e Lazer','Secretaria de Assistência Social','Secretaria de Obras e Habitação','Controladoria Interna','Secretaria de Agricultura e Pecuária','Secretaria de Meio Ambiente','Secretaria de Infraestrutura e Serviços Urbanos','Secretaria do Povoado de Formosinha','Assessoria de Comunicação','Fundo de Assistência Social','Fundo Municipal de Saúde','Fundo Municipal de Meio Ambiente'];
+var SECRETARIAS_SEED = ['Prefeitura','Secretaria de Administração','Secretaria de Finanças','CIRETRAN (Circunscrição Regional de Trânsito)','Secretaria de Educação e Cultura','Secretaria Municipal de Saúde','Secretaria de Transporte','Secretaria de Esporte, Turismo e Lazer','Secretaria de Assistência Social','Secretaria de Obras e Habitação','Controladoria Interna','Secretaria de Agricultura e Pecuária','Secretaria de Meio Ambiente','Secretaria de Infraestrutura e Serviços Urbanos','Secretaria do Povoado de Formosinha','Assessoria de Comunicação','Fundo de Assistência Social','Fundo Municipal de Saúde','Fundo Municipal de Meio Ambiente'];
+var SECRETARIAS = SECRETARIAS_SEED.slice(); // lista viva (editável pelo órgão na tela Secretarias/Fundos)
 var MODALIDADES = ['Pregão Eletrônico','Pregão Presencial','Concorrência Eletrônica','Concorrência Presencial','Concurso','Leilão Eletrônico','Leilão Presencial','Diálogo Competitivo'];
 // Critérios filtrados pela modalidade (art. 33 e 56 da Lei 14.133/2021)
 function criteriosDe(mod){
@@ -2348,8 +2389,8 @@ var CURRENT_USER={login:'ueniomarra',papel:'superadmin'};
 // Modelos reais enviados pela Prefeitura de Turvelândia (semeados na biblioteca)
 var MODELOS_SEED=[];
 function seedModelos(){ MODELOS_SEED.forEach(function(m){ var found=false; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===m.id){ DB.docs[i]=m; found=true; break; } } if(!found) DB.docs.push(m); }); }
-function dbLoad(){ try{ var s=localStorage.getItem('aop_demo_v1'); if(s){ var o=JSON.parse(s); DB.docs=o.docs||[]; DB.seq=o.seq||{}; DB.users=(o.users&&o.users.length)?o.users:USERS_SEED.slice(); if(o.contratos&&o.contratos.length) CONTRATOS=o.contratos; if(o.orgaos&&o.orgaos.length) ORGAOS=o.orgaos; } }catch(e){} seedModelos(); }
-function dbSave(){ try{ localStorage.setItem('aop_demo_v1', JSON.stringify({docs:DB.docs,seq:DB.seq,contratos:CONTRATOS,users:DB.users,orgaos:ORGAOS})); }catch(e){} }
+function dbLoad(){ try{ var s=localStorage.getItem('aop_demo_v1'); if(s){ var o=JSON.parse(s); DB.docs=o.docs||[]; DB.seq=o.seq||{}; DB.users=(o.users&&o.users.length)?o.users:USERS_SEED.slice(); if(o.contratos&&o.contratos.length) CONTRATOS=o.contratos; if(o.orgaos&&o.orgaos.length) ORGAOS=o.orgaos; if(o.secretarias&&o.secretarias.length) SECRETARIAS=o.secretarias; } }catch(e){} seedModelos(); }
+function dbSave(){ try{ localStorage.setItem('aop_demo_v1', JSON.stringify({docs:DB.docs,seq:DB.seq,contratos:CONTRATOS,users:DB.users,orgaos:ORGAOS,secretarias:SECRETARIAS})); }catch(e){} }
 function dataHoje(){ var d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
 function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
@@ -2426,6 +2467,9 @@ async function carregarDoSupabase(){
     if(!pp.error && pp.data){ DB.users = pp.data.map(function(r){ return {login:r.email,nome:r.nome,papel:r.papel,perm:r.perm,ativo:r.ativo!==false,orgao:r.orgao_id||'*'}; }); }
     var oo=await SB.from('orgaos').select('id,tipo,nome,uf,cnpj,gestor,cargo');
     if(!oo.error && oo.data && oo.data.length){ ORGAOS = oo.data.map(function(r){ return {id:r.id,tipo:r.tipo,nome:r.nome,uf:r.uf,cnpj:r.cnpj,gestor:r.gestor,cargo:r.cargo}; }); }
+    var orgS=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
+    var ss=await SB.from('org_secretarias').select('lista').eq('orgao_id',orgS).maybeSingle();
+    if(ss && !ss.error && ss.data && ss.data.lista && ss.data.lista.length) SECRETARIAS=ss.data.lista;
   }catch(e){}
 }
 async function registrarAud(acao, item, orgao){
@@ -2716,7 +2760,7 @@ function autoDetectarCampos(html){
 // Usa o modelo como MOLDE do passo: cai no tipo certo, abre os campos, miolo fixo, segue o fluxo.
 function usarModeloComoTemplate(d){
   // modelos antigos (sem campos) são processados automaticamente na 1ª vez que forem usados
-  if(d && d.html && !/\{\{/.test(d.html)){ var auto=autoDetectarCampos(d.html); if(/\{\{/.test(auto)){ d.html=auto; try{ dbSave(); if(SB&&CURRENT_USER) SB.from('documentos').update({html:auto}).eq('id',d.id); }catch(e){} } }
+  if(d && d.html && !/\{\{/.test(d.html)){ var auto=autoDetectarCampos(d.html); if(/\{\{/.test(auto)){ d.html=auto; try{ dbSave(); if(SB&&CURRENT_USER) SB.from('documentos').update({html:auto}).eq('id',d.id).then(function(){},function(){}); }catch(e){} } }
   var tipoBase=inferTipoModelo(d.objeto);
   window._abrindoModelo=true; abrirDoc(tipoBase, false); window._abrindoModelo=false; // renderiza o formulario normal do passo; nao restaura rascunho por cima do modelo
   DOC.modeloUso=true; DOC.modeloTplHtml=d.html; DOC.modeloCampos=tplCampos(d.html); DOC.baseModelo=d.objeto;
