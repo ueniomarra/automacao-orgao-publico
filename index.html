@@ -941,7 +941,7 @@ var DOC = {tipo:'tr', consulta:false, itens:[], dot:[]};
 function money(v){ v = Number(v)||0; return 'R$ ' + v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function pills(key,opts,sel){ return '<div class="pills" id="pill-'+key+'">'+opts.map(function(o){return '<button type="button" class="pill'+(o===sel?' on':'')+'" onclick="setPill(\''+key+'\',this)">'+o+'</button>';}).join('')+'</div>'; }
-function setPill(key,el){ var box=el.parentNode; box.querySelectorAll('.pill').forEach(function(p){p.classList.remove('on')}); el.classList.add('on'); if(key==='modalidade'){ renderCriterios(); renderModalidadeExtra(); } if(key==='engenharia'){ renderRegime(); } if(key==='atipo'){ renderAditivoExtra(); } }
+function setPill(key,el){ var box=el.parentNode; box.querySelectorAll('.pill').forEach(function(p){p.classList.remove('on')}); el.classList.add('on'); if(key==='modalidade'){ renderCriterios(); renderModalidadeExtra(); } if(key==='engenharia'){ renderRegime(); } if(key==='qualtec'){ renderQualTec(); } if(key==='atipo'){ renderAditivoExtra(); } }
 function renderRegime(){ var box=document.getElementById('regime-box'); if(!box) return; if(pillVal('engenharia')==='Sim'){ box.innerHTML='<div class="field"><label>Regime de execução (art. 46 da Lei 14.133/2021)</label>'+pills('regime',REGIMES,'Empreitada por preço global')+'</div>'; } else { box.innerHTML=''; } }
 function renderModalidadeExtra(){
   var box=document.getElementById('mod-extra'); if(!box) return;
@@ -982,6 +982,7 @@ function abrirDoc(tipo, consulta){
   injetarGuia(tipo);
   goto('workspace');
   if(tipo==='tr' && ETP_DATA){ puxarDoETP(); }
+  restaurarRascunho(tipo);
 }
 // Guia de preenchimento no topo de TODO formulário (linguagem simples, à prova de erro)
 var GUIAS = {
@@ -1026,6 +1027,41 @@ function sairModoModelo(){
 }
 // Link discreto: troca o modelo pelo formulário automático do mesmo tipo, sem sair da tela.
 function voltarFormAuto(){ if(DOC && DOC.tipo){ var t=DOC.tipo; abrirDoc(t,false); toast('Formulário automático. Preencha e clique em Gerar documento.'); } }
+// ===== RASCUNHO AUTOMÁTICO do formulário (não perder o que está digitando) =====
+var RASC_TIPOS={tr:1,etp:1,edital:1,contrato:1,dispensa:1,inexigibilidade:1,oficio:1,precos:1};
+function rascKey(t){ return 'aop_rasc_'+((CURRENT_USER&&CURRENT_USER.orgao)||'tur')+'_'+t; }
+function _rascRows(sel,cls){ var a=[]; document.querySelectorAll(sel+' tr').forEach(function(tr){ var first=tr.querySelector('.'+cls[0]); if(!first || !first.value.trim()) return; var o={}; cls.forEach(function(c){ var i=tr.querySelector('.'+c); o[c]=i?i.value:''; }); a.push(o); }); return a; }
+function salvarRascunho(){
+  if(!DOC||!DOC.tipo||DOC.consulta||DOC.modeloTplHtml||!RASC_TIPOS[DOC.tipo]) return;
+  var wp=document.getElementById('pg-workspace'); if(!wp||!wp.classList.contains('on')) return;
+  var ff=document.getElementById('ws-fields'); if(!ff) return;
+  var campos={}; ff.querySelectorAll('input[id],select[id],textarea[id]').forEach(function(e){ if(e.id && e.type!=='file' && e.id.indexOf('prec-')<0 && e.id!=='f-precos-uf') campos[e.id]=e.value; });
+  var pills={}; ff.querySelectorAll('[id^="pill-"]').forEach(function(p){ var on=p.querySelector('.pill.on'); if(on) pills[p.id.slice(5)]=on.textContent.trim(); });
+  var snap={c:campos,p:pills,itens:_rascRows('#itab-body',['i-d','i-u','i-q','i-v']),dot:_rascRows('#dot-body',['d-fi','d-fo','d-ac','d-dt','d-el']),qtp:_rascRows('#qtp-body',['q-d','q-q']),qto:_rascRows('#qto-body',['q-d','q-q'])};
+  try{ localStorage.setItem(rascKey(DOC.tipo), JSON.stringify(snap)); }catch(e){}
+}
+function limparRascunho(t){ try{ localStorage.removeItem(rascKey(t)); }catch(e){} }
+function restaurarRascunho(tipo){
+  if(!RASC_TIPOS[tipo] || window._abrindoModelo) return;
+  var fo=document.getElementById('f-objeto')||document.getElementById('d-obj')||document.getElementById('x-obj')||document.getElementById('o-assunto')||document.getElementById('g-objeto');
+  if(fo && fo.value.trim()) return; // já veio preenchido (chain / objeto usual): não sobrescreve
+  var s; try{ s=JSON.parse(localStorage.getItem(rascKey(tipo))||'null'); }catch(e){ s=null; }
+  if(!s) return;
+  var temConteudo=(s.c && Object.keys(s.c).some(function(k){ return /objeto|justif|obj|assunto|corpo/.test(k) && (s.c[k]||'').trim(); })) || (s.itens&&s.itens.length);
+  if(!temConteudo) return;
+  function setPillByText(key,txt){ var box=document.getElementById('pill-'+key); if(!box) return; box.querySelectorAll('.pill').forEach(function(pp){ if(pp.textContent.trim()===txt) pp.click(); }); }
+  if(s.p){ if(s.p.modalidade) setPillByText('modalidade',s.p.modalidade); if(s.p.engenharia) setPillByText('engenharia',s.p.engenharia); if(s.p.qualtec) setPillByText('qualtec',s.p.qualtec); Object.keys(s.p).forEach(function(k){ if(['modalidade','engenharia','qualtec'].indexOf(k)<0) setPillByText(k,s.p[k]); }); }
+  if(s.c){ Object.keys(s.c).forEach(function(id){ var e=document.getElementById(id); if(e) e.value=s.c[id]; }); }
+  if(s.itens&&s.itens.length){ var tb=document.getElementById('itab-body'); if(tb){ tb.innerHTML=''; s.itens.forEach(function(r){ addLinha(r['i-d'],r['i-u'],r['i-q'],r['i-v']); }); calcTotal(); } }
+  if(s.dot&&s.dot.length){ var db=document.getElementById('dot-body'); if(db){ db.innerHTML=''; s.dot.forEach(function(r){ addDot(); var tr=db.lastChild; if(tr){ var g=function(c){return tr.querySelector('.'+c);}; if(g('d-fi'))g('d-fi').value=r['d-fi']; if(g('d-fo'))g('d-fo').value=r['d-fo']; if(g('d-ac'))g('d-ac').value=r['d-ac']; if(g('d-dt'))g('d-dt').value=r['d-dt']; if(g('d-el'))g('d-el').value=r['d-el']; } }); } }
+  var fillQ=function(bid,rows){ var b=document.getElementById(bid); if(!b||!rows||!rows.length)return; b.innerHTML=''; rows.forEach(function(r){ addQual(bid); var tr=b.lastChild; if(tr){ if(tr.querySelector('.q-d'))tr.querySelector('.q-d').value=r['q-d']; if(tr.querySelector('.q-q'))tr.querySelector('.q-q').value=r['q-q']; } }); };
+  fillQ('qtp-body',s.qtp); fillQ('qto-body',s.qto);
+  toast('Rascunho recuperado. Continue de onde parou.');
+}
+(function(){ var t; function deb(){ clearTimeout(t); t=setTimeout(salvarRascunho,600); }
+  document.addEventListener('input',deb); document.addEventListener('change',deb);
+  document.addEventListener('click',function(e){ if(e.target&&e.target.closest&&e.target.closest('#ws-fields .pill, #ws-fields .del, #ws-fields .addline')) setTimeout(deb,40); });
+})();
 
 // ---- formulário do TR ----
 function renderFormTR(){
@@ -1073,10 +1109,35 @@ function renderFormTR(){
   h += '<table class="itab"><thead><tr><th>Ficha</th><th>Fonte</th><th>Ação</th><th>Dotação</th><th>Elemento</th><th></th></tr></thead><tbody id="dot-body"></tbody></table>';
   h += '<button class="addline" onclick="addDot()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar dotação</button></div>';
 
+  h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-shield"/></svg> Qualificação técnica (atestados, art. 67)</div>';
+  h += '<div class="field"><label>Exigir comprovação de capacidade técnica (atestados)?</label>'+pills('qualtec',['Não','Sim'],'Não')+'<div class="hint" style="margin-top:6px">Marque <b>Sim</b> para obra/engenharia e serviços que exigem experiência comprovada. Você define as parcelas de maior relevância e a quantidade mínima. O que definir aqui entra no TR e no Edital (habilitação).</div></div>';
+  h += '<div id="qualtec-box" style="margin-top:10px"></div></div>';
+
   document.getElementById('ws-fields').innerHTML = h;
-  renderCriterios(); renderModalidadeExtra(); renderRegime();
+  renderCriterios(); renderModalidadeExtra(); renderRegime(); renderQualTec();
   addLinha(); addDot();
 }
+// Qualificação técnica: parcelas de maior relevância e quantidade mínima (profissional e operacional)
+function renderQualTec(){
+  var box=document.getElementById('qualtec-box'); if(!box) return;
+  if(pillVal('qualtec')!=='Sim'){ box.innerHTML=''; return; }
+  var h='';
+  h+='<div class="gl" style="font-size:12.5px;color:var(--royal);margin:2px 0 6px"><svg class="ic" style="width:13px;height:13px"><use href="#i-users"/></svg> Capacidade técnico-PROFISSIONAL (profissional com CAT, art. 67, I)</div>';
+  h+='<table class="itab"><thead><tr><th style="width:64%">Parcela de maior relevância (serviço)</th><th>Qtd mínima</th><th></th></tr></thead><tbody id="qtp-body"></tbody></table>';
+  h+='<button class="addline" type="button" onclick="addQual(\'qtp-body\')"><svg class="ic" style="width:13px;height:13px"><use href="#i-plus"/></svg> Adicionar (profissional)</button>';
+  h+='<div class="gl" style="font-size:12.5px;color:var(--royal);margin:14px 0 6px"><svg class="ic" style="width:13px;height:13px"><use href="#i-shield"/></svg> Capacidade técnico-OPERACIONAL (atestado da empresa, CAT/CAO, art. 67, II)</div>';
+  h+='<table class="itab"><thead><tr><th style="width:64%">Parcela de maior relevância (serviço)</th><th>Qtd mínima</th><th></th></tr></thead><tbody id="qto-body"></tbody></table>';
+  h+='<button class="addline" type="button" onclick="addQual(\'qto-body\')"><svg class="ic" style="width:13px;height:13px"><use href="#i-plus"/></svg> Adicionar (operacional)</button>';
+  h+='<div class="hint" style="margin-top:8px">Para obra/engenharia o registro no CREA/CAU é exigido automaticamente. A quantidade mínima limita-se às parcelas de maior relevância (em regra até 50% dos quantitativos), art. 67 da Lei nº 14.133/2021.</div>';
+  box.innerHTML=h; addQual('qtp-body'); addQual('qto-body');
+}
+function addQual(bodyId){
+  var tb=document.getElementById(bodyId); if(!tb) return;
+  var tr=document.createElement('tr');
+  tr.innerHTML='<td><input class="q-d" placeholder="ex.: execução de pavimentação asfáltica"></td><td><input class="q-q" style="width:96px" placeholder="ex.: 500 m²"></td><td><button class="del" type="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+  tb.appendChild(tr);
+}
+function coletaQual(bodyId){ var arr=[]; document.querySelectorAll('#'+bodyId+' tr').forEach(function(tr){ var d=tr.querySelector('.q-d'),q=tr.querySelector('.q-q'); if(d&&d.value.trim()) arr.push({d:d.value.trim(),q:(q?q.value.trim():'')}); }); return arr; }
 
 // Pesquisa de Preços (art. 23) dentro do TR: registra fonte real por preço, nunca inventa
 function abrirPrecos(){
@@ -1472,7 +1533,8 @@ function gerarTR(){
   if(!linhas) linhas='<tr><td colspan="6">Adicione itens na tabela.</td></tr>';
   var dotrows = dot.length? dot.map(function(d){return '<tr><td>'+esc(d.fi)+'</td><td>'+esc(d.fo)+'</td><td>'+esc(d.ac)+'</td><td>'+esc(d.dt)+'</td><td>'+esc(d.el)+'</td></tr>';}).join('') : '<tr><td colspan="5">Dotação a informar pelo setor.</td></tr>';
 
-  PROC={numTR:num,processo:proc,secretaria:sec,secNome:secNome,secCargo:secCargo,modalidade:mod,criterio:crit,fj:fj,objeto:obj,justif:just,itens:itens,dot:dot,local:local,entrega:entrega,recprov:recprov,recdef:recdef,vig:vig,gar:gar,pag:pag,tot:tot,eng:pillVal('engenharia'),regime:pillVal('regime'),forma:forma,modbase:modbase,srp:srptr,convenio:convenio,unidades:unidades,horario:horario,subst:subst,reaj:reaj,indice:indice};
+  var qualtecOn=pillVal('qualtec')==='Sim', qtProf=qualtecOn?coletaQual('qtp-body'):[], qtOper=qualtecOn?coletaQual('qto-body'):[];
+  PROC={numTR:num,processo:proc,secretaria:sec,secNome:secNome,secCargo:secCargo,modalidade:mod,criterio:crit,fj:fj,objeto:obj,justif:just,itens:itens,dot:dot,local:local,entrega:entrega,recprov:recprov,recdef:recdef,vig:vig,gar:gar,pag:pag,tot:tot,eng:pillVal('engenharia'),regime:pillVal('regime'),forma:forma,modbase:modbase,srp:srptr,convenio:convenio,unidades:unidades,horario:horario,subst:subst,reaj:reaj,indice:indice,qualtec:{exige:qualtecOn,prof:qtProf,oper:qtOper}};
   var H='';
   H+=docHeader('TERMO DE REFERÊNCIA', esc(ORG.nome.toUpperCase())+'/'+ORG.uf+'<br>PROCESSO ADMINISTRATIVO Nº '+esc(proc)+' | TR Nº '+esc(num)+'<br>'+esc(sec.toUpperCase()));
 
@@ -1491,6 +1553,19 @@ function gerarTR(){
 
   H+='<h2>3. DOS REQUISITOS PARA CONTRATAÇÃO</h2>';
   H+='<p>3.1. A empresa licitante deverá atender às condições de habilitação exigidas na licitação, abrangendo a qualificação jurídica, fiscal, social, trabalhista, econômico-financeira e técnica, nos termos da Lei Federal nº 14.133/2021.</p>';
+  if(qualtecOn && (qtProf.length || qtOper.length)){
+    H+='<p>3.2. DA QUALIFICAÇÃO TÉCNICA. Para a comprovação de capacidade técnica, nos termos do art. 67 da Lei nº 14.133/2021, serão exigidos os atestados a seguir, relativos às parcelas de maior relevância do objeto:</p>';
+    if(qtProf.length){
+      H+='<p>3.2.1. Capacidade técnico-profissional (art. 67, inciso I): comprovação de que a licitante possui, na data prevista para a entrega da proposta, profissional de nível compatível detentor de atestado e respectiva Certidão de Acervo Técnico (CAT) que comprove a execução das seguintes parcelas:</p>';
+      H+='<table><thead><tr><th>Parcela de maior relevância</th><th>Quantidade mínima exigida</th></tr></thead><tbody>'+qtProf.map(function(x){return '<tr><td>'+esc(x.d)+'</td><td>'+esc(x.q||'a definir pelo setor')+'</td></tr>';}).join('')+'</tbody></table>';
+    }
+    if(qtOper.length){
+      H+='<p>3.2.2. Capacidade técnico-operacional (art. 67, inciso II): comprovação de aptidão da licitante (pessoa jurídica), mediante atestado e respectiva CAT/CAO, para a execução das seguintes parcelas:</p>';
+      H+='<table><thead><tr><th>Parcela de maior relevância</th><th>Quantidade mínima exigida</th></tr></thead><tbody>'+qtOper.map(function(x){return '<tr><td>'+esc(x.d)+'</td><td>'+esc(x.q||'a definir pelo setor')+'</td></tr>';}).join('')+'</tbody></table>';
+    }
+    H+='<p>3.2.3. As exigências limitam-se às parcelas de maior relevância e valor significativo, em regra até 50% dos quantitativos, vedadas exigências de comprovação de tempo ou de locais específicos, nos termos do art. 67 da Lei nº 14.133/2021.</p>';
+    if(pillVal('engenharia')==='Sim'){ H+='<p>3.2.4. A licitante e o responsável técnico deverão comprovar registro ou inscrição na entidade profissional competente (CREA ou CAU).</p>'; }
+  }
 
   H+='<h2>4. DA FORMA E DOS CRITÉRIOS DE SELEÇÃO DO FORNECEDOR</h2>';
   H+='<p>4.1. O fornecedor será selecionado por meio de '+modbase+', sob a forma '+forma+', com adoção do critério de julgamento por '+esc(crit).toLowerCase()+', nos termos da Lei Federal nº 14.133/2021.</p>';
@@ -1817,7 +1892,16 @@ function gerarEdital(){
   H+='<p>'+c+'.2. Habilitação jurídica: ato constitutivo, estatuto ou contrato social em vigor, devidamente registrado, e documentos dos administradores; para o microempreendedor individual, o Certificado da Condição de MEI.</p>';
   H+='<p>'+c+'.3. Regularidade fiscal e trabalhista: a) Certidão conjunta de Tributos Federais e Dívida Ativa da União; b) Certidão Negativa Estadual; c) Certidão Negativa Municipal; d) Certificado de Regularidade do FGTS; e) Certidão Negativa de Débitos Trabalhistas, CNDT (Lei nº 12.440/2011); f) inscrição no CNPJ.</p>';
   H+='<p>'+c+'.4. Qualificação econômico-financeira: Certidão Negativa de Falência, Concordata ou Recuperação Judicial ou Extrajudicial, emitida há no máximo 60 (sessenta) dias, salvo prazo de validade próprio.</p>';
-  H+=(obra?('<p>'+c+'.5. Qualificação técnica (obra ou serviço de engenharia): registro ou quitação junto ao CREA ou CAU; atestado(s) de capacidade técnica compatível(is), acompanhado(s) da respectiva Certidão de Acervo Técnico (CAT); e indicação do responsável técnico, nos termos do art. 67 da Lei nº 14.133/2021.</p>'):('<p>'+c+'.5. Qualificação técnica: no mínimo 1 (um) atestado de capacidade técnica, emitido por pessoa jurídica de direito público ou privado, compatível com o objeto.</p>'));
+  var QT=PROC.qualtec;
+  if(QT && QT.exige && ((QT.prof&&QT.prof.length)||(QT.oper&&QT.oper.length))){
+    H+='<p>'+c+'.5. Qualificação técnica (art. 67 da Lei nº 14.133/2021):</p>';
+    if(QT.prof&&QT.prof.length){ H+='<p>'+c+'.5.1. Técnico-profissional (inciso I): comprovação de profissional detentor de atestado e respectiva CAT das parcelas de maior relevância: '+QT.prof.map(function(x){return esc(x.d)+(x.q?(' (mínimo '+esc(x.q)+')'):'');}).join('; ')+'.</p>'; }
+    if(QT.oper&&QT.oper.length){ H+='<p>'+c+'.5.2. Técnico-operacional (inciso II): atestado da licitante e respectiva CAT/CAO das parcelas de maior relevância: '+QT.oper.map(function(x){return esc(x.d)+(x.q?(' (mínimo '+esc(x.q)+')'):'');}).join('; ')+'.</p>'; }
+    if(obra){ H+='<p>'+c+'.5.3. Registro ou inscrição no CREA ou CAU, da empresa e do responsável técnico.</p>'; }
+    H+='<p>'+c+'.5.4. As exigências limitam-se às parcelas de maior relevância e valor significativo, em regra até 50% dos quantitativos, vedadas exigências de tempo ou de locais específicos (art. 67 da Lei nº 14.133/2021).</p>';
+  } else {
+    H+=(obra?('<p>'+c+'.5. Qualificação técnica (obra ou serviço de engenharia): registro ou quitação junto ao CREA ou CAU; atestado(s) de capacidade técnica compatível(is), acompanhado(s) da respectiva Certidão de Acervo Técnico (CAT); e indicação do responsável técnico, nos termos do art. 67 da Lei nº 14.133/2021.</p>'):('<p>'+c+'.5. Qualificação técnica: no mínimo 1 (um) atestado de capacidade técnica, emitido por pessoa jurídica de direito público ou privado, compatível com o objeto.</p>'));
+  }
   H+='<p>'+c+'.6. Declarações exigidas, conforme os modelos anexos: enquadramento como ME/EPP, idoneidade, inexistência de fato impeditivo, não vínculo com a Administração, responsabilidade e cumprimento do art. 7º, inciso XXXIII, da Constituição Federal.</p>';
   H+='<p>'+c+'.7. Havendo restrição na regularidade fiscal e trabalhista de ME/EPP, será assegurado o prazo de 5 (cinco) dias úteis, prorrogável por igual período, para regularização (art. 43, §1º, da Lei Complementar nº 123/2006).</p>';
   c=++K; H+='<h2>'+c+'. DO RECURSO</h2><p>'+c+'.1. Declarada a vencedora, abre-se o prazo de 10 (dez) minutos para que qualquer licitante manifeste, motivadamente, a intenção de recorrer, sob pena de preclusão.</p><p>'+c+'.2. Manifestada a intenção, a recorrente terá '+esc(rec)+' (três) dias úteis para apresentar as razões, ficando as demais licitantes intimadas a apresentar contrarrazões em igual prazo, contado do término do prazo da recorrente.</p>';
@@ -2319,6 +2403,7 @@ async function registrarDoc(tipo, html){
   if(ix>=0) DB.docs[ix]=rec; else DB.docs.unshift(rec);
   if(tipo==='contrato') await registrarContrato(rec, orgao);
   dbSave();
+  limparRascunho(tipo); // documento gerado e salvo: o rascunho não é mais necessário
 }
 async function registrarContrato(rec, orgao){
   for(var i=0;i<CONTRATOS.length;i++){ if(CONTRATOS[i].n===rec.numero){ return; } }
@@ -2633,7 +2718,7 @@ function usarModeloComoTemplate(d){
   // modelos antigos (sem campos) são processados automaticamente na 1ª vez que forem usados
   if(d && d.html && !/\{\{/.test(d.html)){ var auto=autoDetectarCampos(d.html); if(/\{\{/.test(auto)){ d.html=auto; try{ dbSave(); if(SB&&CURRENT_USER) SB.from('documentos').update({html:auto}).eq('id',d.id); }catch(e){} } }
   var tipoBase=inferTipoModelo(d.objeto);
-  abrirDoc(tipoBase, false); // renderiza o formulario normal do passo (dirige o fluxo e o encadeamento)
+  window._abrindoModelo=true; abrirDoc(tipoBase, false); window._abrindoModelo=false; // renderiza o formulario normal do passo; nao restaura rascunho por cima do modelo
   DOC.modeloUso=true; DOC.modeloTplHtml=d.html; DOC.modeloCampos=tplCampos(d.html); DOC.baseModelo=d.objeto;
   setTxt('ws-titulo','Seu modelo de '+nomeTipo(tipoBase)); setTxt('ws-desc', d.objeto);
   // MANTÉM o formulário do passo (com os BOTÕES e a lógica da lei); só acrescenta um aviso e os campos PRÓPRIOS do modelo.
