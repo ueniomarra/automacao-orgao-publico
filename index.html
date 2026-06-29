@@ -886,7 +886,7 @@ function criteriosDe(mod){
   if(/Concorr/.test(mod)) return ['Menor preço','Maior desconto','Melhor técnica ou conteúdo artístico','Técnica e preço','Maior retorno econômico'];
   if(/Leil/.test(mod)) return ['Maior lance'];
   if(/Concurso/.test(mod)) return ['Melhor técnica ou conteúdo artístico'];
-  if(/Diálogo|Dialogo/.test(mod)) return ['Técnica e preço','Maior retorno econômico'];
+  if(/Diálogo|Dialogo/.test(mod)) return ['Melhor técnica ou conteúdo artístico','Técnica e preço'];
   return ['Menor preço','Maior desconto','Melhor técnica ou conteúdo artístico','Técnica e preço','Maior lance','Maior retorno econômico'];
 }
 var FORMASJULG = ['Por item','Por grupo (lote)','Global'];
@@ -1411,21 +1411,26 @@ function coletaDot(){
 // ---- gerar documento ----
 async function gerarDoc(){
   var p=document.getElementById('ws-preview');
-  if(DOC.modeloUso){ if(!confirm('Isto vai substituir o SEU modelo pelo texto automático do sistema. Deseja continuar?')) return; DOC.modeloUso=false; sairModoModelo(); }
   if(DOC.tipo==='processo'){ toast('Aqui você baixa processos prontos. Use o botão "Baixar processo completo" da contratação na lista ao lado.'); return; }
   var html;
-  if(DOC.tipo==='tr') html=gerarTR();
-  else if(DOC.tipo==='etp') html=gerarETP();
-  else if(DOC.tipo==='edital') html=gerarEdital();
-  else if(DOC.tipo==='contrato') html=gerarContrato();
-  else if(DOC.tipo==='minuta') html=gerarMinuta();
-  else if(DOC.tipo==='aditivo') html=gerarAditivo();
-  else if(DOC.tipo==='dispensa') html=gerarDispensa();
-  else if(DOC.tipo==='inexigibilidade') html=gerarInexig();
-  else if(DOC.tipo==='oficio') html=gerarOficio();
-  else if(DOC.tipo==='precos') html=gerarMapaPrecos();
-  else html=gerarGenerico();
-  if(html===false || html==null){ return; } // gerador barrou (ex.: ETP sem elemento obrigatório/justificativa)
+  if(DOC.modeloTplHtml){
+    // Modo modelo: roda o gerador do passo (lê os botões do formulário e seta PROC/ETP_DATA p/ encadear) e o documento sai no TEXTO do modelo, com os campos preenchidos pelos botões e o miolo fixo.
+    try{ if(DOC.tipo==='tr') gerarTR(); else if(DOC.tipo==='etp') gerarETP(); }catch(e){}
+    html=tplPreencher(DOC.modeloTplHtml, tplValores(DOC.modeloCampos));
+  } else {
+    if(DOC.tipo==='tr') html=gerarTR();
+    else if(DOC.tipo==='etp') html=gerarETP();
+    else if(DOC.tipo==='edital') html=gerarEdital();
+    else if(DOC.tipo==='contrato') html=gerarContrato();
+    else if(DOC.tipo==='minuta') html=gerarMinuta();
+    else if(DOC.tipo==='aditivo') html=gerarAditivo();
+    else if(DOC.tipo==='dispensa') html=gerarDispensa();
+    else if(DOC.tipo==='inexigibilidade') html=gerarInexig();
+    else if(DOC.tipo==='oficio') html=gerarOficio();
+    else if(DOC.tipo==='precos') html=gerarMapaPrecos();
+    else html=gerarGenerico();
+    if(html===false || html==null){ return; } // gerador barrou (ex.: ETP sem elemento obrigatório/justificativa)
+  }
   p.className='docpaper'; p.innerHTML=html;
   p.scrollTop=0;
   if(!DOC.consulta) await registrarDoc(DOC.tipo, html);
@@ -1610,6 +1615,7 @@ function renderFormGenerico(tipo){
 function exportarWord(){
   var p=document.getElementById('ws-preview');
   if(p.classList.contains('empty')){ gerarDoc(); }
+  else if(DOC.modeloTplHtml){ p.innerHTML=tplPreencher(DOC.modeloTplHtml, tplValores(DOC.modeloCampos)); }
   var titulo=(DOCMETA[DOC.tipo]?DOCMETA[DOC.tipo].t:'documento');
   var css='body{font-family:Calibri,sans-serif;font-size:12pt;line-height:1.5;color:#000}h1{font-size:14pt;text-align:center}h2{font-size:12pt;color:#0A2342}.dsub{text-align:center;font-size:10pt;color:#444;margin-bottom:18pt}table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:4pt;font-size:10pt}.assina{text-align:center;margin-top:30pt}.selo{border:1px solid #d9b94f;background:#FBF3DF;padding:8pt;font-size:9pt;margin-top:16pt}';
   var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+p.innerHTML+'</body></html>';
@@ -2487,7 +2493,7 @@ function importarModelo(prefixo){
     if(ext==='docx' && window.mammoth){
       try{ var ab=await f.arrayBuffer(); var res=await window.mammoth.convertToHtml({arrayBuffer:ab}); html=res.value||''; }catch(e){ html=''; }
     }
-    if(html){ html='<div class="dsub">Modelo do órgão: '+esc(f.name)+'</div>'+html; }
+    if(html){ html='<div class="dsub">Modelo do órgão: '+esc(f.name)+'</div>'+autoDetectarCampos(html); }
     else { html='<h1>'+esc(f.name)+'</h1><p>Modelo do órgão importado como referência. Para <b>editar e reutilizar</b> dentro do sistema, envie em <b>Word (.docx)</b>; PDF e .doc antigos entram só para consulta.</p>'; }
     await salvarModeloBanco(nome, html);
   };
@@ -2516,25 +2522,172 @@ function inferTipoModelo(s){ s=(s||'').toLowerCase();
   if(/parecer/.test(s)) return 'parecer';
   return 'oficio';
 }
+// ===================== MOTOR DE MOLDE (modelo do orgao com campos preenchiveis + miolo fixo) =====================
+// Campos que o FLUXO ja conhece e preenche sozinho (nao viram input manual)
+var TPL_CONHECIDOS={objeto:1,secretaria:1,setor:1,interessado:1,processo:1,processo_administrativo:1,numero:1,numero_do_pregao:1,numero_do_tr:1,numero_do_certame:1,numero_do_contrato:1,n:1,no:1,modalidade:1,criterio:1,criterio_de_julgamento:1,tipo:1,valor:1,valor_total:1,valor_estimado:1,valor_global:1,orgao:1,prefeitura:1,municipio:1,uf:1,estado:1,cnpj:1,cnpj_do_orgao:1,data:1,data_de_hoje:1,itens:1};
+function tplKey(raw){ return pncpNorm((raw||'').trim()).replace(/\s+/g,'_'); }
+// Acha os campos {{...}} de um modelo (unicos)
+function tplCampos(html){ var out=[],seen={},re=/\{\{\s*([^}]+?)\s*\}\}/g,m; while((m=re.exec(html||''))){ var raw=m[1].trim(),k=tplKey(raw); if(!seen[k]){ seen[k]=1; out.push({raw:raw,key:k}); } } return out; }
+// Valores que o fluxo ja tem (PROC do TR, ETP, formulario, dados do orgao)
+function tplValoresFluxo(){
+  var v={}, P=(PROC&&PROC.objeto)?PROC:null, E=(typeof ETP_DATA!=='undefined')?ETP_DATA:null;
+  var gv=function(id){ var e=document.getElementById(id); return e?(e.value||'').trim():''; };
+  var pv=function(k){ try{ return (typeof pillVal==='function')?(pillVal(k)||''):''; }catch(e){ return ''; } };
+  var dt=function(id){ var s=gv(id); if(!s) return ''; try{ return (typeof fmtDT==='function' && /T/.test(s))?fmtDT(s):(typeof fmtD==='function'?fmtD(s):s); }catch(e){ return s; } };
+  var set=function(keys,val){ if(val==null||val==='') return; keys.forEach(function(k){ if(v[k]==null) v[k]=val; }); };
+  set(['objeto'], (P&&P.objeto)||(E&&E.objeto)||gv('f-objeto')||gv('d-obj')||gv('x-obj')||gv('o-assunto')||gv('g-objeto'));
+  set(['secretaria','setor','interessado','requerente'], (P&&P.secretaria)||(E&&E.sec)||gv('f-secretaria')||gv('d-sec')||gv('x-sec'));
+  set(['processo','processo_administrativo'], (P&&P.processo)||gv('f-processo'));
+  set(['numero','numero_do_pregao','numero_do_tr','numero_do_certame','numero_do_contrato','n','no'], (P&&P.numTR)||gv('f-numtr')||gv('e-num')||gv('c-num'));
+  // botões do formulário (clicáveis) entram no modelo
+  set(['modalidade'], (P&&P.modalidade)||pv('modalidade'));
+  set(['criterio','criterio_de_julgamento','tipo','julgamento'], (P&&P.criterio)||pv('criterio'));
+  set(['forma_de_julgamento','forma_de_julgamento_do_objeto','forma'], (P&&P.fj)||pv('formajulg'));
+  set(['modo_de_disputa','modo_disputa'], pv('emodo'));
+  set(['plataforma','plataforma_eletronica'], pv('eplat')||pv('plataforma'));
+  set(['regime','regime_de_execucao'], (P&&P.regime)||pv('regime'));
+  // datas do certame (etapa do Edital)
+  set(['inicio','inicio_do_recebimento','data_de_inicio'], dt('e-ini'));
+  set(['termino','termino_do_recebimento','data_de_termino'], dt('e-fim'));
+  set(['sessao','data_da_sessao','abertura','sessao_publica'], dt('e-sessao'));
+  set(['valor','valor_total','valor_estimado','valor_global','valor_maximo'], P?money(P.tot):'');
+  set(['vigencia'], (P&&P.vig)?(P.vig+' meses'):gv('f-vigencia'));
+  // dados do contrato (form de contrato)
+  set(['contratada','razao_social'], gv('c-razao'));
+  set(['cnpj_da_contratada'], gv('c-cnpj'));
+  set(['representante','representante_legal'], gv('c-rep'));
+  set(['fiscal','fiscal_do_contrato'], gv('c-fiscal'));
+  set(['orgao','prefeitura','municipio'], ORG&&ORG.nome);
+  set(['uf','estado'], ORG&&ORG.uf);
+  set(['cnpj','cnpj_do_orgao'], ORG&&ORG.cnpj);
+  set(['data','data_de_hoje'], dataHoje());
+  if(P&&P.itens&&P.itens.length){ var l=P.itens.map(function(it,i){ return '<tr><td>'+(i+1)+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>'+money(it.v)+'</td><td>'+money(it.t)+'</td></tr>'; }).join(''); v['itens']='<table><thead><tr><th>Item</th><th>Descrição</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th></tr></thead><tbody>'+l+'</tbody></table>'; }
+  return v;
+}
+// Junta valores do fluxo + os campos personalizados digitados (inputs id="mc-<key>")
+function tplValores(campos){
+  var v=tplValoresFluxo();
+  (campos||[]).forEach(function(c){ var el=document.getElementById('mc-'+c.key); if(el && el.value!=='') v[c.key]=esc(el.value); });
+  // campo de sites (lista com botão adicionar): junta em linhas "Site: ..."
+  var sbox=document.getElementById('mc-sites-box');
+  if(sbox){ var arr=[]; sbox.querySelectorAll('.site-in').forEach(function(i){ var t=(i.value||'').trim(); if(t) arr.push('Site: '+esc(t)); }); if(arr.length) v['sites']=arr.join('<br>'); }
+  return v;
+}
+// Adiciona uma linha de site (consulta do edital); o usuário pode incluir quantos quiser.
+function addSite(val){
+  var box=document.getElementById('mc-sites-box'); if(!box) return;
+  var d=document.createElement('div'); d.style.cssText='display:flex;gap:6px;margin-bottom:6px';
+  d.innerHTML='<input class="site-in" style="flex:1" value="'+esc(val||'')+'" placeholder="https://..."><button class="del" type="button" onclick="this.closest(\'div\').remove()">✕</button>';
+  box.appendChild(d);
+}
+// Campos que o FORMULÁRIO do passo (com botões) e o fluxo já preenchem; o resto vira input próprio do modelo.
+var CAMPO_FLUXO={objeto:1,secretaria:1,setor:1,interessado:1,requerente:1,processo:1,processo_administrativo:1,numero:1,numero_do_pregao:1,numero_do_tr:1,numero_do_certame:1,numero_do_contrato:1,n:1,no:1,modalidade:1,criterio:1,criterio_de_julgamento:1,tipo:1,julgamento:1,forma_de_julgamento:1,forma_de_julgamento_do_objeto:1,forma:1,modo_de_disputa:1,modo_disputa:1,plataforma:1,plataforma_eletronica:1,regime:1,regime_de_execucao:1,inicio:1,inicio_do_recebimento:1,data_de_inicio:1,termino:1,termino_do_recebimento:1,data_de_termino:1,sessao:1,data_da_sessao:1,abertura:1,sessao_publica:1,valor:1,valor_total:1,valor_estimado:1,valor_global:1,valor_maximo:1,vigencia:1,contratada:1,razao_social:1,cnpj_da_contratada:1,representante:1,representante_legal:1,fiscal:1,fiscal_do_contrato:1,orgao:1,prefeitura:1,municipio:1,uf:1,estado:1,cnpj:1,cnpj_do_orgao:1,data:1,data_de_hoje:1,itens:1};
+// Rótulo amigável para o campo do modelo
+function rotuloCampo(raw){ var m={numero:'Número',objeto:'Objeto',valor:'Valor',data:'Data',secretaria:'Secretaria / setor',interessado:'Interessado',processo:'Processo',modalidade:'Modalidade (eletrônico/presencial)',criterio:'Tipo / critério de julgamento',plataforma:'Plataforma',dotacao:'Dotação orçamentária',vigencia:'Vigência',fiscal:'Fiscal do contrato',representante:'Representante legal',cnpj:'CNPJ',contratada:'Contratada',preencher:'Preencher',orgao:'Órgão',uf:'UF',sites:'Sites de consulta do edital e anexos'}; var k=tplKey(raw); var lbl=m[k]; if(lbl) return lbl; raw=raw.trim(); return raw.charAt(0).toUpperCase()+raw.slice(1); }
+// Em modo modelo, monta os dados do fluxo (PROC/ETP_DATA) a partir dos campos do próprio modelo, p/ o encadeamento.
+function montarProcDeModelo(){
+  var mc=function(k){ var e=document.getElementById('mc-'+k); return e?(e.value||'').trim():''; };
+  var temItens=!!document.getElementById('itab-body');
+  var itens=temItens?coletaItens():[];
+  var valNum=(temItens&&itens.length)?calcTotal():(function(){ var s=mc('valor').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; })();
+  var modal=mc('modalidade')||'Pregão Eletrônico';
+  PROC={ objeto:mc('objeto'), numTR:mc('numero'), processo:mc('processo'), secretaria:mc('secretaria'), modalidade:modal, criterio:mc('criterio')||'Menor preço', forma:/presen/i.test(modal)?'presencial':'eletrônica', modbase:/concorr/i.test(modal)?'CONCORRÊNCIA':'PREGÃO', tot:valNum, itens:itens, eng:'Não', vig:(mc('vigencia')||'12'), dot:[] };
+  if(DOC.tipo==='etp'){ ETP_DATA={objeto:mc('objeto'),sec:mc('secretaria'),itens:itens,tot:valNum,necessidade:''}; }
+}
+// Preenche o modelo: troca cada {{campo}} pelo valor; o que faltar fica destacado em amarelo
+function tplPreencher(html, v){ return (html||'').replace(/\{\{\s*([^}]+?)\s*\}\}/g, function(_,raw){ var k=tplKey(raw); if(v[k]!=null && v[k]!=='') return v[k]; return '<span style="background:#FFF3CD;color:#7a5b00;padding:0 3px;border-radius:3px">['+esc(raw.trim())+']</span>'; }); }
+// DETECÇÃO AUTOMÁTICA dos campos que mudam (roda ao subir o modelo). Conservadora: protege o texto jurídico.
+function autoDetectarCampos(html){
+  if(!html || /\{\{/.test(html)) return html; // já tem campos, não mexe
+  var LEGAL=/(lei|decreto|art\.?|artigo|portaria|resolu|instru[çc]|s[úu]mula|ac[óo]rd|nbr|inciso|§|par[áa]grafo|constitui|emenda)/i;
+  // 0) tabela de itens (descrição/qtd/valor) -> {{itens}} (só a 1ª que parecer de itens)
+  html=html.replace(/<table[\s\S]*?<\/table>/i, function(t){ return /(qtd|quant|valor|unit|item|descri)/i.test(t) ? '{{itens}}' : t; });
+  // 1) espaços em branco para preencher
+  html=html.replace(/_{3,}/g,'{{preencher}}').replace(/\.{5,}/g,' {{preencher}}');
+  // 2) datas rotuladas (início/término/sessão) viram o campo certo; o resto vira {{data}}
+  html=html.replace(/(in[íi]cio[^<:{]{0,28}:\s*)\d{1,2}\/\d{1,2}\/(?:19|20)\d{2}/gi,'$1{{inicio}}');
+  html=html.replace(/(t[ée]rmino[^<:{]{0,28}:\s*)\d{1,2}\/\d{1,2}\/(?:19|20)\d{2}/gi,'$1{{termino}}');
+  html=html.replace(/((?:sess[ãa]o|abertura)[^<:{]{0,28}:\s*)\d{1,2}\/\d{1,2}\/(?:19|20)\d{2}/gi,'$1{{sessao}}');
+  html=html.replace(/\b\d{1,2}\/\d{1,2}\/(?:19|20)\d{2}\b/g,'{{data}}');
+  // 3) números NNN/AAAA (processo, pregão, contrato); protege leis (14.133/2021) e referências legais
+  html=html.replace(/(N[ºo°]\s*)?\b\d{1,4}\/20\d{2}\b/g, function(m, npre, offset, str){
+    var antes=str.slice(Math.max(0,offset-24), offset);
+    if(/[\d.]\s*$/.test(antes)) return m;     // parte de um número maior, ex.: 14.133/2021
+    if(LEGAL.test(antes)) return m;            // referência a lei/decreto/artigo
+    return (npre||'')+'{{numero}}';
+  });
+  // 4) valor monetário SOMENTE após rótulo "valor ...:" (protege valores citados em cláusulas)
+  html=html.replace(/(valor(?:\s+\w+){0,2}\s*[:\-]\s*)R\$\s?[\d.]+,\d{2}/gi, '$1{{valor}}');
+  // 5) rótulos de cabeçalho "LABEL: valor" (exige dois-pontos; cláusulas não usam, então ficam intactas)
+  var labels=[['forma de julgamento do objeto','forma'],['forma de julgamento','forma'],['modo de disputa','modo de disputa'],['crit[ée]rio de julgamento','criterio'],
+    ['objeto','objeto'],['interessado','interessado'],['setor requerente','secretaria'],['requerente','secretaria'],['secretaria','secretaria'],['contratada','contratada'],['raz[ãa]o social','contratada'],
+    ['tipo','criterio'],['crit[ée]rio','criterio'],['julgamento','criterio'],['modalidade','modalidade'],['plataforma','plataforma'],['local da sess[ãa]o','local da sessao'],['dota[çc][ãa]o or[çc]ament[áa]ria','dotacao'],['vig[êe]ncia','vigencia'],['fiscal do contrato','fiscal'],['fiscal','fiscal'],['representante legal','representante']];
+  labels.forEach(function(l){
+    var re=new RegExp('(>|^|[\\s;])('+l[0]+')(\\s*:\\s*)([^<\\n]{2,90}?)(?=<|\\n|$)','gi');
+    html=html.replace(re, function(m, b, lab, sep, val){ if(/\{\{/.test(val)||LEGAL.test(val)) return m; return b+lab+sep+'{{'+l[1]+'}}'; });
+  });
+  return html;
+}
+// Usa o modelo como MOLDE do passo: cai no tipo certo, abre os campos, miolo fixo, segue o fluxo.
+function usarModeloComoTemplate(d){
+  // modelos antigos (sem campos) são processados automaticamente na 1ª vez que forem usados
+  if(d && d.html && !/\{\{/.test(d.html)){ var auto=autoDetectarCampos(d.html); if(/\{\{/.test(auto)){ d.html=auto; try{ dbSave(); if(SB&&CURRENT_USER) SB.from('documentos').update({html:auto}).eq('id',d.id); }catch(e){} } }
+  var tipoBase=inferTipoModelo(d.objeto);
+  abrirDoc(tipoBase, false); // renderiza o formulario normal do passo (dirige o fluxo e o encadeamento)
+  DOC.modeloUso=true; DOC.modeloTplHtml=d.html; DOC.modeloCampos=tplCampos(d.html); DOC.baseModelo=d.objeto;
+  setTxt('ws-titulo','Seu modelo de '+nomeTipo(tipoBase)); setTxt('ws-desc', d.objeto);
+  // MANTÉM o formulário do passo (com os BOTÕES e a lógica da lei); só acrescenta um aviso e os campos PRÓPRIOS do modelo.
+  var ff=document.getElementById('ws-fields');
+  if(ff){
+    var g=ff.querySelector('.guia-box'); if(g) g.remove();
+    var custom=DOC.modeloCampos.filter(function(c){ return c.key!=='itens' && !CAMPO_FLUXO[c.key]; });
+    var b='<div class="fgroup" style="background:#FFF9EC;border:1px solid #E8C766;border-radius:10px;padding:12px"><div class="gl" style="color:#9a6a0a"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Seu modelo de '+esc(nomeTipo(tipoBase))+' está em uso</div><div class="hint">Preencha o formulário abaixo, <b>clicando nos botões</b> (modalidade, critério, etc.). O documento sai no <b>seu modelo</b>, com o miolo jurídico fixo. Depois clique em <b>Gerar documento</b>.</div>';
+    if(DOC.modeloCampos.length===0){ b+='<div class="hint" style="margin-top:6px">Obs.: não achei campos variáveis claros neste modelo; ele sai como está. <span style="cursor:pointer;color:var(--royal);font-weight:700" onclick="prepararModelo(\''+d.id+'\')">Ajustar campos (opcional)</span></div>'; }
+    if(custom.length){ b+='<div style="margin-top:8px;font-size:12px;font-weight:700;color:#9a6a0a">Campos próprios do seu modelo:</div>'+custom.map(function(c){
+      if(c.key==='sites'||c.key==='site'){ return '<div class="field" style="margin-top:7px"><label>'+esc(rotuloCampo(c.raw))+'</label><div id="mc-sites-box"></div><button class="addline" type="button" onclick="addSite()"><svg class="ic" style="width:13px;height:13px"><use href="#i-plus"/></svg> Adicionar site</button></div>'; }
+      return '<div class="field" style="margin-top:7px"><label>'+esc(rotuloCampo(c.raw))+'</label><input id="mc-'+c.key+'" placeholder="preencher"></div>'; }).join(''); }
+    b+='</div>';
+    ff.insertAdjacentHTML('afterbegin', b);
+    if(document.getElementById('mc-sites-box')){ ['https://www.turvelandia.go.gov.br','https://bnc.org.br/','https://pncp.gov.br/app'].forEach(function(s){ addSite(s); }); }
+  }
+  var p=document.getElementById('ws-preview'); p.className='docpaper'; p.removeAttribute('contenteditable'); p.innerHTML=tplPreencher(d.html, tplValores(DOC.modeloCampos));
+  goto('workspace');
+  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg=mod==='Compras'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
+  try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
+  toast('Modelo de '+nomeTipo(tipoBase)+' carregado. Preencha o passo (botões) e clique em Gerar documento.');
+}
+// Preparar modelo: marcar (uma vez) quais trechos mudam a cada processo
+function prepararModelo(id){
+  var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } } if(!d) return;
+  var btns=[['objeto','Objeto'],['numero','Número'],['data','Data'],['valor','Valor'],['secretaria','Secretaria'],['itens','Tabela de itens'],['__custom','Outro campo']];
+  var bar=btns.map(function(b){ return '<button type="button" class="chip c-ok" style="cursor:pointer;margin:0 5px 6px 0" onclick="marcarCampo(\''+b[0]+'\')">'+esc(b[1])+'</button>'; }).join('');
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 8px">Selecione no texto a parte que <b>muda a cada processo</b> (número, data, objeto, valor...) e clique no campo. O resto fica fixo. Faça uma vez; depois é só usar o modelo.</p><div style="margin-bottom:8px">'+bar+'</div><div id="mark-area" contenteditable="true" style="border:1px solid var(--line);border-radius:10px;padding:14px;max-height:48vh;overflow:auto;font-size:13px;line-height:1.7">'+d.html+'</div><button class="btn-gold" style="width:100%;justify-content:center;margin-top:12px" onclick="salvarModeloPreparado(\''+id+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-save"/></svg> Salvar modelo preparado</button>';
+  abrirModal('Preparar modelo: '+esc(d.objeto), h);
+}
+function marcarCampo(nome){
+  if(nome==='__custom'){ nome=prompt('Nome do campo que muda (ex.: fiscal do contrato):'); if(!nome) return; }
+  var area=document.getElementById('mark-area'); var sel=window.getSelection();
+  if(!area || !sel || !sel.rangeCount || sel.isCollapsed){ toast('Selecione no texto a parte que muda, depois clique no campo.'); return; }
+  var range=sel.getRangeAt(0);
+  if(!area.contains(range.commonAncestorContainer)){ toast('Selecione dentro do texto do modelo.'); return; }
+  range.deleteContents(); range.insertNode(document.createTextNode('{{'+nome+'}}')); sel.removeAllRanges();
+  toast('Campo "'+nome+'" marcado.');
+}
+async function salvarModeloPreparado(id){
+  var area=document.getElementById('mark-area'); if(!area) return;
+  var html=area.innerHTML;
+  var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } } if(!d) return;
+  d.html=html;
+  if(SB && CURRENT_USER){ try{ await SB.from('documentos').update({html:html}).eq('id',id); }catch(e){} }
+  dbSave(); fecharModal();
+  var n=tplCampos(html).length;
+  toast(n?('Modelo preparado: '+n+' campo(s). Agora é só usar.'):'Modelo salvo. Nenhum campo marcado ainda.');
+}
 // Usar o modelo do órgão: vai para o gerador daquele tipo (edital, TR, etc.) já com o modelo carregado para editar e exportar.
 function usarModelo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
   if(!d) return;
-  var tipoBase=inferTipoModelo(d.objeto);
-  abrirDoc(tipoBase, false);
-  DOC.modeloUso=true; DOC.consulta=false; DOC.id=null; DOC.supaId=null; DOC.baseModelo=d.objeto;
-  setTxt('ws-titulo','Usando o seu modelo de '+nomeTipo(tipoBase)); setTxt('ws-desc', d.objeto);
-  var ff=document.getElementById('ws-fields');
-  if(ff){ var g=ff.querySelector('.guia-box'); if(g) g.remove();
-    ff.insertAdjacentHTML('afterbegin','<div class="guia-box" style="margin:0 0 12px"><div class="guia-h"><svg class="ic" style="width:15px;height:15px;stroke:#0A2342"><use href="#i-check"/></svg> Usando o seu modelo</div><div class="guia-t">O seu modelo de <b>'+esc(nomeTipo(tipoBase))+'</b> está aberto no documento ao lado. <b>Clique no texto, edite o que precisa</b> e clique em <b>Exportar Word</b> para baixar pronto. O botão "Gerar documento" só serve se você quiser, no lugar do seu modelo, o texto automático do sistema.</div></div>'); }
-  var p=document.getElementById('ws-preview'); p.className='docpaper'; p.setAttribute('contenteditable','true'); p.style.outline='none'; p.innerHTML=d.html;
-  var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
-  entrarModoModelo();
-  goto('workspace');
-  // caiu no lugar certo: marca o modulo dono do documento no menu lateral (Licitacoes, Compras ou Meio Ambiente)
-  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg = mod==='Compras'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
-  try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
-  toast('Modelo aberto em '+((DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||'Licitações e Contratos')+'. Edite o texto e clique em Exportar Word.');
+  usarModeloComoTemplate(d);
 }
 async function excluirModelo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
@@ -2669,11 +2822,7 @@ function openModelos(tipo){
 function aplicarModeloAqui(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
   if(!d) return;
-  DOC.modeloUso=true; DOC.baseModelo=d.objeto;
-  var p=document.getElementById('ws-preview'); if(p){ p.className='docpaper'; p.setAttribute('contenteditable','true'); p.style.outline='none'; p.innerHTML=d.html; p.scrollTop=0; }
-  var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
-  entrarModoModelo();
-  toast('Modelo carregado no documento. Edite o texto e clique em Exportar Word.');
+  usarModeloComoTemplate(d);
 }
 function inserirModeloTipo(tipo){ openModelos(tipo); }
 function buscaGlobal(){
