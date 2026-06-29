@@ -261,6 +261,9 @@ td .modd{font-size:12px;color:var(--slate)}
 
 /* ===== WORKSPACE DE DOCUMENTO ===== */
 .ws{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:18px}
+.ws.modelo-only{grid-template-columns:1fr}
+.ws.modelo-only .wsform{display:none}
+.ws.modelo-only .wsdoc{max-height:calc(100vh - 150px)}
 .wsform{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-sm);max-height:calc(100vh - 200px);overflow:auto}
 .wsform .wh{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;z-index:2}
 .wsform .wh h3{font-size:15px;font-weight:700}
@@ -699,7 +702,7 @@ td .modd{font-size:12px;color:var(--slate)}
             </div>
           </div>
           <div class="wsdoc">
-            <div class="wh"><h3 id="ws-doctitle">Pré-visualização</h3><span class="tag">minuta</span></div>
+            <div class="wh"><h3 id="ws-doctitle">Pré-visualização</h3><span class="tag" id="ws-doctag">minuta</span><div id="ws-modelobar" style="display:none;align-items:center;gap:14px"><span onclick="voltarFormAuto()" style="cursor:pointer;color:rgba(255,255,255,.82);font-size:11.5px;text-decoration:underline">voltar ao formulário automático</span><button class="btn-gold" onclick="exportarWord()" style="padding:7px 14px"><svg class="ic" style="width:15px;height:15px;stroke:#3a2c06"><use href="#i-save"/></svg> Exportar Word</button></div></div>
             <div class="docpaper empty" id="ws-preview">
               <svg class="ic"><use href="#i-doc"/></svg>
               <div>Preencha os campos ao lado e clique em <b>Gerar documento</b>.<br>O texto sai pronto, no padrão da lei.</div>
@@ -956,6 +959,7 @@ function renderCriterios(){ var c=document.getElementById('crit-box'); if(!c) re
 // ---- abrir documento ----
 function abrirDoc(tipo, consulta){
   DOC = {tipo:tipo, consulta:!!consulta, itens:[], dot:[]};
+  sairModoModelo();
   var m = DOCMETA[tipo] || {mod:'',t:tipo,d:''};
   document.getElementById('ws-modulo').textContent = m.mod;
   document.getElementById('ws-titulo').textContent = (consulta?'Consultar: ':'Novo: ')+m.t;
@@ -967,9 +971,11 @@ function abrirDoc(tipo, consulta){
   else if(tipo==='etp'){ renderFormETP(); }
   else if(tipo==='edital'){ renderFormEdital(); }
   else if(tipo==='contrato'){ renderFormContrato(); }
+  else if(tipo==='minuta'){ renderFormMinuta(); }
   else if(tipo==='aditivo'){ renderFormAditivo(); }
   else if(tipo==='dispensa'){ renderFormDispensa(); }
   else if(tipo==='inexigibilidade'){ renderFormInexig(); }
+  else if(tipo==='oficio'){ renderFormOficio(); }
   else if(tipo==='precos'){ renderFormPrecos(); }
   else if(tipo==='processo'){ renderFormProcesso(); }
   else { renderFormGenerico(tipo); }
@@ -1007,6 +1013,19 @@ function puxarDoETP(){
 }
 function voltarModulo(){ var m=DOCMETA[DOC.tipo]; var pg = m && m.mod==='Compras' ? 'compras' : (m && m.mod==='Meio Ambiente' ? 'ambiente' : 'licitacao'); goto(pg); }
 function resetPreview(){ var p=document.getElementById('ws-preview'); p.removeAttribute('contenteditable'); p.className='docpaper empty'; p.innerHTML='<svg class="ic"><use href="#i-doc"/></svg><div>Preencha os campos ao lado e clique em <b>Gerar documento</b>.<br>O texto sai pronto, no padrão da lei.</div>'; }
+// Modo modelo: esconde o formulário automático e mostra só o documento ocupando a tela, editável.
+function entrarModoModelo(){
+  var ws=document.querySelector('#pg-workspace .ws'); if(ws) ws.classList.add('modelo-only');
+  var tag=document.getElementById('ws-doctag'); if(tag) tag.style.display='none';
+  var bar=document.getElementById('ws-modelobar'); if(bar) bar.style.display='flex';
+}
+function sairModoModelo(){
+  var ws=document.querySelector('#pg-workspace .ws'); if(ws) ws.classList.remove('modelo-only');
+  var tag=document.getElementById('ws-doctag'); if(tag) tag.style.display='';
+  var bar=document.getElementById('ws-modelobar'); if(bar) bar.style.display='none';
+}
+// Link discreto: troca o modelo pelo formulário automático do mesmo tipo, sem sair da tela.
+function voltarFormAuto(){ if(DOC && DOC.tipo){ var t=DOC.tipo; abrirDoc(t,false); toast('Formulário automático. Preencha e clique em Gerar documento.'); } }
 
 // ---- formulário do TR ----
 function renderFormTR(){
@@ -1268,6 +1287,20 @@ function buscarPNCP(){
 }
 function pncpYMD(d){ return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
 function pncpNorm(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+// Conforme o usuário digita o assunto/objeto, sugere automaticamente um modelo do órgão parecido.
+function sugerirModelos(termo, containerId){
+  var box=document.getElementById(containerId); if(!box) return;
+  termo=(termo||'').trim();
+  if(termo.length<3){ box.innerHTML=''; return; }
+  var nq=pncpNorm(termo);
+  var palavras=nq.split(/\s+/).filter(function(w){ return w.length>=4; });
+  if(!palavras.length){ box.innerHTML=''; return; }
+  var ms=(DB.docs||[]).filter(function(d){ return d.tipo==='modelo'; });
+  var scored=ms.map(function(m){ var mo=pncpNorm(m.objeto||''); var s=palavras.filter(function(w){ return mo.indexOf(w)>=0; }).length; return {m:m,s:s}; })
+    .filter(function(x){ return x.s>0; }).sort(function(a,b){ return b.s-a.s; }).slice(0,3);
+  if(!scored.length){ box.innerHTML=''; return; }
+  box.innerHTML='<div class="precos-aviso av-ok" style="margin:8px 0 0;display:block;line-height:1.7"><svg class="ic" style="width:13px;height:13px;vertical-align:-2px"><use href="#i-check"/></svg> <b>Modelo do órgão parecido (clique para usar):</b><br>'+scored.map(function(x){ return '<span style="cursor:pointer;text-decoration:underline;font-weight:700;color:var(--royal)" onclick="aplicarModeloAqui(\''+x.m.id+'\')">'+esc(x.m.objeto)+'</span>'; }).join('<br>')+'</div>';
+}
 async function rodarPNCP(){
   var res=document.getElementById('pncp-res'); if(!res) return;
   var q=(document.getElementById('pncp-q').value||'').trim();
@@ -1378,7 +1411,7 @@ function coletaDot(){
 // ---- gerar documento ----
 async function gerarDoc(){
   var p=document.getElementById('ws-preview');
-  if(DOC.modeloUso){ if(!confirm('Isto vai substituir o SEU modelo pelo texto automático do sistema. Deseja continuar?')) return; DOC.modeloUso=false; }
+  if(DOC.modeloUso){ if(!confirm('Isto vai substituir o SEU modelo pelo texto automático do sistema. Deseja continuar?')) return; DOC.modeloUso=false; sairModoModelo(); }
   if(DOC.tipo==='processo'){ toast('Aqui você baixa processos prontos. Use o botão "Baixar processo completo" da contratação na lista ao lado.'); return; }
   var html;
   if(DOC.tipo==='tr') html=gerarTR();
@@ -1389,6 +1422,7 @@ async function gerarDoc(){
   else if(DOC.tipo==='aditivo') html=gerarAditivo();
   else if(DOC.tipo==='dispensa') html=gerarDispensa();
   else if(DOC.tipo==='inexigibilidade') html=gerarInexig();
+  else if(DOC.tipo==='oficio') html=gerarOficio();
   else if(DOC.tipo==='precos') html=gerarMapaPrecos();
   else html=gerarGenerico();
   if(html===false || html==null){ return; } // gerador barrou (ex.: ETP sem elemento obrigatório/justificativa)
@@ -1563,10 +1597,10 @@ function renderFormProcesso(){
 }
 function renderFormGenerico(tipo){
   var m=DOCMETA[tipo];
-  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\''+tipo+'\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para '+esc(m.t)+'</button></div>';
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\''+tipo+'\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Enviar ou usar um modelo do órgão para '+esc(m.t)+'</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Secretaria / setor</label><select id="g-secretaria">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
-  h+='<div class="field" style="margin-bottom:12px"><label>Objeto</label><input id="g-objeto" placeholder="objeto do documento"></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Objeto / assunto</label><input id="g-objeto" placeholder="digite o objeto e o sistema sugere um modelo" oninput="sugerirModelos(this.value,\'g-modelosug\')"><div id="g-modelosug"></div></div>';
   h+='<div class="field"><label>Fundamentação / justificativa</label><textarea id="g-just"></textarea></div></div>';
   h+='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-doc"/></svg><div><b>'+esc(m.t)+'</b> usa o mesmo motor do TR, com o corpo jurídico próprio em finalização. Você já pode gerar a minuta estrutural e exportar.</div></div>';
   document.getElementById('ws-fields').innerHTML=h;
@@ -1750,7 +1784,7 @@ function renderFormEdital(){
 }
 function renderModoDisputa(){ var box=document.getElementById('e-modo'); if(!box) return; var op=modoDisputaDe(PROC&&PROC.criterio); box.innerHTML=pills('emodo',op,op[0]); }
 function gerarEdital(){
-  if(!(PROC&&PROC.objeto)) return '<div class="selo" style="border-color:#C62D45;background:#FBE9EC;color:#8E1B2E"><b>Gere o Termo de Referência primeiro.</b> O Edital é montado a partir do TR (objeto, itens, valor). Abra Licitações e Contratos, Termo de Referência.</div>';
+  if(!(PROC&&PROC.objeto)){ toast('Gere o Termo de Referência primeiro. O Edital nasce do TR (objeto, itens e valor).'); return false; }
   var num=(document.getElementById('e-num').value)||PROC.numTR||'____/2026';
   var srp=pillVal('srp')==='Sim', modo=pillVal('emodo'), plat=pillVal('eplat');
   var ini=fmtD(document.getElementById('e-ini').value), fim=fmtDT(document.getElementById('e-fim').value), sessao=fmtDT(document.getElementById('e-sessao').value), rec=document.getElementById('e-recursos').value||'3';
@@ -1905,6 +1939,7 @@ function contratoClausulas(v, embed){
   return H;
 }
 function gerarContrato(){
+  if(!(PROC&&PROC.objeto)){ toast('Gere o TR e o Edital primeiro. O Contrato puxa o objeto e o valor deles. Para um modelo em branco, use a Minuta de Contrato.'); return false; }
   var g=function(id){return (document.getElementById(id)||{}).value||'';};
   var v={num:g('c-num')||'____/2026',valor:Number(g('c-valor'))||(PROC&&PROC.tot)||0,razao:g('c-razao'),cnpj:g('c-cnpj'),rep:g('c-rep'),end:g('c-end'),cpf:g('c-cpf'),fiscal:g('c-fiscal'),vini:fmtD(g('c-vini')),vfim:fmtD(g('c-vfim'))};
   return contratoClausulas(v);
@@ -1966,6 +2001,38 @@ var ETP_ELEM=[
  {n:'XII',t:'Possíveis impactos ambientais e medidas mitigadoras',ob:0},
  {n:'XIII',t:'Posicionamento conclusivo sobre a adequação da contratação',ob:1}
 ];
+// Explicacao curta de cada elemento (linguagem simples, "o que e isso") + exemplo editavel ja preenchido.
+// A lei (art. 18, par. 2) exige sempre I, IV, VI, VIII, XIII; os demais, se nao tratados, pedem justificativa.
+var EXPLICA_ETP=[
+ 'O problema que a compra resolve.',
+ 'Se a compra está no Plano de Contratações Anual (PCA).',
+ 'O que a empresa contratada precisa cumprir.',
+ 'Quanto vai comprar e como chegou nessa quantidade.',
+ 'O que o mercado oferece e por que esta solução.',
+ 'Quanto custa, pela pesquisa de preços.',
+ 'A solução completa, do início ao fim.',
+ 'Por que comprar tudo junto ou em partes.',
+ 'O que o órgão ganha com a contratação.',
+ 'O que precisa ser feito antes de assinar o contrato.',
+ 'Outras compras ligadas a esta, se houver.',
+ 'Efeitos no meio ambiente, se houver.',
+ 'A conclusão: vale a pena e está adequada.'
+];
+var EXEMPLOS_ETP=[
+ 'A contratação é necessária para atender à demanda do órgão e assegurar a continuidade das atividades e o adequado atendimento ao interesse público. (Ajuste descrevendo o problema concreto que a compra resolve.)',
+ 'A contratação está alinhada ao planejamento do órgão e será compatibilizada com o Plano de Contratações Anual (PCA). (Se já constar do PCA, indique o item; se o órgão ainda não tiver PCA, registre essa condição.)',
+ 'São requisitos o atendimento às especificações e normas técnicas aplicáveis, aos prazos do Termo de Referência e à regularidade fiscal, trabalhista e técnica da contratada. (Ajuste conforme o objeto.)',
+ 'As quantidades foram estimadas com base na demanda e no consumo do órgão; a memória de cálculo consta da tabela de itens acima.',
+ 'Foi realizado levantamento de mercado, e a solução adotada mostrou-se a mais vantajosa em preço, qualidade e disponibilidade. (Ajuste citando as soluções ou fornecedores comparados.)',
+ 'O valor estimado decorre da pesquisa de preços do processo; os preços unitários e o total constam da tabela de itens acima.',
+ 'A solução compreende o fornecimento integral do objeto, com as condições de entrega, garantia e assistência técnica cabíveis, de modo a atender por completo a necessidade. (Ajuste conforme o objeto.)',
+ 'Optou-se pelo não parcelamento, por se tratar de itens correlatos cujo fornecimento conjunto é mais vantajoso técnica e economicamente. (Se for parcelar, justifique aqui.)',
+ 'Espera-se o atendimento eficiente da necessidade, com economicidade, regularidade no fornecimento e melhoria do serviço público.',
+ 'Não há providências prévias além das ordinárias (dotação orçamentária e designação de fiscal). (Ajuste se houver, por exemplo treinamento ou adequação de espaço.)',
+ 'Não foram identificadas contratações correlatas ou interdependentes. (Ajuste se houver.)',
+ 'Não se identificam impactos ambientais relevantes; quando cabível, serão observados critérios de sustentabilidade na execução.',
+ 'Conclui-se que a contratação é adequada, viável e necessária ao interesse público, recomendando-se o prosseguimento. (Confirme ao final do estudo.)'
+];
 var ETPOBJ='';
 var ETP_DATA=null;
 function renderFormETP(){
@@ -1996,13 +2063,14 @@ function renderFormETP(){
   h+='<div id="precos-todos-res"></div><div id="precos-box"></div></div>';
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Os 13 elementos do art. 18, §1º</div>';
-  h+='<div class="hint" style="margin-bottom:10px">Os 5 OBRIGATÓRIOS (I, IV, VI, VIII, XIII) sempre vão no documento. Nos demais, se você deixar em branco, o sistema EXIGE a justificativa da ausência (art. 18, §2º): sem isso, não gera.</div>';
+  h+='<div class="hint" style="margin-bottom:10px">Cada item já vem com um <b>exemplo pronto</b> e uma explicação do que é. <b>Edite, apague ou reescreva</b> o que quiser em cada campo e clique em <b>Gerar</b>. Os 5 OBRIGATÓRIOS (I, IV, VI, VIII, XIII) sempre vão. Se você apagar um item opcional, o sistema pede a justificativa da ausência (art. 18, §2º).</div>';
   h+=ETP_ELEM.map(function(e,i){
     var auto=(e.n==='IV'||e.n==='VI');
     var lbl='<label>'+e.n+'. '+e.t+(e.ob?' <span style="color:#9a6a0a;font-weight:700">OBRIGATÓRIO</span>':'')+(auto?' <span style="color:var(--royal);font-weight:700">puxa da tabela</span>':'')+'</label>';
-    var ta='<textarea id="etp-'+i+'" style="min-height:56px" placeholder="'+(auto?'preenchido pela tabela de itens; complemente se quiser':'')+'"></textarea>';
+    var dica=EXPLICA_ETP[i]?'<div class="hint" style="margin:-3px 0 5px">'+esc(EXPLICA_ETP[i])+'</div>':'';
+    var ta='<textarea id="etp-'+i+'" style="min-height:56px" placeholder="'+(auto?'preenchido pela tabela de itens; complemente se quiser':'')+'">'+esc(EXEMPLOS_ETP[i]||'')+'</textarea>';
     var just=e.ob?'':'<textarea id="etpj-'+i+'" style="min-height:40px;margin-top:6px;background:#FFF9EC" placeholder="Justificativa da ausência (se deixar o campo acima vazio)"></textarea>';
-    return '<div class="field" style="margin-bottom:12px">'+lbl+ta+just+'</div>';
+    return '<div class="field" style="margin-bottom:12px">'+lbl+dica+ta+just+'</div>';
   }).join('');
   h+='</div>';
   document.getElementById('ws-fields').innerHTML=h;
@@ -2065,13 +2133,27 @@ var ADITIVO_TIPOS=['Prorrogação','Reajuste','Repactuação','Supressão','Acr�
 function renderFormAditivo(){
   var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'aditivo\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o Aditivo</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Contrato a aditar</div>';
-  h+='<div class="frow c3"><div class="field"><label>Nº do contrato</label><input id="a-contrato" placeholder="ex.: 002/2025"></div><div class="field"><label>Nº do termo aditivo</label><input id="a-num" placeholder="ex.: 2º"></div><div class="field"><label>Contratada</label><input id="a-razao" placeholder="empresa"></div></div></div>';
+  h+='<div class="frow c3"><div class="field"><label>Nº do contrato</label><input id="a-contrato" placeholder="ex.: 002/2025" onchange="buscarContratoAditivo()" onblur="buscarContratoAditivo()"></div><div class="field"><label>Nº do termo aditivo</label><input id="a-num" placeholder="ex.: 2º"></div><div class="field"><label>Contratada</label><input id="a-razao" placeholder="empresa"></div></div><div class="hint" id="a-achado" style="margin-top:2px"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-contract"/></svg> Tipo de aditivo</div>';
   h+='<div class="field" style="margin-bottom:12px">'+pills('atipo',ADITIVO_TIPOS,'Prorrogação')+'</div>';
   h+='<div id="a-extra"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Fundamentação</div>';
   h+='<div class="field"><label>Justificativa</label><textarea id="a-just" placeholder="motivo do aditamento"></textarea></div></div>';
   document.getElementById('ws-fields').innerHTML=h; renderAditivoExtra();
+}
+// Aditivo busca o contrato pelo numero: acha nos contratos e nos documentos do orgao, e preenche a contratada.
+function buscarContratoAditivo(){
+  var campo=document.getElementById('a-contrato'); if(!campo) return;
+  var n=(campo.value||'').trim(); var av=document.getElementById('a-achado'); if(!n){ if(av) av.textContent=''; return; }
+  var c=null;
+  for(var i=0;i<CONTRATOS.length;i++){ if(String(CONTRATOS[i].n).trim()===n){ c=CONTRATOS[i]; break; } }
+  if(!c){ var d=(DB.docs||[]).filter(function(x){return x.tipo==='contrato' && String(x.numero).trim()===n;})[0]; if(d) c={obj:d.objeto, razao:(d.proc&&d.proc.razao)||''}; }
+  if(c){
+    var r=document.getElementById('a-razao'); if(r && c.razao && !r.value) r.value=c.razao;
+    if(av) av.innerHTML='<span style="color:#1f7a33;font-weight:700">Contrato encontrado.</span> '+esc(c.obj||'')+(c.razao?(' ('+esc(c.razao)+')'):'');
+  } else {
+    if(av) av.innerHTML='<span style="color:#9a6a0a;font-weight:700">Contrato não encontrado no sistema.</span> Preencha a contratada manualmente.';
+  }
 }
 function renderAditivoExtra(){
   var box=document.getElementById('a-extra'); if(!box) return; var t=pillVal('atipo'); var h='';
@@ -2123,6 +2205,42 @@ function gerarInexig(){
   H+='<div class="selo"><b>Minuta de inexigibilidade gerada pelo sistema</b> (art. 74 da Lei nº 14.133/2021). A inviabilidade de competição deve ser comprovada nos autos. Sujeita à validação do setor e da autoridade.</div>';
   return H;
 }
+// ---------- OFÍCIO (documento no timbre do órgão) ----------
+function renderFormOficio(){
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'oficio\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Enviar ou usar um modelo do órgão para o Ofício</button></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados do ofício</div>';
+  h+='<div class="frow c2"><div class="field"><label>Número do ofício</label><input id="o-num" placeholder="ex.: 045/2026"></div><div class="field"><label>Setor remetente</label><select id="o-sec">'+SECRETARIAS.map(function(s){return '<option>'+esc(s)+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Destinatário (nome)</label><input id="o-destnome" placeholder="ex.: Sr. João da Silva"></div><div class="field"><label>Cargo / órgão do destinatário</label><input id="o-destcargo" placeholder="ex.: Diretor da Empresa X"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Assunto</label><input id="o-assunto" placeholder="ex.: Solicitação de documentos da contratação" oninput="sugerirModelos(this.value,\'o-modelosug\')"><div id="o-modelosug"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Texto do ofício</label><textarea id="o-corpo" style="min-height:130px" placeholder="Escreva o conteúdo do ofício. O sistema cuida do cabeçalho, do timbre, da data e do fecho."></textarea></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-users"/></svg> Assinatura</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nome de quem assina</label><input id="o-signome" placeholder="ex.: Maria Souza"></div><div class="field"><label>Cargo</label><input id="o-sigcargo" placeholder="ex.: Secretária de Administração"></div></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function gerarOficio(){
+  var g=function(id){ var e=document.getElementById(id); return e?(e.value||'').trim():''; };
+  var num=g('o-num')||'____/2026', sec=g('o-sec'), dn=g('o-destnome')||'__________', dc=g('o-destcargo'), as=g('o-assunto')||'__________', corpo=g('o-corpo')||'[texto do ofício]', sn=g('o-signome')||'__________', sc=g('o-sigcargo');
+  var H=docHeader('OFÍCIO Nº '+esc(num), esc(ORG.nome.toUpperCase())+'/'+ORG.uf+(sec?'<br>'+esc(sec):''));
+  H+='<p style="text-align:right">'+esc(ORG.nome)+'/'+ORG.uf+', '+dataHoje()+'.</p>';
+  H+='<p>A Sua Senhoria<br><b>'+esc(dn)+'</b>'+(dc?'<br>'+esc(dc):'')+'</p>';
+  H+='<p><b>Assunto:</b> '+esc(as)+'</p>';
+  H+='<p>Prezado(a) Senhor(a),</p>';
+  H+='<p style="text-align:justify">'+esc(corpo)+'</p>';
+  H+='<p>Atenciosamente,</p>';
+  H+='<div class="assina">____________________________________________<br>'+esc(sn)+(sc?'<br>'+esc(sc):'')+'</div>';
+  H+='<div class="selo"><b>Ofício gerado pelo sistema</b>, no timbre do órgão. Confira o texto antes de assinar e protocolar.</div>';
+  return H;
+}
+// ---------- MINUTA DE CONTRATO (avulsa; tela informativa, o corpo sai do TR/Edital) ----------
+function renderFormMinuta(){
+  var temTR=!!(PROC&&PROC.objeto);
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'minuta\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para a Minuta</button></div>';
+  h+='<div class="fgroup" style="background:#FAFBFE;border:1px solid var(--line);border-radius:10px;padding:13px"><div class="gl" style="color:#9a6a0a"><svg class="ic" style="width:14px;height:14px"><use href="#i-lock"/></svg> Minuta de contrato (anexo do edital)</div>';
+  h+= temTR ? '<div class="hint" style="line-height:1.8"><b>Objeto:</b> '+esc(PROC.objeto)+'<br><b>Vinculada ao:</b> '+esc(PROC.modbase||'PREGÃO')+' Nº '+esc(PROC.numTR||'')+'<br><b>Valor estimado:</b> '+money(PROC.tot)+'</div>' : '<div class="hint">A minuta sai pronta com as 19 cláusulas no padrão da Lei nº 14.133/2021. Se você gerar o <b>Termo de Referência</b> antes, ela já vem com o objeto, o valor e o vínculo ao certame. Sem TR, sai como <b>modelo em branco</b> para preencher.</div>';
+  h+='</div>';
+  h+='<div class="hint" style="margin-top:4px">A minuta também sai sozinha, como Anexo II, quando você gera o <b>Edital</b>. Use esta tela só quando precisar dela isolada. Clique em <b>Gerar documento</b>.</div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
 
 // ===================== BANCO LOCAL (conecta dashboard, central e contratos) =====================
 var USERS_SEED=[
@@ -2148,12 +2266,31 @@ function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v;
 function nomeTipo(t){ var m={tr:'Termo de Referência',etp:'ETP',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
 async function registrarDoc(tipo, html){
-  var objeto=((document.getElementById('f-objeto')||document.getElementById('g-objeto')||{}).value)||(PROC&&PROC.objeto)||'(sem objeto)';
-  var sec=((document.getElementById('f-secretaria')||document.getElementById('g-secretaria')||{}).value)||'';
-  var numero=((document.getElementById('f-numtr')||{}).value)||'';
+  // Objeto/secretaria/processo corretos POR TIPO (evita um documento herdar dados de outro)
+  var gv=function(id){ var e=document.getElementById(id); return e?(e.value||'').trim():''; };
+  var fluxo={tr:1,edital:1,contrato:1,minuta:1}; // só o fluxo carrega o snapshot do processo (PROC)
+  var objeto, sec;
+  if(tipo==='dispensa'){ objeto=gv('d-obj'); sec=gv('d-sec'); }
+  else if(tipo==='inexigibilidade'){ objeto=gv('x-obj'); sec=gv('x-sec'); }
+  else if(tipo==='oficio'){ objeto=gv('o-assunto')||gv('g-objeto'); sec=gv('o-sec')||gv('g-secretaria'); }
+  else if(tipo==='aditivo'){ objeto='Contrato '+(gv('a-contrato')||'sem número'); sec=''; }
+  else if(fluxo[tipo]){ objeto=(PROC&&PROC.objeto)||gv('f-objeto'); sec=(PROC&&PROC.secretaria)||gv('f-secretaria'); }
+  else { objeto=gv('f-objeto')||(PROC&&PROC.objeto); sec=gv('f-secretaria')||gv('etp-sec'); } // etp, precos
+  if(!objeto) objeto='(sem objeto)';
+  if(!sec) sec='';
+  // Número do documento vem do campo certo de cada tipo (o mesmo que aparece no documento), não um genérico
+  var numero;
+  if(tipo==='tr') numero=gv('f-numtr');
+  else if(tipo==='edital') numero=gv('e-num');
+  else if(tipo==='contrato') numero=gv('c-num');
+  else if(tipo==='dispensa') numero=gv('d-cod')||gv('d-proc');
+  else if(tipo==='inexigibilidade') numero=gv('x-proc');
+  else if(tipo==='oficio') numero=gv('o-num');
+  else if(tipo==='aditivo') numero=gv('a-num');
+  else numero=''; // etp, precos, minuta: numeração automática
   DB.seq=DB.seq||{};
   if(!numero){ DB.seq[tipo]=(DB.seq[tipo]||0)+1; numero=String(DB.seq[tipo]).padStart(3,'0')+'/2026'; }
-  var proc=(PROC&&PROC.objeto)?PROC:null; // guarda os dados do processo p/ o contrato puxar depois
+  var proc=(fluxo[tipo] && PROC && PROC.objeto)?PROC:null; // só o fluxo guarda o processo p/ o contrato puxar depois
   var rec={id:DOC.id,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:dataHoje(),html:html,proc:proc};
   var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
   // Salva no banco (Supabase) por órgão; localStorage vira só cache/offline
@@ -2180,8 +2317,10 @@ async function registrarDoc(tipo, html){
 async function registrarContrato(rec, orgao){
   for(var i=0;i<CONTRATOS.length;i++){ if(CONTRATOS[i].n===rec.numero){ return; } }
   var sec=(rec.secretaria||'Secretaria de Administração');
-  var c={n:rec.numero,obj:rec.objeto,sec:sec,venc:'a definir',valor:0,status:'ativo'};
-  if(SB && CURRENT_USER){ try{ var ins=await SB.from('contratos').insert({orgao_id:orgao||'tur',numero:rec.numero,objeto:rec.objeto,secretaria:sec,vencimento:'a definir',valor:0,status:'ativo'}).select('id').single(); if(ins.data) c.id=ins.data.id; }catch(e){} }
+  var razao=((document.getElementById('c-razao')||{}).value||'').trim();
+  var valor=Number((document.getElementById('c-valor')||{}).value)||(rec.proc&&rec.proc.tot)||0;
+  var c={n:rec.numero,obj:rec.objeto,sec:sec,venc:'a definir',valor:valor,status:'ativo',razao:razao};
+  if(SB && CURRENT_USER){ try{ var ins=await SB.from('contratos').insert({orgao_id:orgao||'tur',numero:rec.numero,objeto:rec.objeto,secretaria:sec,vencimento:'a definir',valor:valor,status:'ativo'}).select('id').single(); if(ins.data) c.id=ins.data.id; }catch(e){} }
   CONTRATOS.unshift(c);
 }
 // Carrega documentos e contratos do órgão (Supabase é a fonte da verdade)
@@ -2321,6 +2460,7 @@ function abrirDocSalvo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
   if(!d) return;
   DOC={tipo:d.tipo,consulta:true,itens:[],dot:[],id:d.id};
+  sairModoModelo();
   setTxt('ws-modulo','Documento salvo'); setTxt('ws-titulo',nomeTipo(d.tipo)+(d.numero?' '+d.numero:'')); setTxt('ws-desc',d.objeto);
   document.getElementById('ws-fields').innerHTML='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-doc"/></svg><div>Documento salvo no sistema. Use <b>Exportar Word</b> para baixar.</div></div>';
   var p=document.getElementById('ws-preview'); p.className='docpaper'; p.removeAttribute('contenteditable'); p.innerHTML=d.html;
@@ -2389,9 +2529,12 @@ function usarModelo(id){
     ff.insertAdjacentHTML('afterbegin','<div class="guia-box" style="margin:0 0 12px"><div class="guia-h"><svg class="ic" style="width:15px;height:15px;stroke:#0A2342"><use href="#i-check"/></svg> Usando o seu modelo</div><div class="guia-t">O seu modelo de <b>'+esc(nomeTipo(tipoBase))+'</b> está aberto no documento ao lado. <b>Clique no texto, edite o que precisa</b> e clique em <b>Exportar Word</b> para baixar pronto. O botão "Gerar documento" só serve se você quiser, no lugar do seu modelo, o texto automático do sistema.</div></div>'); }
   var p=document.getElementById('ws-preview'); p.className='docpaper'; p.setAttribute('contenteditable','true'); p.style.outline='none'; p.innerHTML=d.html;
   var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
+  entrarModoModelo();
   goto('workspace');
+  // caiu no lugar certo: marca o modulo dono do documento no menu lateral (Licitacoes, Compras ou Meio Ambiente)
+  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg = mod==='Compras'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
   try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
-  toast('Modelo aberto no '+nomeTipo(tipoBase)+'. Edite o texto e clique em Exportar Word.');
+  toast('Modelo aberto em '+((DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||'Licitações e Contratos')+'. Edite o texto e clique em Exportar Word.');
 }
 async function excluirModelo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
@@ -2529,6 +2672,7 @@ function aplicarModeloAqui(id){
   DOC.modeloUso=true; DOC.baseModelo=d.objeto;
   var p=document.getElementById('ws-preview'); if(p){ p.className='docpaper'; p.setAttribute('contenteditable','true'); p.style.outline='none'; p.innerHTML=d.html; p.scrollTop=0; }
   var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
+  entrarModoModelo();
   toast('Modelo carregado no documento. Edite o texto e clique em Exportar Word.');
 }
 function inserirModeloTipo(tipo){ openModelos(tipo); }
