@@ -1277,6 +1277,9 @@ async function precoPNCP(desc, uf, unidade){
   var cand=[];
   itensAll.forEach(function(itensJ,idx){ var it=top[idx]; var arr=(itensJ&&(itensJ.data||itensJ))||[]; arr.forEach(function(x){ var v=Number(x.valorUnitarioEstimado)||0; if(v<=0) return; var dn=pncpNorm(x.descricao); if(!hasWord(dn,core[0])) return; var strict=core.every(function(t){return hasWord(dn,t);}); var score=toks.reduce(function(a,t){return a+(hasWord(dn,t)?1:0);},0); cand.push({score:score,strict:strict,ord:inOrder(dn,core),unid:(x.unidadeMedida||''),p:{auto:true,fonte:'PNCP',onde:((it.orgao_nome)||'Órgão')+' ('+((it.municipio_nome)||'')+'/'+(it.uf||'')+'), CNPJ '+it.orgao_cnpj,ref:'https://pncp.gov.br/app/editais/'+it.orgao_cnpj+'/'+it.ano+'/'+it.numero_sequencial,data:(it.data_publicacao_pncp||'').slice(0,10),valor:v.toFixed(2),desc:(x.descricao||'').slice(0,70)}}); }); });
   if(!cand.length) return {n:0,fontes:[]};
+  // IN SEGES/ME 65/2021, art. 5º, II: contratações similares do último 1 (um) ano
+  var cymd=corte1anoYMD(); var recentes=cand.filter(function(c){ return c.p.data && c.p.data>=cymd; });
+  if(recentes.length) cand=recentes; else return {n:0,fontes:[],velho:true};
   var unitMatch=true;
   if(unidade){ var ru=unitNorm(unidade); var um=cand.filter(function(c){return unitNorm(c.unid)===ru;}); if(um.length>=2){ cand=um; } else { unitMatch=false; } }
   var strictC=cand.filter(function(c){return c.strict;}); var ordC=cand.filter(function(c){return c.strict&&c.ord;});
@@ -1302,7 +1305,7 @@ async function buscarPrecosTodos(){
     if(btn) btn.innerHTML='Precificando item '+(i+1)+' de '+rows.length+'...';
     var r=null; try{ r=await precoPNCP(desc, uf, und); }catch(e){}
     var achou = r && r.media>0 && (!und || r.unitMatch!==false);
-    if(achou){ rows[i].querySelector('.i-v').value=r.media.toFixed(2); ok++; PRECO_FONTES[pncpNorm(desc)]={media:r.media,menor:r.menor,mediana:r.mediana,fontes:r.fontes||[]}; linhas.push({d:desc,v:r.media,n:r.n,menor:r.menor,mediana:r.mediana,fontes:r.fontes||[]}); }
+    if(achou){ rows[i].querySelector('.i-v').value=r.media.toFixed(2); ok++; PRECO_FONTES[pncpNorm(desc)]={media:r.media,menor:r.menor,mediana:r.mediana,fontes:r.fontes||[],acesso:dataHoraAgora()}; linhas.push({d:desc,v:r.media,n:r.n,menor:r.menor,mediana:r.mediana,fontes:r.fontes||[]}); }
     else { sem++; delete PRECO_FONTES[pncpNorm(desc)]; linhas.push({d:desc,v:null}); }
     calcTotal();
   }
@@ -1311,12 +1314,16 @@ async function buscarPrecosTodos(){
   if(box){
     var h='<div class="precos-card" style="margin-top:10px"><div class="precos-h"><div><b>Preços oficiais (PNCP, Governo Federal)</b><span>'+ok+' de '+rows.length+' itens precificados; '+sem+' para você revisar</span></div></div>';
     h+=linhas.map(function(l){
-      var topo='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0 4px"><div style="font-size:13px;color:var(--ink);font-weight:600">'+esc(l.d)+'</div>'+(l.v!=null?('<span class="st st-a" style="white-space:nowrap"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> '+money(l.v)+' ('+l.n+' fontes)</span>'):'<span class="st st-b" style="white-space:nowrap"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> revisar (sem preço claro)</span>')+'</div>';
+      var badge;
+      if(l.v==null){ badge='<span class="st st-b" style="white-space:nowrap"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> revisar (sem preço claro)</span>'; }
+      else if(l.n<3){ badge='<span class="st st-b" style="white-space:nowrap"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> '+money(l.v)+' ('+l.n+' fonte(s), complete 3)</span>'; }
+      else { badge='<span class="st st-a" style="white-space:nowrap"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> '+money(l.v)+' ('+l.n+' fontes)</span>'; }
+      var topo='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0 4px"><div style="font-size:13px;color:var(--ink);font-weight:600">'+esc(l.d)+'</div>'+badge+'</div>';
       var fontes='';
       if(l.fontes && l.fontes.length){ fontes='<div style="font-size:11.5px;color:var(--slate);padding:0 0 9px 2px;line-height:1.6">'+l.fontes.map(function(p){ return '• '+esc(p.onde)+', '+(p.data||'s/d')+', R$ '+esc(p.valor)+' <a href="'+esc(p.ref)+'" target="_blank" style="color:var(--royal)">ver no PNCP</a>'; }).join('<br>')+'</div>'; }
       return '<div style="border-top:1px solid #F0F3F9">'+topo+fontes+'</div>';
     }).join('');
-    h+='<div class="hint" style="margin-top:8px">As fontes ficam registradas e entram no documento gerado como a memória da pesquisa de preços (art. 23). Itens marcados para revisar você lança manualmente. O valor total já foi atualizado.</div></div>';
+    h+='<div class="hint" style="margin-top:8px">Só contratações do <b>último 1 ano</b> (IN SEGES/ME 65/2021, art. 5º, II), com <b>data e hora de acesso</b> registradas. As fontes entram no documento como a memória da pesquisa de preços (art. 23). Itens marcados para revisar, ou com menos de 3 fontes, você complementa (cotação, nota fiscal, tabela). O valor total já foi atualizado.</div></div>';
     box.innerHTML=h;
   }
   toast(ok+' de '+rows.length+' itens precificados; '+sem+' para revisar.');
@@ -1324,16 +1331,21 @@ async function buscarPrecosTodos(){
 // Memoria da pesquisa de precos: lista, por item, as fontes reais do PNCP (entra no documento, art. 23)
 function memoriaPrecos(itens){
   if(!itens||!itens.length) return '';
-  var any=false, body='';
+  var any=false, body='', algumMenos3=false;
   itens.forEach(function(it){
     var f=PRECO_FONTES[pncpNorm(it.d)];
     if(f && f.fontes && f.fontes.length){ any=true;
-      var srcs=f.fontes.map(function(p){ return '<li>'+esc(p.onde)+', publicado em '+esc(p.data||'sem data')+', valor unitário R$ '+esc(p.valor)+' (PNCP: '+esc(p.ref)+')</li>'; }).join('');
-      body+='<p style="margin-top:8px"><b>'+esc(it.d)+'</b>: valor de referência '+money(it.v)+', apurado pela média de '+f.fontes.length+' preços públicos (menor '+money(f.menor)+', mediana '+money(f.mediana)+'). Fontes:</p><ul>'+srcs+'</ul>';
+      var srcs=f.fontes.map(function(p){ return '<li>'+esc(p.onde)+', publicado em '+esc(p.data||'sem data')+', valor unitário '+money(Number(p.valor))+' (PNCP: '+esc(p.ref)+')</li>'; }).join('');
+      var nota = f.fontes.length<3 ? ' <i>(menos de 3 fontes; recomenda-se complementar com cotação de fornecedor, nota fiscal ou tabela de referência)</i>' : '';
+      if(f.fontes.length<3) algumMenos3=true;
+      body+='<p style="margin-top:8px"><b>'+esc(it.d)+'</b>: valor de referência '+money(it.v)+', apurado pela média de '+f.fontes.length+' preço(s) público(s) (menor '+money(f.menor)+', mediana '+money(f.mediana)+'), descartados os valores manifestamente inexequíveis ou excessivos.'+nota+(f.acesso?(' Acesso ao PNCP em '+esc(f.acesso)+'.'):'')+' Fontes:</p><ul>'+srcs+'</ul>';
     }
   });
   if(!any) return '';
-  return '<h2>PESQUISA DE PREÇOS, FONTES (art. 23 da Lei nº 14.133/2021)</h2><p>Os preços de referência foram apurados em contratações públicas registradas no Portal Nacional de Contratações Públicas (PNCP), conforme as fontes a seguir:</p>'+body;
+  var H='<h2>PESQUISA DE PREÇOS, MEMÓRIA E FONTES (art. 23 da Lei nº 14.133/2021 e IN SEGES/ME nº 65/2021)</h2>';
+  H+='<p>Os preços de referência foram apurados em contratações públicas similares registradas no Portal Nacional de Contratações Públicas (PNCP), parâmetro do art. 5º, inciso II, da IN SEGES/ME nº 65/2021, considerados os contratos em execução ou concluídos no período de <b>1 (um) ano</b> anterior à pesquisa, com registro da data, do valor unitário, da fonte rastreável e da data e hora de acesso. Adotou-se a média dos preços válidos, com descarte dos valores manifestamente inexequíveis ou excessivos.</p>';
+  if(algumMenos3) H+='<p><i>Observação: itens com menos de 3 (três) fontes devem ser complementados com outros parâmetros (cotação direta com fornecedores, notas fiscais ou tabelas de referência), nos termos do art. 23 da Lei nº 14.133/2021.</i></p>';
+  return H+body;
 }
 function calcPrecos(){
   var cards=[].slice.call(document.querySelectorAll('#prec-list .precos-item'));
@@ -1389,6 +1401,8 @@ function buscarPNCP(){
 }
 function pncpYMD(d){ return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
 function pncpNorm(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function dataHoraAgora(){ var d=new Date(); var p=function(n){return String(n).padStart(2,'0');}; return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' às '+p(d.getHours())+':'+p(d.getMinutes()); }
+function corte1anoYMD(){ var d=new Date(); d.setFullYear(d.getFullYear()-1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 // Conforme o usuário digita o assunto/objeto, sugere automaticamente um modelo do órgão parecido.
 function sugerirModelos(termo, containerId){
   var box=document.getElementById(containerId); if(!box) return;
