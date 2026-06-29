@@ -589,7 +589,7 @@ td .modd{font-size:12px;color:var(--slate)}
       <!-- CENTRAL DE DOCUMENTOS -->
       <div class="page" id="pg-central">
         <div class="pagehead"><div><div class="hello">Documentos</div><h1>Central de Documentos</h1><p>Todo documento criado no sistema entra aqui, por tipo, pronto para abrir, exportar ou imprimir. O sistema começa vazio e enche conforme você gera ou importa.</p></div>
-          <button class="btn-ghost" onclick="inserirModelo()"><svg class="ic" style="width:17px;height:17px"><use href="#i-plus"/></svg> Inserir modelo do órgão</button></div>
+          <button class="btn-ghost" onclick="inserirModelo()"><svg class="ic" style="width:17px;height:17px"><use href="#i-plus"/></svg> Usar um modelo do órgão</button></div>
         <div class="secpills" id="doc-tabs"></div>
         <div class="panel">
           <div class="ph"><h3 id="doc-tabtitle">Editais</h3></div>
@@ -1013,7 +1013,7 @@ function renderFormTR(){
   var objOpts = Object.keys(OBJETOS);
   var h = '';
   h += '<div class="fgroup"><div class="frow c2"><button class="btn-ghost" type="button" onclick="buscarPNCP()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-search"/></svg> Buscar modelo no PNCP</button><button class="btn-ghost" type="button" onclick="abrirPrecos()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-money"/></svg> Pesquisa de Preços (art. 23)</button></div>';
-  h += '<button class="btn-ghost" type="button" style="width:100%;justify-content:center;margin-top:10px" onclick="inserirModeloTipo(\'tr\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para o Termo de Referência</button></div>';
+  h += '<button class="btn-ghost" type="button" style="width:100%;justify-content:center;margin-top:10px" onclick="inserirModeloTipo(\'tr\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o Termo de Referência</button></div>';
   h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Objeto usual (preenche sozinho)</div>';
   h += '<div class="field"><label>Escolha um objeto e o sistema preenche a justificativa e os itens de referência</label><select id="f-objlib" onchange="aplicarObjeto()"><option value="">Selecione ou preencha manualmente</option>'+objOpts.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select></div></div>';
 
@@ -1563,7 +1563,7 @@ function renderFormProcesso(){
 }
 function renderFormGenerico(tipo){
   var m=DOCMETA[tipo];
-  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\''+tipo+'\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para '+esc(m.t)+'</button></div>';
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\''+tipo+'\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para '+esc(m.t)+'</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Secretaria / setor</label><select id="g-secretaria">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Objeto</label><input id="g-objeto" placeholder="objeto do documento"></div>';
@@ -1734,7 +1734,7 @@ function modoDisputaDe(crit){
 // ---------- EDITAL ----------
 function renderFormEdital(){
   var temTR = !!(PROC && PROC.objeto);
-  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'edital\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para o Edital</button></div>';
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'edital\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o Edital</button></div>';
   h+='<div class="fgroup" style="background:#FAFBFE;border:1px solid var(--line);border-radius:10px;padding:13px">';
   h+='<div class="gl" style="color:#9a6a0a"><svg class="ic" style="width:14px;height:14px"><use href="#i-lock"/></svg> Vem do Termo de Referência (automático, só leitura)</div>';
   if(temTR){ h+='<div class="hint" style="line-height:1.8"><b>Objeto:</b> '+esc(PROC.objeto)+'<br><b>Modalidade:</b> '+esc(PROC.modalidade)+'<br><b>Critério:</b> '+esc(PROC.criterio)+'<br><b>Valor estimado:</b> '+money(PROC.tot)+'<br><b>Interessado:</b> '+esc(PROC.secretaria)+'<br><b>Itens:</b> '+(PROC.itens?PROC.itens.length:0)+'</div>'; }
@@ -1853,7 +1853,7 @@ function anexosEdital(num, srp){
 // ---------- CONTRATO e MINUTA (mesmo corpo; Minuta = partes em branco) ----------
 function renderFormContrato(){
   var temTR=!!(PROC&&PROC.objeto);
-  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'contrato\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para o Contrato</button></div>';
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'contrato\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o Contrato</button></div>';
   h+='<div class="fgroup" style="background:#FAFBFE;border:1px solid var(--line);border-radius:10px;padding:13px"><div class="gl" style="color:#9a6a0a"><svg class="ic" style="width:14px;height:14px"><use href="#i-lock"/></svg> Vem do TR / Edital (automático)</div>';
   h+= temTR? '<div class="hint" style="line-height:1.8"><b>Objeto:</b> '+esc(PROC.objeto)+'<br><b>Valor estimado:</b> '+money(PROC.tot)+'<br><b>Vigência:</b> '+esc(PROC.vig)+' meses<br><b>Interessado:</b> '+esc(PROC.secretaria)+'</div>' : '<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Gere o TR e o Edital primeiro. O Contrato puxa o objeto e a dotação deles.</div>';
   h+='</div>';
@@ -1912,7 +1912,7 @@ function gerarContrato(){
 function gerarMinuta(){ return contratoClausulas(null); }
 // ---------- DISPENSA (fluxo direto, módulo Compras) ----------
 function renderFormDispensa(){
-  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'dispensa\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para a Dispensa</button></div>';
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'dispensa\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para a Dispensa</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dispensa de licitação (art. 75)</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Fundamento, art. 75, inciso</label>'+pills('dinc',['I, obras e serviços de engenharia (até R$ 130.984,20)','II, demais compras e serviços (até R$ 65.492,11)'],'II, demais compras e serviços (até R$ 65.492,11)')+'</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Setor requerente</label><select id="d-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
@@ -1971,7 +1971,7 @@ var ETP_DATA=null;
 function renderFormETP(){
   var objOpts=Object.keys(OBJETOS);
   var h='<div class="fgroup"><div class="frow c2"><button class="btn-ghost" type="button" onclick="buscarPNCP()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-search"/></svg> Buscar modelo no PNCP</button><button class="btn-ghost" type="button" onclick="abrirPrecos()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-money"/></svg> Pesquisa de Preços (art. 23)</button></div>';
-  h+='<button class="btn-ghost" type="button" style="width:100%;justify-content:center;margin-top:10px" onclick="inserirModeloTipo(\'etp\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para o ETP</button></div>';
+  h+='<button class="btn-ghost" type="button" style="width:100%;justify-content:center;margin-top:10px" onclick="inserirModeloTipo(\'etp\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o ETP</button></div>';
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Objeto usual (preenche itens sozinho)</div>';
   h+='<div class="field"><label>Escolha um objeto e o sistema preenche os itens de referência</label><select id="f-objlib" onchange="aplicarObjeto()"><option value="">Selecione ou preencha manualmente</option>'+objOpts.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select></div></div>';
@@ -2063,7 +2063,7 @@ function gerarETP(){
 // ---------- ADITIVO (art. 124 e 125; grounded no termo aditivo real) ----------
 var ADITIVO_TIPOS=['Prorrogação','Reajuste','Repactuação','Supressão','Acréscimo','Retificação'];
 function renderFormAditivo(){
-  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'aditivo\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para o Aditivo</button></div>';
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'aditivo\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o Aditivo</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Contrato a aditar</div>';
   h+='<div class="frow c3"><div class="field"><label>Nº do contrato</label><input id="a-contrato" placeholder="ex.: 002/2025"></div><div class="field"><label>Nº do termo aditivo</label><input id="a-num" placeholder="ex.: 2º"></div><div class="field"><label>Contratada</label><input id="a-razao" placeholder="empresa"></div></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-contract"/></svg> Tipo de aditivo</div>';
@@ -2101,7 +2101,7 @@ function gerarAditivo(){
 }
 // ---------- INEXIGIBILIDADE (art. 74) ----------
 function renderFormInexig(){
-  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'inexigibilidade\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Inserir modelo do órgão para a Inexigibilidade</button></div>';
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'inexigibilidade\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para a Inexigibilidade</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Inexigibilidade de licitação (art. 74)</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Setor requerente</label><select id="x-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
   h+='<div class="frow c2"><div class="field"><label>Processo nº</label><input id="x-proc"></div><div class="field"><label>Valor total (R$)</label><input id="x-valor" type="number" step="0.01"></div></div>';
@@ -2390,6 +2390,8 @@ function usarModelo(id){
   var p=document.getElementById('ws-preview'); p.className='docpaper'; p.setAttribute('contenteditable','true'); p.style.outline='none'; p.innerHTML=d.html;
   var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
   goto('workspace');
+  try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
+  toast('Modelo aberto no '+nomeTipo(tipoBase)+'. Edite o texto e clique em Exportar Word.');
 }
 async function excluirModelo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
@@ -2512,10 +2514,22 @@ async function toggleAtivoUsuario(email, ativar){
   await carregarDoSupabase(); renderAdmin(); toast(email+(ativar?' ativado':' desativado')+'.');
 }
 function openModelos(tipo){
+  var dentroDoGerador = !!(DOC && DOC.tipo && document.getElementById('ws-preview'));
   var ms=(DB.docs||[]).filter(function(d){return d.tipo==='modelo';});
-  var lista = ms.length ? ms.map(function(m){ return '<div class="modal-row" style="cursor:pointer" onclick="fecharModal();usarModelo(\''+m.id+'\')"><b>'+esc(nomeTipo(m.tipo))+(m.numero?' '+esc(m.numero):'')+'</b><span>'+esc(m.objeto)+'</span></div>'; }).join('') : '<p style="color:var(--slate);font-size:13px;margin:0">Nenhum modelo do órgão salvo ainda. Envie o primeiro abaixo.</p>';
-  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">Use um modelo do órgão já salvo (clique nele), ou envie um novo em Word (.docx):</p>'+lista+'<div style="margin-top:16px"><button class="btn-gold" type="button" onclick="fecharModal();importarModelo(\''+(tipo?esc(nomeTipo(tipo)):'')+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Enviar novo modelo (Word)</button></div>';
+  var acao = dentroDoGerador ? 'aplicarModeloAqui' : 'usarModelo';
+  var lista = ms.length ? ms.map(function(m){ return '<div class="modal-row" style="cursor:pointer" onclick="fecharModal();'+acao+'(\''+m.id+'\')"><b>'+esc(m.objeto)+'</b><span>Clique para usar este modelo</span></div>'; }).join('') : '<p style="color:var(--slate);font-size:13px;margin:0">Nenhum modelo do órgão salvo ainda. Envie o primeiro abaixo.</p>';
+  var dica = dentroDoGerador ? 'Escolha um modelo do órgão para carregar aqui neste documento (você edita e exporta), ou envie um novo em Word (.docx):' : 'Use um modelo do órgão já salvo (clique nele), ou envie um novo em Word (.docx):';
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">'+dica+'</p>'+lista+'<div style="margin-top:16px"><button class="btn-gold" type="button" onclick="fecharModal();importarModelo(\''+(tipo?esc(nomeTipo(tipo)):'')+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Enviar novo modelo (Word)</button></div>';
   abrirModal('Modelos do órgão', h);
+}
+// Carrega o modelo escolhido NO documento atual, sem sair da tela nem zerar o formulário.
+function aplicarModeloAqui(id){
+  var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
+  if(!d) return;
+  DOC.modeloUso=true; DOC.baseModelo=d.objeto;
+  var p=document.getElementById('ws-preview'); if(p){ p.className='docpaper'; p.setAttribute('contenteditable','true'); p.style.outline='none'; p.innerHTML=d.html; p.scrollTop=0; }
+  var ch=document.getElementById('ws-chain'); if(ch) ch.style.display='none';
+  toast('Modelo carregado no documento. Edite o texto e clique em Exportar Word.');
 }
 function inserirModeloTipo(tipo){ openModelos(tipo); }
 function buscaGlobal(){
