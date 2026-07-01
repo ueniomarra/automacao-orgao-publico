@@ -576,6 +576,15 @@ td .modd{font-size:12px;color:var(--slate)}
       <!-- ANÁLISE DE LICITAÇÃO ONLINE -->
       <div class="page" id="pg-analise">
         <div class="pagehead"><div><div class="hello">Módulo 4</div><h1>Análise de Licitação Online</h1><p>Apoio interno da prefeitura na licitação online, em todas as modalidades: confere e valida a documentação de habilitação, as propostas e a planilha orçamentária dos licitantes, apontando o que está certo e o que precisa de atenção.</p></div></div>
+        <style>
+          #pg-analise .panel{border-top:3px solid #C9A961;box-shadow:0 2px 10px rgba(10,35,66,.06)}
+          #pg-analise .ph h3{letter-spacing:.2px}
+          #pg-analise .gl{color:#0A2342;font-weight:700}
+          #pg-analise .btn-primary{box-shadow:0 2px 8px rgba(10,35,66,.18)}
+          #pg-analise .pill.on{box-shadow:0 2px 6px rgba(10,35,66,.20)}
+          #pg-analise input,#pg-analise select,#pg-analise textarea{transition:border-color .15s,box-shadow .15s}
+          #pg-analise input:focus,#pg-analise select:focus,#pg-analise textarea:focus{border-color:#0A2342;box-shadow:0 0 0 3px rgba(201,169,97,.25);outline:none}
+        </style>
         <div id="an-root"></div>
       </div>
 
@@ -2410,7 +2419,7 @@ var _anPT=null,_anPP=null;
 function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _anPP=null; if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; try{ SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:p, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'}).then(function(){},function(){}); }catch(e){} }
 function anPersist(p){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; _anPP=p; if(_anPT) clearTimeout(_anPT); _anPT=setTimeout(anFlush,600); }
 function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER) return Promise.resolve(false); return SB.from('an_processos').select('dados').order('updated_at',{ascending:false}).then(function(r){ if(r&&r.data){ ANALISE.procs=r.data.map(function(x){return x.dados;}).filter(Boolean); ANALISE._loaded=true; return true; } return false; }).catch(function(){ return false; }); }
-function anEntrar(){ var r=document.getElementById('an-root'); if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&!ANALISE._loaded){ if(r) r.innerHTML='<div class="panel"><div style="padding:16px" class="hint">Carregando processos do órgão...</div></div>'; anCarregarSupabase().then(function(){ ANALISE._loaded=true; renderAnalise(); }); } else { renderAnalise(); } }
+function anEntrar(){ anFlush(); ANALISE.curId=null; ANALISE.curLic=null; var r=document.getElementById('an-root'); if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&!ANALISE._loaded){ if(r) r.innerHTML='<div class="panel"><div style="padding:16px" class="hint">Carregando processos do órgão...</div></div>'; anCarregarSupabase().then(function(){ ANALISE._loaded=true; renderAnalise(); }); } else { renderAnalise(); } }
 function anGid(p){ return (p||'a')+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
 function anCur(){ for(var i=0;i<ANALISE.procs.length;i++){ if(ANALISE.procs[i].id===ANALISE.curId) return ANALISE.procs[i]; } return null; }
 function anNum(s){ s=String(s==null?'':s).replace(/[^0-9,.-]/g,''); if(s.indexOf(',')>=0){ s=s.replace(/\./g,'').replace(',','.'); } return Number(s)||0; }
@@ -2434,11 +2443,18 @@ function anExigencias(obra){
 function renderAnalise(){ if(!ANALISE._loaded){ anLoad(); ANALISE._loaded=true; } var r=document.getElementById('an-root'); if(!r) return; if(anCur() && anLic()) anRenderConferencia(r); else if(anCur()) anRenderProc(r); else anRenderLista(r); }
 function anRenderLista(root){
   var h=anGuiaGeral(); h+='<div class="panel"><div class="ph"><h3>Processos em análise</h3><button class="btn-primary" type="button" onclick="anNovo()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-plus"/></svg> Novo processo</button></div><div style="padding:6px 2px">';
-  if(!ANALISE.procs.length){ h+='<div class="hint">Nenhum processo em análise ainda. Clique em "Novo processo", informe os dados do certame e o sistema monta a análise dos licitantes.</div>'; }
+  if(!ANALISE.procs.length){ h+='<div style="text-align:center;padding:40px 16px"><svg class="ic" style="width:46px;height:46px;color:#C9A961;opacity:.9"><use href="#i-shield"/></svg><div style="margin-top:14px;font-size:16px;color:#0A2342;font-weight:700">Nenhum processo em análise ainda</div><div style="margin-top:6px;font-size:13.5px;color:#64748b;max-width:420px;margin-left:auto;margin-right:auto">Clique em <b>Novo processo</b> para começar. O sistema vai te guiar passo a passo em cada etapa da análise.</div><div style="display:flex;justify-content:center;margin-top:18px"><button class="btn-primary" type="button" onclick="anNovo()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-plus"/></svg> Novo processo</button></div></div>'; }
   else {
-    h+='<table class="itab"><thead><tr><th>Modalidade</th><th>Objeto</th><th>Processo</th><th>Licitantes</th><th></th></tr></thead><tbody>';
-    ANALISE.procs.forEach(function(p){ h+='<tr><td>'+esc(p.modalidade)+'</td><td>'+esc(p.objeto||'(sem objeto)')+'</td><td>'+esc(p.processo||'-')+'</td><td>'+((p.licitantes||[]).length)+'</td><td style="white-space:nowrap"><button class="btn-ghost" type="button" onclick="anAbrir(&#39;'+p.id+'&#39;)">Abrir</button> <button class="btn-ghost" type="button" onclick="anExcluir(&#39;'+p.id+'&#39;)">Excluir</button></td></tr>'; });
-    h+='</tbody></table>';
+    h+='<div style="display:flex;flex-direction:column;gap:10px">';
+    ANALISE.procs.forEach(function(p){ var nlic=(p.licitantes||[]).length; h+='<div style="border:1px solid #e6e9ef;border-left:5px solid #0A2342;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;background:#fff;transition:box-shadow .15s" onmouseover="this.style.boxShadow=&#39;0 4px 14px rgba(10,35,66,.10)&#39;" onmouseout="this.style.boxShadow=&#39;none&#39;">'
+      +'<div style="min-width:0">'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="background:#0A2342;color:#C9A961;font-weight:700;font-size:11px;padding:3px 11px;border-radius:20px">'+esc(p.modalidade)+'</span>'+(p.processo?'<span style="font-size:12px;color:#64748b">Processo '+esc(p.processo)+'</span>':'')+'</div>'
+      +'<div style="margin-top:7px;font-weight:600;color:#0f172a;font-size:14.5px;overflow:hidden;text-overflow:ellipsis">'+esc(p.objeto||'(sem objeto definido)')+'</div>'
+      +'<div style="margin-top:4px;font-size:12.5px;color:#64748b">'+nlic+' licitante'+(nlic===1?'':'s')+' cadastrado'+(nlic===1?'':'s')+'</div>'
+      +'</div>'
+      +'<div style="flex:none;display:flex;gap:8px"><button class="btn-primary" type="button" onclick="anAbrir(&#39;'+p.id+'&#39;)">Abrir</button><button class="btn-ghost" type="button" onclick="anExcluir(&#39;'+p.id+'&#39;)">Excluir</button></div>'
+      +'</div>'; });
+    h+='</div>';
   }
   h+='</div></div>';
   root.innerHTML=h;
@@ -2523,14 +2539,16 @@ function anGerarRelatorio(){ var p=anCur(); if(!p) return; var org=(typeof ORG!=
 function anExportRelatorio(){ var p=anCur(); if(!p||!p.relatorioHtml) return; var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body style="font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#111">'+p.relatorioHtml+'</body></html>'; var blob=new Blob(['﻿'+html],{type:'application/msword'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Relatorio_analise_'+String(p.processo||'processo').replace(/[^a-z0-9]+/ig,'_')+'.doc'; document.body.appendChild(a); a.click(); setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},1500); toast('Relatório exportado em Word.'); }
 // ---------- Legendas e guia (linguagem simples para qualquer pessoa operar) ----------
 function anLeg(txt){ return '<div style="display:flex;gap:8px;align-items:flex-start;background:#f1f5fb;border-left:4px solid #C9A961;border-radius:8px;padding:9px 12px;margin:0 0 12px"><svg class="ic" style="width:15px;height:15px;flex:none;margin-top:1px"><use href="#i-shield"/></svg><span style="font-size:13px;color:#0A2342;line-height:1.55">'+txt+'</span></div>'; }
-function anGuiaGeral(){ return '<div class="panel"><div class="ph"><h3>Como funciona este módulo</h3></div><div style="padding:6px 2px">'
-  +'<div class="hint" style="margin-bottom:10px">Este módulo é um ajudante da comissão de licitação. Ele lê os documentos e aponta o que parece certo e o que precisa de atenção. Quem decide e assina é sempre a comissão; o sistema não substitui ninguém.</div>'
-  +'<div style="font-size:13px;color:#0A2342;line-height:1.85"><b>Passo a passo, bem simples:</b><br>'
-  +'<b>1.</b> Clique em <b>Novo processo</b>, descreva a licitação (o que está sendo contratado e o valor estimado) e suba o edital.<br>'
-  +'<b>2.</b> Cadastre os <b>licitantes</b> (as empresas) na ordem de classificação.<br>'
-  +'<b>3.</b> Clique em <b>Analisar</b> na empresa, suba os documentos dela e clique em <b>Conferir</b>. O sistema mostra o que está certo e o que está errado.<br>'
-  +'<b>4.</b> Gere o <b>parecer</b> de cada empresa e, no fim, o <b>relatório do processo</b> para anexar.</div>'
-  +'</div></div>'; }
+function anGuiaGeral(){
+  var step=function(n,txt){ return '<div style="display:flex;gap:12px;align-items:flex-start"><div style="flex:none;width:30px;height:30px;border-radius:50%;background:#0A2342;color:#C9A961;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center">'+n+'</div><div style="font-size:13.5px;color:#1e293b;line-height:1.5;padding-top:4px">'+txt+'</div></div>'; };
+  return '<div class="panel" style="background:linear-gradient(180deg,#f7f9fc 0,#ffffff 60%)"><div class="ph"><h3>Como funciona este módulo</h3></div><div style="padding:8px 4px">'
+  +'<div class="hint" style="margin-bottom:16px">Este módulo é um ajudante da comissão de licitação: ele lê os documentos e aponta o que está certo e o que precisa de atenção. Quem decide e assina é sempre a comissão.</div>'
+  +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 22px">'
+  +step(1,'Clique em <b>Novo processo</b>, descreva a licitação e suba o edital.')
+  +step(2,'Cadastre os <b>licitantes</b> (as empresas) na ordem de classificação.')
+  +step(3,'Clique em <b>Analisar</b> na empresa, suba os documentos e clique em <b>Conferir</b>.')
+  +step(4,'Gere o <b>parecer</b> de cada empresa e o <b>relatório</b> final do processo.')
+  +'</div></div></div>'; }
 function anGuiaProcesso(){ return anLeg('<b>Você está dentro de um processo.</b> Faça na ordem: <b>1)</b> preencha o Certame e suba o edital, <b>2)</b> cadastre os licitantes, <b>3)</b> clique em <b>Analisar</b> em cada empresa para subir e conferir os documentos. As caixas azuis com borda dourada explicam cada parte.'); }
 function anRenderLicRows(){ var p=anCur(); var b=document.getElementById('an-lic-body'); if(!b||!p) return; b.innerHTML=''; (p.licitantes||[]).forEach(function(l,i){ var tr=document.createElement('tr'); tr.innerHTML='<td><input value="'+esc(l.razao)+'" onchange="anSetLic('+i+',&#39;razao&#39;,this.value)"></td><td><input value="'+esc(l.cnpj)+'" placeholder="00.000.000/0001-00" onchange="anSetLic('+i+',&#39;cnpj&#39;,this.value)"></td><td><input value="'+esc(l.ordem||(i+1))+'" style="width:64px" onchange="anSetLic('+i+',&#39;ordem&#39;,this.value)"></td><td>'+anSitBadge(l.situacao)+'</td><td style="white-space:nowrap"><button class="btn-ghost" type="button" onclick="anAbrirLic(&#39;'+l.id+'&#39;)">Analisar</button> <button class="btn-ghost" type="button" onclick="anDelLic('+i+')">remover</button></td>'; b.appendChild(tr); }); }
 function anAddLic(){ var p=anCur(); if(!p) return; p.licitantes=p.licitantes||[]; p.licitantes.push({id:anGid('l'),razao:'',cnpj:'',ordem:p.licitantes.length+1}); anSave(); anRenderLicRows(); }
