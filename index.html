@@ -576,18 +576,7 @@ td .modd{font-size:12px;color:var(--slate)}
       <!-- ANÁLISE DE LICITAÇÃO ONLINE -->
       <div class="page" id="pg-analise">
         <div class="pagehead"><div><div class="hello">Módulo 4</div><h1>Análise de Licitação Online</h1><p>Apoio interno da prefeitura na licitação online, em todas as modalidades: confere e valida a documentação de habilitação, as propostas e a planilha orçamentária dos licitantes, apontando o que está certo e o que precisa de atenção.</p></div></div>
-        <div class="panel">
-          <div class="ph"><h3>O que este módulo vai fazer</h3></div>
-          <div style="padding:6px 2px">
-            <ul class="checks">
-              <li>Receber e organizar a documentação enviada na licitação online.</li>
-              <li>Conferir a habilitação (jurídica, fiscal, trabalhista, econômica e técnica), checando certidões e prazos.</li>
-              <li>Analisar a proposta e a planilha orçamentária após a fase de lances.</li>
-              <li>Apontar pendências e gerar um parecer de conformidade para o pregoeiro e a comissão.</li>
-            </ul>
-            <div class="precos-aviso av-warn" style="margin-top:14px"><svg class="ic" style="width:14px;height:14px"><use href="#i-alert"/></svg> Módulo em desenvolvimento. A estrutura já está reservada aqui; a construção começa em seguida.</div>
-          </div>
-        </div>
+        <div id="an-root"></div>
       </div>
 
       <!-- CENTRAL DE DOCUMENTOS -->
@@ -818,6 +807,7 @@ function show(pg){
   if(pg==='relatorios') renderRelatorios();
   if(pg==='baselegal') renderBaseLegal();
   if(pg==='secretarias') renderSecretarias();
+  if(pg==='analise') anEntrar();
 }
 // ===== Secretarias / Fundos do órgão (alimentam os campos de seleção dos documentos) =====
 function renderSecretarias(){
@@ -2406,6 +2396,326 @@ function seedModelos(){ MODELOS_SEED.forEach(function(m){ var found=false; for(v
 function dbLoad(){ try{ var s=localStorage.getItem('aop_demo_v1'); if(s){ var o=JSON.parse(s); DB.docs=o.docs||[]; DB.seq=o.seq||{}; DB.users=(o.users&&o.users.length)?o.users:USERS_SEED.slice(); if(o.contratos&&o.contratos.length) CONTRATOS=o.contratos; if(o.orgaos&&o.orgaos.length) ORGAOS=o.orgaos; if(o.secretarias&&o.secretarias.length) SECRETARIAS=o.secretarias; } }catch(e){} seedModelos(); }
 function dbSave(){ try{ localStorage.setItem('aop_demo_v1', JSON.stringify({docs:DB.docs,seq:DB.seq,contratos:CONTRATOS,users:DB.users,orgaos:ORGAOS,secretarias:SECRETARIAS})); }catch(e){} }
 function dataHoje(){ var d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+
+// ===================== MÓDULO: ANÁLISE DE LICITAÇÃO ONLINE =====================
+// Apoio interno da comissão: recebe os documentos do licitante e confronta contra as
+// exigências da licitação, seguindo o rito da Lei 14.133/2021. O sistema aponta e gera
+// a minuta; a comissão decide e assina. Bloco 1: certame, licitantes e exigências.
+var ANMODS=['Pregão Eletrônico','Concorrência Eletrônica','Pregão Presencial','Concorrência Presencial','Diálogo Competitivo','Chamamento / Credenciamento','Dispensa','Inexigibilidade'];
+var ANALISE={procs:[],curId:null};
+function anLoad(){ try{ var s=localStorage.getItem('aop_analise_v1'); if(s){ ANALISE.procs=(JSON.parse(s).procs)||[]; } }catch(e){} }
+function anSave(){ try{ localStorage.setItem('aop_analise_v1', JSON.stringify({procs:ANALISE.procs})); }catch(e){} var c=anCur(); if(c) anPersist(c); }
+function anOrg(){ return (typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; }
+var _anPT=null,_anPP=null;
+function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _anPP=null; if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; try{ SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:p, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'}).then(function(){},function(){}); }catch(e){} }
+function anPersist(p){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; _anPP=p; if(_anPT) clearTimeout(_anPT); _anPT=setTimeout(anFlush,600); }
+function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER) return Promise.resolve(false); return SB.from('an_processos').select('dados').order('updated_at',{ascending:false}).then(function(r){ if(r&&r.data){ ANALISE.procs=r.data.map(function(x){return x.dados;}).filter(Boolean); ANALISE._loaded=true; return true; } return false; }).catch(function(){ return false; }); }
+function anEntrar(){ var r=document.getElementById('an-root'); if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&!ANALISE._loaded){ if(r) r.innerHTML='<div class="panel"><div style="padding:16px" class="hint">Carregando processos do órgão...</div></div>'; anCarregarSupabase().then(function(){ ANALISE._loaded=true; renderAnalise(); }); } else { renderAnalise(); } }
+function anGid(p){ return (p||'a')+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
+function anCur(){ for(var i=0;i<ANALISE.procs.length;i++){ if(ANALISE.procs[i].id===ANALISE.curId) return ANALISE.procs[i]; } return null; }
+function anNum(s){ s=String(s==null?'':s).replace(/[^0-9,.-]/g,''); if(s.indexOf(',')>=0){ s=s.replace(/\./g,'').replace(',','.'); } return Number(s)||0; }
+function anModo(mod){ if(/credenc|chamamento/i.test(mod)) return 'todos'; if(/dispensa|inexig/i.test(mod)) return 'direta'; return 'sequencial'; }
+function anModoTxt(m){ return m==='todos'?'Credenciamento ou chamamento: o sistema confere e habilita TODOS os interessados que cumprem os requisitos. Não há disputa de menor preço nem 1º colocado.':(m==='direta'?'Contratação direta (dispensa ou inexigibilidade): o sistema confere a regularidade do contratado e a justificativa. Não há disputa entre licitantes.':'Rito comum: julga-se as propostas e habilita-se o 1º colocado. Se inabilitado, convoca-se o próximo classificado (art. 63, II da Lei 14.133/2021).'); }
+function anExigencias(obra){
+  var L=[
+    {cat:'Habilitação jurídica', base:'art. 66 da Lei 14.133/2021', itens:['Ato constitutivo, contrato ou estatuto social e a última alteração','Comprovante de inscrição no CNPJ']},
+    {cat:'Regularidade fiscal, social e trabalhista', base:'art. 68 da Lei 14.133/2021', itens:['Certidão da Fazenda Federal e da Dívida Ativa da União (Receita e PGFN)','Certificado de Regularidade do FGTS (CRF)','Certidão da Fazenda Estadual','Certidão da Fazenda Municipal','Certidão Negativa de Débitos Trabalhistas (CNDT)']},
+    {cat:'Qualificação econômico-financeira', base:'art. 69 da Lei 14.133/2021', itens:['Balanço patrimonial e demonstrações contábeis dos 2 últimos exercícios','Certidão negativa de falência e de recuperação judicial']},
+    {cat:'Qualificação técnica', base:'art. 67 da Lei 14.133/2021', itens:['Atestado de capacidade técnica compatível com o objeto']},
+    {cat:'Declarações', base:'Lei 14.133/2021 e LC 123/2006', itens:['Declaração de que não emprega menor (art. 7º, XXXIII, da Constituição Federal)','Declaração de enquadramento como ME ou EPP, quando for o caso','Declaração de inexistência de fato impeditivo da habilitação']}
+  ];
+  if(obra){
+    L[2].itens.push('Comprovação de capital social ou patrimônio líquido mínimo exigido no edital');
+    L[3].itens.push('Registro e quitação junto ao CREA ou CAU');
+    L[3].itens.push('Certidão de Acervo Técnico (CAT) do responsável técnico');
+  }
+  return L;
+}
+function renderAnalise(){ if(!ANALISE._loaded){ anLoad(); ANALISE._loaded=true; } var r=document.getElementById('an-root'); if(!r) return; if(anCur() && anLic()) anRenderConferencia(r); else if(anCur()) anRenderProc(r); else anRenderLista(r); }
+function anRenderLista(root){
+  var h=anGuiaGeral(); h+='<div class="panel"><div class="ph"><h3>Processos em análise</h3><button class="btn-primary" type="button" onclick="anNovo()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-plus"/></svg> Novo processo</button></div><div style="padding:6px 2px">';
+  if(!ANALISE.procs.length){ h+='<div class="hint">Nenhum processo em análise ainda. Clique em "Novo processo", informe os dados do certame e o sistema monta a análise dos licitantes.</div>'; }
+  else {
+    h+='<table class="itab"><thead><tr><th>Modalidade</th><th>Objeto</th><th>Processo</th><th>Licitantes</th><th></th></tr></thead><tbody>';
+    ANALISE.procs.forEach(function(p){ h+='<tr><td>'+esc(p.modalidade)+'</td><td>'+esc(p.objeto||'(sem objeto)')+'</td><td>'+esc(p.processo||'-')+'</td><td>'+((p.licitantes||[]).length)+'</td><td style="white-space:nowrap"><button class="btn-ghost" type="button" onclick="anAbrir(&#39;'+p.id+'&#39;)">Abrir</button> <button class="btn-ghost" type="button" onclick="anExcluir(&#39;'+p.id+'&#39;)">Excluir</button></td></tr>'; });
+    h+='</tbody></table>';
+  }
+  h+='</div></div>';
+  root.innerHTML=h;
+}
+function anNovo(){ var p={id:anGid('p'),modalidade:'Pregão Eletrônico',criterio:'Menor preço',objeto:'',processo:'',valorEstimado:0,dataBase:dataHoje(),inversao:'Não',obra:'Não',licitantes:[],criado:dataHoje()}; ANALISE.procs.unshift(p); ANALISE.curId=p.id; anSave(); try{ if(typeof registrarAud==='function' && typeof SB!=='undefined' && SB && CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Abriu processo de análise', p.id, org); } }catch(e){} renderAnalise(); }
+function anAbrir(id){ anFlush(); ANALISE.curId=id; ANALISE.curLic=null; renderAnalise(); }
+function anExcluir(id){ try{ if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER) SB.from('an_processos').delete().eq('orgao_id',anOrg()).eq('proc_id',id).then(function(){},function(){}); }catch(e){} ANALISE.procs=ANALISE.procs.filter(function(p){return p.id!==id;}); if(ANALISE.curId===id) ANALISE.curId=null; anSave(); renderAnalise(); }
+function anVoltar(){ anFlush(); ANALISE.curId=null; renderAnalise(); }
+function anRenderProc(root){
+  var p=anCur(); if(!p){ anRenderLista(root); return; }
+  var modo=anModo(p.modalidade);
+  var h=''; h+=anGuiaProcesso();
+  h+='<div class="panel"><div class="ph"><h3>Certame</h3><button class="btn-ghost" type="button" onclick="anVoltar()">Voltar aos processos</button></div><div style="padding:6px 2px">';
+  h+=anLeg('<b>O que é o Certame:</b> aqui você descreve a licitação (o objeto, a modalidade, o valor que a prefeitura estima gastar) e sobe o edital, o termo de referência e a planilha. Isso vira a régua: o sistema compara os documentos das empresas com o que está aqui.');
+  h+='<div class="field" style="margin-bottom:12px"><label>Modalidade</label>'+pills('anmod',ANMODS,p.modalidade)+'</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do processo administrativo</label><input id="an-proc" value="'+esc(p.processo)+'" placeholder="ex.: 2859/2026"></div><div class="field"><label>Objeto é obra ou serviço de engenharia?</label>'+pills('anobra',['Não','Sim'],p.obra)+'</div></div>';
+  h+='<div class="field" style="margin:12px 0"><label>Objeto</label><input id="an-obj" value="'+esc(p.objeto)+'" placeholder="ex.: contratação de serviços de limpeza pública"></div>';
+  h+='<div class="frow c3"><div class="field"><label>Valor total estimado (R$)</label><input id="an-valest" value="'+(p.valorEstimado?money(p.valorEstimado).replace("R$ ",""):"")+'" placeholder="1.132.989,99"></div><div class="field"><label>Data-base da sessão</label><input id="an-datab" value="'+esc(p.dataBase)+'" placeholder="dd/mm/aaaa"></div><div class="field"><label>Inversão de fases?</label>'+pills('aninv',['Não','Sim'],p.inversao)+'</div></div>';
+  h+='<div class="hint" style="margin-top:12px;display:flex;gap:8px;align-items:flex-start"><svg class="ic" style="width:14px;height:14px;flex:none;margin-top:2px"><use href="#i-shield"/></svg><span>'+esc(anModoTxt(modo))+'</span></div>';
+  h+='<div class="fgroup" style="margin-top:14px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos da licitação (a régua da comparação)</div>';
+  h+='<div class="hint" style="margin-bottom:8px">Suba o edital, o termo de referência e a planilha de referência. O sistema lê e usa como base para comparar contra os documentos de cada licitante.</div>';
+  h+='<input id="an-file-cert" type="file" accept="application/pdf" multiple onchange="anOnUploadCertame(this)">';
+  h+='<div id="an-prog-cert" class="hint" style="margin-top:6px"></div>';
+  if((p.docsCertame||[]).length){ h+='<table class="itab" style="margin-top:10px"><tbody>'; p.docsCertame.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td style="width:110px">'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td style="width:90px"><button class="btn-ghost" type="button" onclick="anDelDocCert('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
+  h+='</div>';
+  h+='<button class="btn-primary" type="button" style="margin-top:12px;justify-content:center" onclick="anSalvarCertame()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Salvar certame</button>';
+  h+='</div></div>';
+  h+='<div class="panel"><div class="ph"><h3>Licitantes</h3></div><div style="padding:6px 2px">';
+  h+=anLeg('<b>O que são os Licitantes:</b> as empresas que participaram da licitação. Cadastre cada uma na ordem de classificação (1º lugar, 2º lugar...). A coluna <b>Situação</b> mostra o resultado, e o botão <b>Analisar</b> abre a conferência dos documentos daquela empresa.');
+  h+='<div class="hint" style="margin-bottom:10px">'+(modo==='todos'?'No credenciamento, informe os interessados. O sistema confere e habilita todos que cumprem os requisitos.':(modo==='direta'?'Na contratação direta, informe o contratado a ser verificado.':'Informe os licitantes na ordem de classificação após os lances. O sistema analisa a habilitação do 1º colocado; se inabilitado, você convoca o próximo.'))+'</div>';
+  h+='<table class="itab"><thead><tr><th style="width:38%">Razão social</th><th>CNPJ</th><th>Class.</th><th>Situação</th><th></th></tr></thead><tbody id="an-lic-body"></tbody></table>';
+  h+='<button class="addline" type="button" onclick="anAddLic()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar licitante</button>';
+  h+=anRenderFluxo(p,modo);
+  h+='</div></div>';
+  var exs=anExigencias(p.obra==='Sim');
+  h+='<div class="panel"><div class="ph"><h3>Exigências de habilitação</h3></div><div style="padding:6px 2px">';
+  h+=anLeg('<b>O que é:</b> a lista de documentos que a lei exige de cada empresa para ela poder ser habilitada. O sistema monta sozinho conforme o tipo de objeto. É contra esta lista que ele confere os documentos de cada licitante.');
+  h+='<div class="hint" style="margin-bottom:10px">Checklist montado automaticamente conforme a Lei 14.133/2021 e o tipo de objeto. É a régua que o sistema usa para conferir cada licitante.</div>';
+  exs.forEach(function(g){ h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> '+esc(g.cat)+'</div><div class="hint" style="margin:-4px 0 8px">'+esc(g.base)+'</div><ul class="checks">'+g.itens.map(function(it){return '<li>'+esc(it)+'</li>';}).join('')+'</ul></div>'; });
+  h+='</div></div>';
+  h+=anRenderRecurso(p);
+  h+=anRenderRelatorioPanel(p);
+  root.innerHTML=h;
+  anRenderLicRows();
+}
+function anSitBadge(sit){ var m={habilitado:['Habilitado','#0A2342','#fff'],inabilitado:['Inabilitado','#6b7280','#fff'],pendente:['Pendente','#E8A020','#0A2342']}; if(!sit) return '<span style="color:#6b7280;font-size:12px">aguardando</span>'; var x=m[sit]||['-','#e5e7eb','#111']; return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:700;background:'+x[1]+';color:'+x[2]+'">'+x[0]+'</span>'; }
+function anVencedor(p){ var ls=(p.licitantes||[]).slice().sort(function(a,b){return (parseInt(a.ordem)||99)-(parseInt(b.ordem)||99);}); for(var i=0;i<ls.length;i++){ if(ls[i].situacao==='habilitado') return ls[i]; } return null; }
+function anProximo(p){ var ls=(p.licitantes||[]).slice().sort(function(a,b){return (parseInt(a.ordem)||99)-(parseInt(b.ordem)||99);}); for(var i=0;i<ls.length;i++){ if(ls[i].situacao==='habilitado') return null; if(ls[i].situacao!=='inabilitado') return ls[i]; } return null; }
+function anRenderFluxo(p,modo){ if(modo!=='sequencial') return ''; var v=anVencedor(p), prox=anProximo(p); var h='<div class="hint" style="margin-top:12px;display:flex;gap:8px;align-items:flex-start"><svg class="ic" style="width:14px;height:14px;flex:none;margin-top:2px"><use href="#i-shield"/></svg><span>';
+  if(v) h+='<b>Vencedor habilitado:</b> '+esc(v.razao)+'. O certame segue para adjudicação e homologação.';
+  else if(prox) h+='<b>Em análise (art. 63, II da Lei 14.133/2021):</b> analisa-se a habilitação de '+esc(prox.razao||'1º colocado')+' (classificação '+esc(prox.ordem||'-')+'). Se inabilitado, o próximo classificado passa a ser o analisado. Clique em Analisar.';
+  else if((p.licitantes||[]).length) h+='Todos os classificados foram inabilitados. Avalie convocar remanescentes ou declarar o certame fracassado.';
+  else h+='Adicione os licitantes na ordem de classificação para iniciar a análise.';
+  h+='</span></div>'; return h; }
+function anRenderRecurso(p){ var r=p.recurso||{}; var h='<div class="panel"><div class="ph"><h3>Fase recursal</h3></div><div style="padding:6px 2px">';
+  h+='<div class="hint" style="margin-bottom:10px">Fase recursal única (art. 165 da Lei 14.133/2021): prazo de 3 dias úteis para recurso, contado da intimação da habilitação ou do julgamento, e igual prazo para contrarrazões.</div>';
+  h+='<div class="frow c2"><div class="field"><label>Houve recurso?</label>'+pills('anrec',['Não','Sim'],r.houve||'Não')+'</div><div class="field"><label>Recorrente</label><input id="anrec-quem" value="'+esc(r.quem||'')+'" placeholder="empresa que recorreu"></div></div>';
+  h+='<div class="frow c3" style="margin-top:10px"><div class="field"><label>Data da intimação</label><input id="anrec-int" value="'+esc(r.intimacao||'')+'" placeholder="dd/mm/aaaa"></div><div class="field"><label>Fim do prazo (3 dias úteis)</label><input id="anrec-praz" value="'+esc(r.prazo||'')+'" placeholder="dd/mm/aaaa"></div><div class="field"><label>Resultado</label>'+pills('anrecres',['Pendente','Provido','Improvido'],r.resultado||'Pendente')+'</div></div>';
+  h+='<div class="field" style="margin-top:10px"><label>Síntese da decisão do recurso</label><textarea id="anrec-dec" placeholder="fundamentação resumida">'+esc(r.decisao||'')+'</textarea></div>';
+  h+='<button class="btn-primary" type="button" style="margin-top:10px;justify-content:center" onclick="anSalvarRecurso()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Salvar fase recursal</button>';
+  h+='</div></div>'; return h; }
+function anSalvarRecurso(){ var p=anCur(); if(!p) return; var g=function(id){var e=document.getElementById(id);return e?e.value:'';}; p.recurso={houve:pillVal('anrec')||'Não', quem:g('anrec-quem'), intimacao:g('anrec-int'), prazo:g('anrec-praz'), resultado:pillVal('anrecres')||'Pendente', decisao:g('anrec-dec')}; anSave(); toast('Fase recursal salva.'); }
+function anRenderRelatorioPanel(p){ var h='<div class="panel"><div class="ph"><h3>Relatório final do processo</h3><button class="btn-primary" type="button" onclick="anGerarRelatorio()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Gerar relatório</button></div><div style="padding:6px 2px">';
+  h+='<div class="hint">Consolida o certame, a situação de cada licitante, as pendências apontadas, a proposta, a fase recursal e o vencedor, para anexar ao processo administrativo.</div>';
+  if(p.relatorioHtml){ h+='<div style="margin-top:12px;border:1px solid #e5e7eb;border-radius:10px;padding:16px;background:#fff">'+p.relatorioHtml+'</div>'; h+='<button class="btn-ghost" type="button" style="margin-top:10px" onclick="anExportRelatorio()"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Exportar para Word</button>'; }
+  h+='</div></div>'; return h; }
+function anGerarRelatorio(){ var p=anCur(); if(!p) return; var org=(typeof ORG!=='undefined'&&ORG)?ORG:{nome:'Prefeitura Municipal'}; var ls=(p.licitantes||[]).slice().sort(function(a,b){return (parseInt(a.ordem)||99)-(parseInt(b.ordem)||99);});
+  var h='';
+  h+='<div style="text-align:center;font-weight:700">'+esc((org.nome||'').toUpperCase())+'</div>';
+  h+='<div style="text-align:center;font-weight:700;margin-bottom:12px">RELATÓRIO DE ANÁLISE DA LICITAÇÃO</div>';
+  h+='<p><b>Processo:</b> '+esc(p.processo||'-')+' &nbsp;&nbsp; <b>Modalidade:</b> '+esc(p.modalidade)+(p.inversao==='Sim'?' (com inversão de fases)':'')+'</p>';
+  h+='<p><b>Objeto:</b> '+esc(p.objeto||'-')+' &nbsp;&nbsp; <b>Valor estimado:</b> '+(p.valorEstimado?money(p.valorEstimado):'não informado')+'</p>';
+  h+='<p><b>Data-base da sessão:</b> '+esc(p.dataBase||'-')+'</p>';
+  h+='<p style="margin-top:10px"><b>Licitantes e situação:</b></p><ol>';
+  ls.forEach(function(l){ var res=l.resultado; var pend=res?res.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';}):[]; h+='<li style="margin-bottom:6px"><b>'+esc(l.razao||'(sem nome)')+'</b> (CNPJ '+esc(l.cnpj||'-')+'), classificação '+esc(l.ordem||'-')+': <b>'+esc(l.situacaoTxt||'não analisado')+'</b>.'; if(pend.length) h+=' Pendências: '+esc(pend.map(function(i){return i.cat+' ('+i.nota+')';}).join('; '))+'.'; if(res&&res.proposta) h+=' Proposta: '+esc(res.proposta.nota); h+='</li>'; });
+  h+='</ol>';
+  var v=anVencedor(p); h+='<p><b>Resultado:</b> '+(v?('licitante habilitado e vencedor: '+esc(v.razao)+(v.valorProposta?', valor global '+money(v.valorProposta):'')+'.'):'sem licitante habilitado até o momento.')+'</p>';
+  if(p.recurso&&p.recurso.houve==='Sim') h+='<p><b>Fase recursal:</b> recurso interposto por '+esc(p.recurso.quem||'-')+', resultado '+esc(p.recurso.resultado||'pendente')+'. '+esc(p.recurso.decisao||'')+'</p>'; else h+='<p><b>Fase recursal:</b> sem recurso registrado.</p>';
+  h+='<p style="margin-top:10px">Relatório gerado como apoio à decisão. A análise final, a decisão e a assinatura competem à comissão de contratação e à autoridade competente.</p>';
+  h+='<p style="margin-top:22px;text-align:center">_______________________________________<br>Comissão de Contratação ou Pregoeiro(a)<br>'+esc(dataHoje())+'</p>';
+  p.relatorioHtml=h; anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var o=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Gerou relatório do processo de análise', p.processo||p.id, o); } }catch(e){} renderAnalise(); toast('Relatório do processo gerado.'); }
+function anExportRelatorio(){ var p=anCur(); if(!p||!p.relatorioHtml) return; var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body style="font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#111">'+p.relatorioHtml+'</body></html>'; var blob=new Blob(['﻿'+html],{type:'application/msword'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Relatorio_analise_'+String(p.processo||'processo').replace(/[^a-z0-9]+/ig,'_')+'.doc'; document.body.appendChild(a); a.click(); setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},1500); toast('Relatório exportado em Word.'); }
+// ---------- Legendas e guia (linguagem simples para qualquer pessoa operar) ----------
+function anLeg(txt){ return '<div style="display:flex;gap:8px;align-items:flex-start;background:#f1f5fb;border-left:4px solid #C9A961;border-radius:8px;padding:9px 12px;margin:0 0 12px"><svg class="ic" style="width:15px;height:15px;flex:none;margin-top:1px"><use href="#i-shield"/></svg><span style="font-size:13px;color:#0A2342;line-height:1.55">'+txt+'</span></div>'; }
+function anGuiaGeral(){ return '<div class="panel"><div class="ph"><h3>Como funciona este módulo</h3></div><div style="padding:6px 2px">'
+  +'<div class="hint" style="margin-bottom:10px">Este módulo é um ajudante da comissão de licitação. Ele lê os documentos e aponta o que parece certo e o que precisa de atenção. Quem decide e assina é sempre a comissão; o sistema não substitui ninguém.</div>'
+  +'<div style="font-size:13px;color:#0A2342;line-height:1.85"><b>Passo a passo, bem simples:</b><br>'
+  +'<b>1.</b> Clique em <b>Novo processo</b>, descreva a licitação (o que está sendo contratado e o valor estimado) e suba o edital.<br>'
+  +'<b>2.</b> Cadastre os <b>licitantes</b> (as empresas) na ordem de classificação.<br>'
+  +'<b>3.</b> Clique em <b>Analisar</b> na empresa, suba os documentos dela e clique em <b>Conferir</b>. O sistema mostra o que está certo e o que está errado.<br>'
+  +'<b>4.</b> Gere o <b>parecer</b> de cada empresa e, no fim, o <b>relatório do processo</b> para anexar.</div>'
+  +'</div></div>'; }
+function anGuiaProcesso(){ return anLeg('<b>Você está dentro de um processo.</b> Faça na ordem: <b>1)</b> preencha o Certame e suba o edital, <b>2)</b> cadastre os licitantes, <b>3)</b> clique em <b>Analisar</b> em cada empresa para subir e conferir os documentos. As caixas azuis com borda dourada explicam cada parte.'); }
+function anRenderLicRows(){ var p=anCur(); var b=document.getElementById('an-lic-body'); if(!b||!p) return; b.innerHTML=''; (p.licitantes||[]).forEach(function(l,i){ var tr=document.createElement('tr'); tr.innerHTML='<td><input value="'+esc(l.razao)+'" onchange="anSetLic('+i+',&#39;razao&#39;,this.value)"></td><td><input value="'+esc(l.cnpj)+'" placeholder="00.000.000/0001-00" onchange="anSetLic('+i+',&#39;cnpj&#39;,this.value)"></td><td><input value="'+esc(l.ordem||(i+1))+'" style="width:64px" onchange="anSetLic('+i+',&#39;ordem&#39;,this.value)"></td><td>'+anSitBadge(l.situacao)+'</td><td style="white-space:nowrap"><button class="btn-ghost" type="button" onclick="anAbrirLic(&#39;'+l.id+'&#39;)">Analisar</button> <button class="btn-ghost" type="button" onclick="anDelLic('+i+')">remover</button></td>'; b.appendChild(tr); }); }
+function anAddLic(){ var p=anCur(); if(!p) return; p.licitantes=p.licitantes||[]; p.licitantes.push({id:anGid('l'),razao:'',cnpj:'',ordem:p.licitantes.length+1}); anSave(); anRenderLicRows(); }
+function anSetLic(i,k,v){ var p=anCur(); if(!p||!p.licitantes[i]) return; p.licitantes[i][k]=v; anSave(); }
+function anDelLic(i){ var p=anCur(); if(!p) return; p.licitantes.splice(i,1); anSave(); anRenderLicRows(); }
+function anSalvarCertame(){ var p=anCur(); if(!p) return; p.modalidade=pillVal('anmod')||p.modalidade; p.obra=pillVal('anobra')||'Não'; p.inversao=pillVal('aninv')||'Não'; var g=function(id){var e=document.getElementById(id);return e?e.value:'';}; p.processo=g('an-proc'); p.objeto=g('an-obj'); p.valorEstimado=anNum(g('an-valest')); p.dataBase=g('an-datab')||p.dataBase; anSave(); toast('Certame salvo. O rito e as exigências foram ajustados conforme a modalidade e o objeto.'); renderAnalise(); }
+
+// ---------- Bloco 2: leitura de documentos (PDF texto + OCR no navegador) e conferência ----------
+var AN_CATS=['Contrato/estatuto social','CND Federal/PGFN','FGTS (CRF)','CND Estadual','CND Municipal','CNDT (trabalhista)','Balanço patrimonial','Certidão de falência','Atestado de capacidade técnica','Proposta / planilha','Declarações','Outro'];
+function anSugereCat(nome){ var n=(nome||'').toLowerCase();
+  if(/cndt|trabalhist/.test(n)) return 'CNDT (trabalhista)';
+  if(/fgts|crf/.test(n)) return 'FGTS (CRF)';
+  if(/federal|pgfn|receita|uni[aã]o/.test(n)) return 'CND Federal/PGFN';
+  if(/estadual|sefaz/.test(n)) return 'CND Estadual';
+  if(/municipal|prefeitura/.test(n)) return 'CND Municipal';
+  if(/balan[çc]o|dre|cont[aá]bil|demonstra/.test(n)) return 'Balanço patrimonial';
+  if(/fal[eê]ncia|recupera/.test(n)) return 'Certidão de falência';
+  if(/atestado|acervo|capacidade|\bcat\b/.test(n)) return 'Atestado de capacidade técnica';
+  if(/proposta|planilha|or[çc]ament/.test(n)) return 'Proposta / planilha';
+  if(/declara/.test(n)) return 'Declarações';
+  if(/contrato social|estatuto|constitutiv|requerimento de empres|cnpj/.test(n)) return 'Contrato/estatuto social';
+  return 'Outro';
+}
+function anLic(){ var p=anCur(); if(!p) return null; var a=(p.licitantes||[]).filter(function(l){return l.id===ANALISE.curLic;}); return a[0]||null; }
+function anAbrirLic(id){ ANALISE.curLic=id; renderAnalise(); }
+function anFecharLic(){ ANALISE.curLic=null; renderAnalise(); }
+function anLoadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=function(){res();}; s.onerror=function(){rej(new Error('falha ao carregar '+src));}; document.head.appendChild(s); }); }
+var _anPdf=null,_anTess=null;
+function anEnsurePdf(){ if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib); if(!_anPdf){ _anPdf=anLoadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js').then(function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; return window.pdfjsLib; }); } return _anPdf; }
+function anEnsureTess(){ if(window.Tesseract) return Promise.resolve(window.Tesseract); if(!_anTess){ _anTess=anLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js').then(function(){ return window.Tesseract; }); } return _anTess; }
+async function anLerPdf(buf, prog){
+  var pdfjs=await anEnsurePdf();
+  var doc=await pdfjs.getDocument({data:buf}).promise;
+  var n=doc.numPages, full='';
+  for(var i=1;i<=n;i++){ var pg=await doc.getPage(i); var tc=await pg.getTextContent(); full+=tc.items.map(function(it){return it.str;}).join(' ')+'\n'; }
+  if(full.replace(/\s/g,'').length>=200){ return {texto:full, ocr:false, paginas:n}; }
+  var Tess=await anEnsureTess();
+  if(prog) prog('Preparando leitura por OCR...');
+  var worker=await Tess.createWorker('por');
+  var out='';
+  try{ for(var j=1;j<=n;j++){ if(prog) prog('Lendo página '+j+' de '+n+' por OCR...'); var page=await doc.getPage(j); var vp=page.getViewport({scale:2}); var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height; await page.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise; var r=await worker.recognize(cv); out+=r.data.text+'\n'; } }
+  finally{ try{ await worker.terminate(); }catch(e){} }
+  return {texto:out, ocr:true, paginas:n};
+}
+function anCNPJs(t){ var s=String(t||'').replace(/[ .\-\/ ]/g,''); var re=/\d{14}/g,m,o=[]; while(m=re.exec(s)) o.push(m[0]); return o; }
+function anTemCNPJ(t,cnpj){ var d=String(cnpj||'').replace(/\D/g,''); if(d.length!==14) return null; return anCNPJs(t).indexOf(d)>=0; }
+function anParseDt(s){ var m=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/.exec(s||''); return m?new Date(+m[3],+m[2]-1,+m[1]):null; }
+function anValidade(t){ var m=/(validade|v[aá]lid[ao]|v[aá]lida\s+at[eé]|vencimento|expira[çc][aã]o)[^0-9]{0,40}(\d{2}[\/.\-]\d{2}[\/.\-]\d{4})/i.exec(String(t||'')); return m?m[2]:null; }
+function anEhNegativa(t){ var n=String(t||'').toLowerCase(); if(/positiva\s+com\s+efeito/.test(n)) return true; if(/negativa/.test(n)) return true; if(/\bpositiva\b/.test(n)) return false; return null; }
+function anValores(t){ var re=/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/ig,m,v=[]; while(m=re.exec(String(t||''))) v.push(anNum(m[1])); return v; }
+function anValorGlobal(t){ var m=/(valor\s+global|valor\s+total\s+geral|total\s+geral|pre[çc]o\s+total\s+global|valor\s+total\s+da\s+proposta)[^0-9]{0,40}(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/i.exec(String(t||'')); return m?anNum(m[2]):null; }
+function anOnUpload(input){ var files=input.files; if(!files||!files.length) return; var l=anLic(); if(!l) return; l.docs=l.docs||[]; var arr=[].slice.call(files); var prog=function(msg){ var el=document.getElementById('an-prog'); if(el) el.textContent=msg; };
+  (function next(k){ if(k>=arr.length){ input.value=''; anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); f.arrayBuffer().then(function(buf){ return anLerPdf(buf, prog); }).then(function(res){ l.docs.push({nome:f.name, categoria:anSugereCat(f.name), texto:res.texto, ocr:res.ocr, paginas:res.paginas}); anSave(); toast('Lido'+(res.ocr?' por OCR':'')+': '+f.name); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
+}
+function anSetDocCat(i,cat){ var l=anLic(); if(!l||!l.docs[i]) return; l.docs[i].categoria=cat; anSave(); }
+function anDelDoc(i){ var l=anLic(); if(!l) return; l.docs.splice(i,1); anSave(); renderAnalise(); }
+function anRequeridos(){ return [
+  {cat:'Contrato/estatuto social', regra:'pres_cnpj', modo:'auto'},
+  {cat:'CND Federal/PGFN', regra:'certidao', modo:'auto'},
+  {cat:'FGTS (CRF)', regra:'certidao', modo:'auto'},
+  {cat:'CND Estadual', regra:'certidao', modo:'auto'},
+  {cat:'CND Municipal', regra:'certidao', modo:'auto'},
+  {cat:'CNDT (trabalhista)', regra:'certidao', modo:'auto'},
+  {cat:'Balanço patrimonial', regra:'presenca', modo:'auto'},
+  {cat:'Certidão de falência', regra:'certidao', modo:'auto'},
+  {cat:'Atestado de capacidade técnica', regra:'compat', modo:'humano'},
+  {cat:'Declarações', regra:'presenca', modo:'auto'}
+]; }
+function anAvaliaReq(req, docs, p, l){
+  var ds=docs.filter(function(d){return d.categoria===req.cat;});
+  if(!ds.length) return {status:'ausente', nota:'Documento não localizado entre os enviados.'};
+  var d=ds[0];
+  if(req.modo==='humano') return anCompatAtestado(d.texto,p);
+  if(req.regra==='certidao'){
+    var neg=anEhNegativa(d.texto), val=anValidade(d.texto), cnpjok=anTemCNPJ(d.texto,l.cnpj), notas=[], probl=[];
+    if(neg===false) probl.push('a certidão consta POSITIVA');
+    if(cnpjok===false) probl.push('o CNPJ do documento não confere com o do licitante');
+    if(val){ var dv=anParseDt(val), db=anParseDt(p.dataBase); if(dv&&db&&dv<db) probl.push('validade vencida em '+val+', anterior à data-base '+p.dataBase); else if(dv) notas.push('validade até '+val); }
+    else notas.push('validade não localizada no texto');
+    if(neg===null) notas.push('não confirmado automaticamente se é negativa');
+    if(probl.length) return {status:'atencao', nota:'Pendência: '+probl.join('; ')+'.'};
+    if(neg===true && val && cnpjok!==false) return {status:'conforme', nota:'Certidão negativa, dentro da validade e com CNPJ conferido'+(notas.length?' ('+notas.join('; ')+')':'')+'.'};
+    return {status:'conferir', nota:'Documento presente, mas '+(notas.join('; ')||'requer conferência')+'.'};
+  }
+  if(req.regra==='pres_cnpj'){ var ok=anTemCNPJ(d.texto,l.cnpj); if(ok===false) return {status:'atencao', nota:'CNPJ do documento não confere com o do licitante.'}; return {status: ok?'conforme':'conferir', nota: ok?'Documento presente e CNPJ conferido.':'Documento presente; CNPJ não confirmado automaticamente, conferir.'}; }
+  return {status:'conforme', nota:'Documento presente.'};
+}
+function anAvaliaProposta(docs,p,l){ var ds=docs.filter(function(d){return d.categoria==='Proposta / planilha';}); var manual=(l&&l.valorProposta>0)?l.valorProposta:null; if(!ds.length && manual==null) return null; var t=ds.length?ds[0].texto:''; var todos=anValores(t); var g=(manual!=null)?manual:anValorGlobal(t); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
+  if(g!=null){
+    if(!p.valorEstimado){ pior('conferir'); notas.push('valor global '+money(g)+fonte+'; informe o valor estimado do certame para comparar'); }
+    else if(g>p.valorEstimado*1.0001){ pior('atencao'); notas.push('valor global '+money(g)+fonte+' ACIMA do estimado '+money(p.valorEstimado)+' (proposta desclassificável por excesso, art. 59, III)'); }
+    else if(g<p.valorEstimado*0.5){ pior('conferir'); notas.push('valor global '+money(g)+fonte+' muito abaixo do estimado '+money(p.valorEstimado)+' (verificar exequibilidade, art. 59, §§ 2º a 4º)'); }
+    else notas.push('valor global '+money(g)+fonte+' dentro do estimado '+money(p.valorEstimado));
+  } else if(todos.length){ pior('conferir'); notas.push('valor global não isolado automaticamente; valores encontrados: '+todos.slice().sort(function(a,b){return b-a;}).slice(0,6).map(money).join('; ')+' (confirme o valor global no campo indicado)'); }
+  else { pior('conferir'); notas.push('nenhum valor localizado; confira a planilha'); }
+  if(todos.length>=3){ var ord=todos.slice().sort(function(a,b){return b-a;}); var tot=ord[0], resto=ord.slice(1).reduce(function(a,b){return a+b;},0); if(tot>0){ var dif=Math.abs(tot-resto)/tot; if(dif<=0.02) notas.push('a soma dos itens confere com o maior valor da planilha'); else { pior('conferir'); notas.push('a soma dos itens ('+money(resto)+') não fecha com o maior valor da planilha ('+money(tot)+'), conferir'); } } }
+  if(p.valoresRef && p.valoresRef.length && g!=null){ var refMax=Math.max.apply(null,p.valoresRef); if(g>refMax*1.0001){ pior('atencao'); notas.push('valor acima do maior valor de referência do edital ('+money(refMax)+')'); } else notas.push('dentro dos valores de referência do edital'); }
+  return {status:st, valor:g, nota: notas.join('. ')+'.'};
+}
+function anObjKeywords(s){ var stop={de:1,da:1,do:1,das:1,dos:1,para:1,com:1,sem:1,por:1,em:1,no:1,na:1,nos:1,nas:1,ao:1,aos:1,que:1,uma:1,uns:1,ou:1,servico:1,servicos:1,contratacao:1,aquisicao:1,prestacao:1,fornecimento:1,empresa:1,especializada:1,municipio:1,municipal:1,futura:1,eventual:1,execucao:1,referente:1}; var t=String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' '); var w=t.split(/\s+/).filter(function(x){return x.length>=4 && !stop[x];}); var seen={},out=[]; w.forEach(function(x){ if(!seen[x]){seen[x]=1; out.push(x);} }); return out.slice(0,10); }
+function anNormTxt(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function anCompatAtestado(txt,p){ var kws=anObjKeywords(p.objeto||''); if(!kws.length) return {status:'conferir', nota:'Atestado presente. Informe o objeto do certame para o sistema comparar; a compatibilidade final é da comissão (art. 67).'}; var nt=anNormTxt(txt); var achou=kws.filter(function(k){return nt.indexOf(k)>=0;}); var faltou=kws.filter(function(k){return nt.indexOf(k)<0;}); var cob=achou.length/kws.length;
+  if(cob>=0.5) return {status:'conforme', nota:'Atestado aparentemente compatível com o objeto: encontrados os termos ('+achou.join(', ')+'). A comissão confirma a compatibilidade (art. 67).'};
+  if(cob>0) return {status:'atencao', nota:'Baixa aderência ao objeto: encontrados ('+achou.join(', ')+'), NÃO encontrados ('+faltou.join(', ')+'). Verifique se o atestado é compatível (art. 67).'};
+  return {status:'atencao', nota:'Não foram encontrados no atestado os termos do objeto do certame ('+faltou.join(', ')+'). Verifique a compatibilidade (art. 67).'};
+}
+function anOnUploadCertame(input){ var files=input.files; if(!files||!files.length) return; var p=anCur(); if(!p) return; p.docsCertame=p.docsCertame||[]; var arr=[].slice.call(files); var prog=function(m){ var el=document.getElementById('an-prog-cert'); if(el) el.textContent=m; };
+  (function next(k){ if(k>=arr.length){ input.value=''; p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); f.arrayBuffer().then(function(buf){ return anLerPdf(buf,prog); }).then(function(res){ p.docsCertame.push({nome:f.name,texto:res.texto,ocr:res.ocr,paginas:res.paginas}); anSave(); toast('Documento da licitação lido'+(res.ocr?' (OCR)':'')+': '+f.name); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
+}
+function anDelDocCert(i){ var p=anCur(); if(!p||!p.docsCertame) return; p.docsCertame.splice(i,1); p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); }
+function anStatusGeral(itens,prop){ var auto=itens.filter(function(i){return i.modo==='auto';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})) return 'ressalvas'; return 'habilitado'; }
+function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var itens=anRequeridos().map(function(r){ var av=anAvaliaReq(r,docs,p,l); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l); l.resultado={itens:itens, proposta:prop, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
+function anTag(st){ var map={conforme:['Conforme','#0A2342','#fff'],atencao:['Atenção','#E8A020','#0A2342'],ausente:['Ausente','#6b7280','#fff'],conferir:['Conferir','#ffffff','#0A2342']}; var m=map[st]||['-','#e5e7eb','#111']; var extra=st==='conferir'?';border:1px solid #0A2342':''; return '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:700;background:'+m[1]+';color:'+m[2]+extra+'">'+m[0]+'</span>'; }
+function anRenderConferencia(root){
+  var p=anCur(), l=anLic(); if(!l){ anRenderProc(root); return; }
+  var docs=l.docs||[];
+  var h='<div class="panel"><div class="ph"><h3>Conferência do licitante</h3><button class="btn-ghost" type="button" onclick="anFecharLic()">Voltar ao processo</button></div><div style="padding:6px 2px">';
+  h+=anLeg('<b>O que fazer nesta tela:</b> suba os documentos que esta empresa enviou (certidões, balanço, atestado, proposta e planilha). O sistema lê cada arquivo, até os escaneados, e você confere a categoria de cada um. Depois clique em <b>Conferir</b>: ele compara tudo com as exigências e com o edital e mostra o resultado embaixo.');
+  h+='<div class="hint"><b>'+esc(l.razao||'(licitante sem nome)')+'</b> | CNPJ: '+esc(l.cnpj||'não informado')+' | Classificação: '+esc(l.ordem||'-')+'</div>';
+  h+='<div class="fgroup" style="margin-top:12px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos do licitante</div>';
+  h+='<div class="hint" style="margin-bottom:8px">Suba os documentos que o licitante enviou no portal do pregão (PDF). O sistema lê o texto e, se for escaneado, faz OCR no próprio navegador, sem chave de API. Depois confira a categoria de cada arquivo.</div>';
+  h+='<input id="an-file" type="file" accept="application/pdf" multiple onchange="anOnUpload(this)">';
+  h+='<div id="an-prog" class="hint" style="margin-top:6px"></div>';
+  if(docs.length){ h+='<table class="itab" style="margin-top:10px"><thead><tr><th style="width:42%">Arquivo</th><th>Categoria</th><th>Leitura</th><th></th></tr></thead><tbody>'; docs.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td><select onchange="anSetDocCat('+i+',this.value)">'+AN_CATS.map(function(c){return '<option'+(c===d.categoria?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td>'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td><button class="btn-ghost" type="button" onclick="anDelDoc('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
+  h+='<div class="frow c2" style="margin-top:10px"><div class="field"><label>Valor global da proposta, conforme a planilha (R$)</label><input id="an-valprop" value="'+(l.valorProposta?money(l.valorProposta).replace("R$ ",""):"")+'" placeholder="ex.: 1.132.989,99"></div></div>';
+  h+='<div class="hint" style="margin-top:4px">Em planilha escaneada o sistema nem sempre isola o total com segurança. Confirme aqui o valor global e o sistema compara automaticamente com o valor estimado do certame.</div>';
+  h+='<button class="btn-primary" type="button" style="margin-top:12px;justify-content:center" onclick="anConferir()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-shield"/></svg> Conferir habilitação e proposta</button>';
+  h+='</div></div>';
+  if(l.resultado) h+=anRenderResultado(l);
+  root.innerHTML=h;
+}
+function anRenderResultado(l){
+  var r=l.resultado, auto=r.itens.filter(function(i){return i.modo==='auto';}), hum=r.itens.filter(function(i){return i.modo==='humano';});
+  var stg={habilitado:'Habilitado',ressalvas:'Habilitado com ressalvas',pendente:'Pendente (diligência)',inabilitado:'Inabilitado'};
+  var h='<div class="panel"><div class="ph"><h3>Resultado da conferência</h3></div><div style="padding:6px 2px">';
+  h+=anLeg('<b>Como ler o resultado:</b> <b>Conforme</b> está certo. <b>Atenção</b> tem problema, e o texto ao lado diz qual. <b>Ausente</b> o documento não foi enviado. <b>Conferir</b> o sistema não teve certeza e a comissão precisa olhar. A primeira coluna é o que o sistema confere sozinho; a segunda é o que depende do olhar da comissão. Nada aqui é decisão final, é só apontamento.');
+  h+='<div class="precos-aviso av-warn" style="margin-bottom:12px"><svg class="ic" style="width:14px;height:14px"><use href="#i-shield"/></svg> Situação sugerida pelo sistema: <b>'+esc(stg[l.statusSugerido]||'-')+'</b>. Minuta de apoio: a decisão final e a assinatura são da comissão.</div>';
+  h+='<div class="gl" style="margin:6px 0"><svg class="ic" style="width:14px;height:14px"><use href="#i-shield"/></svg> Conferido pelo sistema (objetivo)</div><table class="itab"><tbody>';
+  auto.forEach(function(i){ h+='<tr><td style="width:32%">'+esc(i.cat)+'</td><td style="width:15%">'+anTag(i.status)+'</td><td>'+esc(i.nota)+'</td></tr>'; });
+  h+='</tbody></table>';
+  if(r.proposta){ h+='<div class="gl" style="margin:12px 0 6px"><svg class="ic" style="width:14px;height:14px"><use href="#i-money"/></svg> Proposta e planilha</div><table class="itab"><tbody><tr><td style="width:32%">Proposta / planilha</td><td style="width:15%">'+anTag(r.proposta.status)+'</td><td>'+esc(r.proposta.nota)+'</td></tr></tbody></table>'; }
+  h+='<div class="gl" style="margin:12px 0 6px"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Requer conferência da comissão (subjetivo)</div><table class="itab"><tbody>';
+  hum.forEach(function(i){ h+='<tr><td style="width:32%">'+esc(i.cat)+'</td><td style="width:15%">'+anTag(i.status)+'</td><td>'+esc(i.nota)+'</td></tr>'; });
+  h+='</tbody></table>';
+  h+=anRenderParecerBox(l);
+  h+='</div></div>';
+  return h;
+}
+// ---------- Bloco 3: minuta do parecer ----------
+function anRenderParecerBox(l){
+  var sug={habilitado:'Habilitado',ressalvas:'Habilitado com ressalvas',pendente:'Pendente (diligência)',inabilitado:'Inabilitado'};
+  var dec=l.decisao||sug[l.statusSugerido]||'Habilitado com ressalvas';
+  var h='<div class="gl" style="margin:14px 0 6px"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Parecer</div>';
+  h+=anLeg('<b>O que é o Parecer:</b> o texto oficial que resume a análise desta empresa. Escolha a decisão da comissão, informe quem assina e clique em gerar. O sistema já preenche o resumo dos documentos regulares e das pendências; depois dá para exportar em Word.');
+  h+='<div class="field" style="margin-bottom:10px"><label>Decisão da comissão</label>'+pills('andec',['Habilitado','Habilitado com ressalvas','Pendente (diligência)','Inabilitado'],dec)+'</div>';
+  h+='<div class="field" style="margin-bottom:10px"><label>Responsável que assina (pregoeiro ou comissão)</label><input id="an-resp" value="'+esc(l.responsavel||'')+'" placeholder="nome de quem assina"></div>';
+  h+='<button class="btn-primary" type="button" style="justify-content:center" onclick="anGerarParecer()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Gerar minuta do parecer</button>';
+  if(l.parecerHtml){ h+='<div style="margin-top:12px;border:1px solid #e5e7eb;border-radius:10px;padding:16px;background:#fff">'+l.parecerHtml+'</div>'; h+='<button class="btn-ghost" type="button" style="margin-top:10px" onclick="anExportParecer()"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Exportar para Word</button>'; }
+  return h;
+}
+function anGerarParecer(){
+  var p=anCur(), l=anLic(); if(!l) return; l.decisao=pillVal('andec')||l.decisao; var resp=document.getElementById('an-resp'); if(resp) l.responsavel=resp.value;
+  var r=l.resultado||{itens:[],proposta:null};
+  var confs=r.itens.filter(function(i){return i.status==='conforme';}).map(function(i){return i.cat;});
+  var conf=r.itens.filter(function(i){return i.status==='conferir'||i.modo==='humano';}).map(function(i){return i.cat;});
+  var pend=r.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';}).map(function(i){return i.cat+' ('+i.nota+')';});
+  var org=(typeof ORG!=='undefined'&&ORG)?ORG:{nome:'Prefeitura Municipal'};
+  var h='';
+  h+='<div style="text-align:center;font-weight:700">'+esc((org.nome||'').toUpperCase())+'</div>';
+  h+='<div style="text-align:center;font-weight:700;margin-bottom:12px">PARECER DE ANÁLISE DE HABILITAÇÃO</div>';
+  h+='<p><b>Processo administrativo:</b> '+esc(p.processo||'-')+' &nbsp;&nbsp; <b>Modalidade:</b> '+esc(p.modalidade)+'</p>';
+  h+='<p><b>Objeto:</b> '+esc(p.objeto||'-')+'</p>';
+  h+='<p><b>Licitante:</b> '+esc(l.razao||'-')+' &nbsp;&nbsp; <b>CNPJ:</b> '+esc(l.cnpj||'-')+'</p>';
+  h+='<p>A Comissão de Contratação, com o apoio do sistema de análise documental, procedeu à conferência da documentação de habilitação apresentada pelo licitante, à luz das exigências do edital e da Lei 14.133/2021.</p>';
+  if(confs.length) h+='<p><b>Documentos conferidos e considerados regulares:</b> '+esc(confs.join('; '))+'.</p>';
+  if(conf.length) h+='<p><b>Pontos que requerem conferência da Comissão:</b> '+esc(conf.join('; '))+'.</p>';
+  if(pend.length) h+='<p><b>Pendências apontadas:</b> '+esc(pend.join('; '))+'.</p>';
+  if(r.proposta) h+='<p><b>Proposta e planilha orçamentária:</b> '+esc(r.proposta.nota)+'</p>';
+  var decl={ 'Habilitado':'Diante do exposto, verificado o atendimento às exigências de habilitação, esta Comissão declara o licitante HABILITADO.', 'Habilitado com ressalvas':'Diante do exposto, esta Comissão declara o licitante HABILITADO COM RESSALVAS, condicionado à conferência final dos pontos indicados.', 'Pendente (diligência)':'Diante do exposto, esta Comissão converte o julgamento em diligência, concedendo prazo para a complementação e o saneamento da documentação, nos termos do art. 64 da Lei 14.133/2021.', 'Inabilitado':'Diante do exposto, ante o descumprimento de exigência de habilitação, esta Comissão declara o licitante INABILITADO.' };
+  h+='<p>'+esc(decl[l.decisao]||decl['Habilitado com ressalvas'])+'</p>';
+  h+='<p style="margin-top:26px;text-align:center">_______________________________________<br>'+esc(l.responsavel||'Pregoeiro(a) ou Comissão de Contratação')+'<br>'+esc(dataHoje())+'</p>';
+  l.situacao=({'Habilitado':'habilitado','Habilitado com ressalvas':'habilitado','Pendente (diligência)':'pendente','Inabilitado':'inabilitado'})[l.decisao]||'pendente'; l.situacaoTxt=l.decisao;
+  l.parecerHtml=h; anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var o=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Gerou parecer de habilitação', (l.razao||l.id)+' - '+(l.decisao||''), o); } }catch(e){} renderAnalise(); toast('Minuta do parecer gerada. Situação registrada no processo.');
+}
+function anExportParecer(){ var l=anLic(); if(!l||!l.parecerHtml) return; var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body style="font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#111">'+l.parecerHtml+'</body></html>'; var blob=new Blob(['﻿'+html],{type:'application/msword'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Parecer_'+String(l.razao||'licitante').replace(/[^a-z0-9]+/ig,'_')+'.doc'; document.body.appendChild(a); a.click(); setTimeout(function(){ try{URL.revokeObjectURL(a.href); a.remove();}catch(e){} },1500); toast('Parecer exportado em Word.'); }
 function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
 function nomeTipo(t){ var m={tr:'Termo de Referência',etp:'ETP',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
