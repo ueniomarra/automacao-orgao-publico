@@ -580,6 +580,9 @@ td .modd{font-size:12px;color:var(--slate)}
           #pg-analise .panel{border-top:3px solid #C9A961;box-shadow:0 2px 10px rgba(10,35,66,.06)}
           #pg-analise .ph h3{letter-spacing:.2px}
           #pg-analise .gl{color:#0A2342;font-weight:700}
+          #pg-analise .checks{list-style:disc;margin:8px 0 4px;padding-left:24px}
+          #pg-analise .checks li{margin:5px 0;line-height:1.5;color:#334155}
+          #pg-analise .fgroup{margin-bottom:16px}
           #pg-analise .btn-primary{box-shadow:0 2px 8px rgba(10,35,66,.18)}
           #pg-analise .pill.on{box-shadow:0 2px 6px rgba(10,35,66,.20)}
           #pg-analise input,#pg-analise select,#pg-analise textarea{transition:border-color .15s,box-shadow .15s}
@@ -2442,7 +2445,7 @@ function anExigencias(obra){
 }
 function renderAnalise(){ if(!ANALISE._loaded){ anLoad(); ANALISE._loaded=true; } var r=document.getElementById('an-root'); if(!r) return; if(anCur() && anLic()) anRenderConferencia(r); else if(anCur()) anRenderProc(r); else anRenderLista(r); }
 function anRenderLista(root){
-  var h=anGuiaGeral(); h+='<div class="panel"><div class="ph"><h3>Processos em análise</h3><button class="btn-primary" type="button" onclick="anNovo()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-plus"/></svg> Novo processo</button></div><div style="padding:6px 2px">';
+  var h=anGuiaGeral(); h+='<div class="panel"><div class="ph"><h3>Processos em análise</h3><button class="btn-primary" type="button" onclick="anNovo()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-plus"/></svg> Novo processo</button></div><div style="padding:16px 22px">';
   if(!ANALISE.procs.length){ h+='<div style="text-align:center;padding:40px 16px"><svg class="ic" style="width:46px;height:46px;color:#C9A961;opacity:.9"><use href="#i-shield"/></svg><div style="margin-top:14px;font-size:16px;color:#0A2342;font-weight:700">Nenhum processo em análise ainda</div><div style="margin-top:6px;font-size:13.5px;color:#64748b;max-width:420px;margin-left:auto;margin-right:auto">Clique em <b>Novo processo</b> para começar. O sistema vai te guiar passo a passo em cada etapa da análise.</div><div style="display:flex;justify-content:center;margin-top:18px"><button class="btn-primary" type="button" onclick="anNovo()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-plus"/></svg> Novo processo</button></div></div>'; }
   else {
     h+='<div style="display:flex;flex-direction:column;gap:10px">';
@@ -2467,7 +2470,7 @@ function anRenderProc(root){
   var p=anCur(); if(!p){ anRenderLista(root); return; }
   var modo=anModo(p.modalidade);
   var h=''; h+=anGuiaProcesso();
-  h+='<div class="panel"><div class="ph"><h3>Certame</h3><button class="btn-ghost" type="button" onclick="anVoltar()">Voltar aos processos</button></div><div style="padding:6px 2px">';
+  h+='<div class="panel"><div class="ph"><h3>Certame</h3><button class="btn-ghost" type="button" onclick="anVoltar()">Voltar aos processos</button></div><div style="padding:16px 22px">';
   h+=anLeg('<b>O que é o Certame:</b> aqui você descreve a licitação (o objeto, a modalidade, o valor que a prefeitura estima gastar) e sobe o edital, o termo de referência e a planilha. Isso vira a régua: o sistema compara os documentos das empresas com o que está aqui.');
   h+='<div class="field" style="margin-bottom:12px"><label>Modalidade</label>'+pills('anmod',ANMODS,p.modalidade)+'</div>';
   h+='<div class="frow c2"><div class="field"><label>Nº do processo administrativo</label><input id="an-proc" value="'+esc(p.processo)+'" placeholder="ex.: 2859/2026"></div><div class="field"><label>Objeto é obra ou serviço de engenharia?</label>'+pills('anobra',['Não','Sim'],p.obra)+'</div></div>';
@@ -2482,7 +2485,7 @@ function anRenderProc(root){
   h+='</div>';
   h+='<button class="btn-primary" type="button" style="margin-top:12px;justify-content:center" onclick="anSalvarCertame()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Salvar certame</button>';
   h+='</div></div>';
-  h+='<div class="panel"><div class="ph"><h3>Licitantes</h3></div><div style="padding:6px 2px">';
+  h+='<div class="panel"><div class="ph"><h3>Licitantes</h3></div><div style="padding:16px 22px">';
   h+=anLeg('<b>O que são os Licitantes:</b> as empresas que participaram da licitação. Cadastre cada uma na ordem de classificação (1º lugar, 2º lugar...). A coluna <b>Situação</b> mostra o resultado, e o botão <b>Analisar</b> abre a conferência dos documentos daquela empresa.');
   h+='<div class="hint" style="margin-bottom:10px">'+(modo==='todos'?'No credenciamento, informe os interessados. O sistema confere e habilita todos que cumprem os requisitos.':(modo==='direta'?'Na contratação direta, informe o contratado a ser verificado.':'Informe os licitantes na ordem de classificação após os lances. O sistema analisa a habilitação do 1º colocado; se inabilitado, você convoca o próximo.'))+'</div>';
   h+='<table class="itab"><thead><tr><th style="width:38%">Razão social</th><th>CNPJ</th><th>Class.</th><th>Situação</th><th></th></tr></thead><tbody id="an-lic-body"></tbody></table>';
@@ -2490,7 +2493,7 @@ function anRenderProc(root){
   h+=anRenderFluxo(p,modo);
   h+='</div></div>';
   var exs=anExigencias(p.obra==='Sim');
-  h+='<div class="panel"><div class="ph"><h3>Exigências de habilitação</h3></div><div style="padding:6px 2px">';
+  h+='<div class="panel"><div class="ph"><h3>Exigências de habilitação</h3></div><div style="padding:16px 22px">';
   h+=anLeg('<b>O que é:</b> a lista de documentos que a lei exige de cada empresa para ela poder ser habilitada. O sistema monta sozinho conforme o tipo de objeto. É contra esta lista que ele confere os documentos de cada licitante.');
   h+='<div class="hint" style="margin-bottom:10px">Checklist montado automaticamente conforme a Lei 14.133/2021 e o tipo de objeto. É a régua que o sistema usa para conferir cada licitante.</div>';
   exs.forEach(function(g){ h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> '+esc(g.cat)+'</div><div class="hint" style="margin:-4px 0 8px">'+esc(g.base)+'</div><ul class="checks">'+g.itens.map(function(it){return '<li>'+esc(it)+'</li>';}).join('')+'</ul></div>'; });
@@ -2499,7 +2502,10 @@ function anRenderProc(root){
   h+=anRenderRelatorioPanel(p);
   root.innerHTML=h;
   anRenderLicRows();
+  var _pm=document.getElementById('pill-anmod'); if(_pm) _pm.addEventListener('click',function(){ setTimeout(anCertameChange,0); });
+  var _po=document.getElementById('pill-anobra'); if(_po) _po.addEventListener('click',function(){ setTimeout(anCertameChange,0); });
 }
+function anCertameChange(){ var p=anCur(); if(!p) return; p.modalidade=pillVal('anmod')||p.modalidade; p.obra=pillVal('anobra')||p.obra; p.inversao=pillVal('aninv')||p.inversao; var g=function(id){var e=document.getElementById(id);return e?e.value:'';}; if(document.getElementById('an-proc'))p.processo=g('an-proc'); if(document.getElementById('an-obj'))p.objeto=g('an-obj'); if(document.getElementById('an-valest'))p.valorEstimado=anNum(g('an-valest')); if(document.getElementById('an-datab'))p.dataBase=g('an-datab')||p.dataBase; anSave(); renderAnalise(); }
 function anSitBadge(sit){ var m={habilitado:['Habilitado','#0A2342','#fff'],inabilitado:['Inabilitado','#6b7280','#fff'],pendente:['Pendente','#E8A020','#0A2342']}; if(!sit) return '<span style="color:#6b7280;font-size:12px">aguardando</span>'; var x=m[sit]||['-','#e5e7eb','#111']; return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:700;background:'+x[1]+';color:'+x[2]+'">'+x[0]+'</span>'; }
 function anVencedor(p){ var ls=(p.licitantes||[]).slice().sort(function(a,b){return (parseInt(a.ordem)||99)-(parseInt(b.ordem)||99);}); for(var i=0;i<ls.length;i++){ if(ls[i].situacao==='habilitado') return ls[i]; } return null; }
 function anProximo(p){ var ls=(p.licitantes||[]).slice().sort(function(a,b){return (parseInt(a.ordem)||99)-(parseInt(b.ordem)||99);}); for(var i=0;i<ls.length;i++){ if(ls[i].situacao==='habilitado') return null; if(ls[i].situacao!=='inabilitado') return ls[i]; } return null; }
@@ -2509,7 +2515,7 @@ function anRenderFluxo(p,modo){ if(modo!=='sequencial') return ''; var v=anVence
   else if((p.licitantes||[]).length) h+='Todos os classificados foram inabilitados. Avalie convocar remanescentes ou declarar o certame fracassado.';
   else h+='Adicione os licitantes na ordem de classificação para iniciar a análise.';
   h+='</span></div>'; return h; }
-function anRenderRecurso(p){ var r=p.recurso||{}; var h='<div class="panel"><div class="ph"><h3>Fase recursal</h3></div><div style="padding:6px 2px">';
+function anRenderRecurso(p){ var r=p.recurso||{}; var h='<div class="panel"><div class="ph"><h3>Fase recursal</h3></div><div style="padding:16px 22px">';
   h+='<div class="hint" style="margin-bottom:10px">Fase recursal única (art. 165 da Lei 14.133/2021): prazo de 3 dias úteis para recurso, contado da intimação da habilitação ou do julgamento, e igual prazo para contrarrazões.</div>';
   h+='<div class="frow c2"><div class="field"><label>Houve recurso?</label>'+pills('anrec',['Não','Sim'],r.houve||'Não')+'</div><div class="field"><label>Recorrente</label><input id="anrec-quem" value="'+esc(r.quem||'')+'" placeholder="empresa que recorreu"></div></div>';
   h+='<div class="frow c3" style="margin-top:10px"><div class="field"><label>Data da intimação</label><input id="anrec-int" value="'+esc(r.intimacao||'')+'" placeholder="dd/mm/aaaa"></div><div class="field"><label>Fim do prazo (3 dias úteis)</label><input id="anrec-praz" value="'+esc(r.prazo||'')+'" placeholder="dd/mm/aaaa"></div><div class="field"><label>Resultado</label>'+pills('anrecres',['Pendente','Provido','Improvido'],r.resultado||'Pendente')+'</div></div>';
@@ -2517,7 +2523,7 @@ function anRenderRecurso(p){ var r=p.recurso||{}; var h='<div class="panel"><div
   h+='<button class="btn-primary" type="button" style="margin-top:10px;justify-content:center" onclick="anSalvarRecurso()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Salvar fase recursal</button>';
   h+='</div></div>'; return h; }
 function anSalvarRecurso(){ var p=anCur(); if(!p) return; var g=function(id){var e=document.getElementById(id);return e?e.value:'';}; p.recurso={houve:pillVal('anrec')||'Não', quem:g('anrec-quem'), intimacao:g('anrec-int'), prazo:g('anrec-praz'), resultado:pillVal('anrecres')||'Pendente', decisao:g('anrec-dec')}; anSave(); toast('Fase recursal salva.'); }
-function anRenderRelatorioPanel(p){ var h='<div class="panel"><div class="ph"><h3>Relatório final do processo</h3><button class="btn-primary" type="button" onclick="anGerarRelatorio()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Gerar relatório</button></div><div style="padding:6px 2px">';
+function anRenderRelatorioPanel(p){ var h='<div class="panel"><div class="ph"><h3>Relatório final do processo</h3><button class="btn-primary" type="button" onclick="anGerarRelatorio()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Gerar relatório</button></div><div style="padding:16px 22px">';
   h+='<div class="hint">Consolida o certame, a situação de cada licitante, as pendências apontadas, a proposta, a fase recursal e o vencedor, para anexar ao processo administrativo.</div>';
   if(p.relatorioHtml){ h+='<div style="margin-top:12px;border:1px solid #e5e7eb;border-radius:10px;padding:16px;background:#fff">'+p.relatorioHtml+'</div>'; h+='<button class="btn-ghost" type="button" style="margin-top:10px" onclick="anExportRelatorio()"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Exportar para Word</button>'; }
   h+='</div></div>'; return h; }
@@ -2665,7 +2671,7 @@ function anTag(st){ var map={conforme:['Conforme','#0A2342','#fff'],atencao:['At
 function anRenderConferencia(root){
   var p=anCur(), l=anLic(); if(!l){ anRenderProc(root); return; }
   var docs=l.docs||[];
-  var h='<div class="panel"><div class="ph"><h3>Conferência do licitante</h3><button class="btn-ghost" type="button" onclick="anFecharLic()">Voltar ao processo</button></div><div style="padding:6px 2px">';
+  var h='<div class="panel"><div class="ph"><h3>Conferência do licitante</h3><button class="btn-ghost" type="button" onclick="anFecharLic()">Voltar ao processo</button></div><div style="padding:16px 22px">';
   h+=anLeg('<b>O que fazer nesta tela:</b> suba os documentos que esta empresa enviou (certidões, balanço, atestado, proposta e planilha). O sistema lê cada arquivo, até os escaneados, e você confere a categoria de cada um. Depois clique em <b>Conferir</b>: ele compara tudo com as exigências e com o edital e mostra o resultado embaixo.');
   h+='<div class="hint"><b>'+esc(l.razao||'(licitante sem nome)')+'</b> | CNPJ: '+esc(l.cnpj||'não informado')+' | Classificação: '+esc(l.ordem||'-')+'</div>';
   h+='<div class="fgroup" style="margin-top:12px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos do licitante</div>';
@@ -2683,7 +2689,7 @@ function anRenderConferencia(root){
 function anRenderResultado(l){
   var r=l.resultado, auto=r.itens.filter(function(i){return i.modo==='auto';}), hum=r.itens.filter(function(i){return i.modo==='humano';});
   var stg={habilitado:'Habilitado',ressalvas:'Habilitado com ressalvas',pendente:'Pendente (diligência)',inabilitado:'Inabilitado'};
-  var h='<div class="panel"><div class="ph"><h3>Resultado da conferência</h3></div><div style="padding:6px 2px">';
+  var h='<div class="panel"><div class="ph"><h3>Resultado da conferência</h3></div><div style="padding:16px 22px">';
   h+=anLeg('<b>Como ler o resultado:</b> <b>Conforme</b> está certo. <b>Atenção</b> tem problema, e o texto ao lado diz qual. <b>Ausente</b> o documento não foi enviado. <b>Conferir</b> o sistema não teve certeza e a comissão precisa olhar. A primeira coluna é o que o sistema confere sozinho; a segunda é o que depende do olhar da comissão. Nada aqui é decisão final, é só apontamento.');
   h+='<div class="precos-aviso av-warn" style="margin-bottom:12px"><svg class="ic" style="width:14px;height:14px"><use href="#i-shield"/></svg> Situação sugerida pelo sistema: <b>'+esc(stg[l.statusSugerido]||'-')+'</b>. Minuta de apoio: a decisão final e a assinatura são da comissão.</div>';
   h+='<div class="gl" style="margin:6px 0"><svg class="ic" style="width:14px;height:14px"><use href="#i-shield"/></svg> Conferido pelo sistema (objetivo)</div><table class="itab"><tbody>';
