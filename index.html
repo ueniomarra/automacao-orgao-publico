@@ -729,9 +729,7 @@ td .modd{font-size:12px;color:var(--slate)}
   </div>
 </section>
 
-<div class="fabs hide" id="fabs">
-  <button class="fab" onclick="goto('licitacao')"><span class="lab">Novo documento</span><span class="bub main"><svg class="ic" style="width:26px;height:26px;stroke:#3a2c06"><use href="#i-plus"/></svg></span></button>
-</div>
+<!-- botao flutuante removido a pedido do Uenio -->
 
 <script>
 // ---- Supabase: login real e separacao por orgao (chave publica, protegida por RLS no banco) ----
@@ -853,7 +851,6 @@ function abrirApp(email){
   document.getElementById('loginerr').style.display='none';
   document.getElementById('screen-login').classList.add('hide');
   document.getElementById('screen-app').classList.remove('hide');
-  document.getElementById('fabs').classList.remove('hide');
   document.getElementById('avatar').textContent=(email[0]||'A').toUpperCase()+(email[1]||'D').toUpperCase();
   aplicarPermissoes();
   renderDashboard(); renderCentral(); renderAdmin();
@@ -904,7 +901,6 @@ async function trocarMeuNome(){
 }
 function sair(){
   document.getElementById('screen-app').classList.add('hide');
-  document.getElementById('fabs').classList.add('hide');
   document.getElementById('screen-login').classList.remove('hide');
   document.getElementById('in-pass').value='';
 }
