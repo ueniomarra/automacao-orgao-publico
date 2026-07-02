@@ -1888,7 +1888,16 @@ function atualizarChain(){
     if(!DOC.consulta && DOC.tipo==='edital'){ toast('Edital pronto (com a minuta de contrato em anexo). O contrato só é feito DEPOIS do certame: quando houver vencedor, gere o contrato na Central de Documentos, no botão "Gerar contrato" do edital.'); }
   }
 }
-function proximoDoFluxo(){ var p=PROX_FLUXO[DOC.tipo]; if(!p) return; abrirDoc(p,false); }
+function proximoDoFluxo(){
+  var p=PROX_FLUXO[DOC.tipo]; if(!p) return;
+  var origem=nomeTipo(DOC.tipo); var num=DOC.numeroGerado||'';
+  abrirDoc(p,false);
+  // deixa CLARO que o documento anterior foi salvo (o usuário costuma perguntar "para onde foi o TR?")
+  var ff=document.getElementById('ws-fields');
+  if(ff){ var d=document.createElement('div'); d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px';
+    d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> '+esc(origem)+(num?(' nº '+esc(num)):'')+' gerado e <b>salvo na Central de Documentos</b>. Este '+esc(nomeTipo(p))+' nasce dele (objeto, itens e valor já vieram): confira e complete.';
+    ff.insertBefore(d, ff.firstChild); }
+}
 function gerarTR(){
   var sec=document.getElementById('f-secretaria').value;
   var secNome=document.getElementById('f-secretario').value||'';
@@ -3104,6 +3113,7 @@ async function registrarDoc(tipo, html){
   else numero=''; // etp, precos, minuta: numeração automática
   DB.seq=DB.seq||{};
   if(!numero){ var _usado={}; (DB.docs||[]).forEach(function(x){ if(x.tipo===tipo && x.numero && x.id!==DOC.id) _usado[x.numero]=1; }); do{ DB.seq[tipo]=(DB.seq[tipo]||0)+1; numero=String(DB.seq[tipo]).padStart(3,'0')+'/2026'; } while(_usado[numero]); }
+  DOC.numeroGerado=numero; // guarda o número para o aviso do próximo passo ("TR nº X salvo na Central")
   var proc=(fluxo[tipo] && PROC && PROC.objeto)?PROC:null; // só o fluxo guarda o processo p/ o contrato puxar depois
   var rec={id:DOC.id,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:dataHoje(),html:html,proc:proc};
   var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
