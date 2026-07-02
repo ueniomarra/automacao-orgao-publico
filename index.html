@@ -1033,6 +1033,7 @@ function abrirDoc(tipo, consulta){
   goto('workspace');
   if(tipo==='tr' && ETP_DATA){ puxarDoETP(); }
   restaurarRascunho(tipo);
+  renderPreviaAoVivo(); // o miolo já aparece na tela ao abrir o passo
 }
 // Guia de preenchimento no topo de TODO formulário (linguagem simples, à prova de erro)
 var GUIAS = {
@@ -1064,6 +1065,19 @@ function puxarDoETP(){
 }
 function voltarModulo(){ var m=DOCMETA[DOC.tipo]; var pg = m && m.mod==='Compras' ? 'compras' : (m && m.mod==='Meio Ambiente' ? 'ambiente' : 'licitacao'); goto(pg); }
 function resetPreview(){ var p=document.getElementById('ws-preview'); p.removeAttribute('contenteditable'); p.className='docpaper empty'; p.innerHTML='<svg class="ic"><use href="#i-doc"/></svg><div>Preencha os campos ao lado e clique em <b>Gerar documento</b>.<br>O texto sai pronto, no padrão da lei.</div>'; }
+// PRÉVIA AO VIVO: o miolo do documento já aparece na tela quando você abre o passo, e vai se preenchendo conforme você digita. Não salva (só o botão Gerar salva).
+function renderPreviaAoVivo(){
+  if(!DOC || !DOC.tipo || DOC.consulta || DOC.modeloTplHtml) return;
+  var p=document.getElementById('ws-preview'); if(!p) return;
+  // gerador por tipo; edital/contrato/minuta só têm prévia depois que o TR foi gerado (senão não há o que mostrar)
+  var precisaProc={edital:1,contrato:1};
+  if(precisaProc[DOC.tipo] && !(typeof PROC!=='undefined' && PROC && PROC.objeto)) return;
+  var G={tr:(typeof gerarTR==='function'?gerarTR:null), edital:(typeof gerarEdital==='function'?gerarEdital:null), contrato:(typeof gerarContrato==='function'?gerarContrato:null), minuta:(typeof gerarMinuta==='function'?gerarMinuta:null)};
+  var g=G[DOC.tipo]; if(typeof g!=='function') return;
+  var html; try{ html=g(); }catch(e){ return; }
+  if(html===false || html==null) return; // gerador barrou: mantém o estado atual, sem prévia
+  p.className='docpaper'; p.innerHTML=html;
+}
 // Modo modelo: esconde o formulário automático e mostra só o documento ocupando a tela, editável.
 function entrarModoModelo(){
   var ws=document.querySelector('#pg-workspace .ws'); if(ws) ws.classList.add('modelo-only');
@@ -1108,7 +1122,7 @@ function restaurarRascunho(tipo){
   fillQ('qtp-body',s.qtp); fillQ('qto-body',s.qto);
   toast('Rascunho recuperado. Continue de onde parou.');
 }
-(function(){ var t; function deb(){ clearTimeout(t); t=setTimeout(salvarRascunho,600); }
+(function(){ var t; function deb(){ clearTimeout(t); t=setTimeout(function(){ salvarRascunho(); try{ renderPreviaAoVivo(); }catch(e){} },500); }
   document.addEventListener('input',deb); document.addEventListener('change',deb);
   document.addEventListener('click',function(e){ if(e.target&&e.target.closest&&e.target.closest('#ws-fields .pill, #ws-fields .del, #ws-fields .addline')) setTimeout(deb,40); });
 })();
@@ -3437,7 +3451,8 @@ function modeloComoReferencia(d){
   goto('workspace');
   try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg=mod==='Compras'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
   try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
-  toast('Modelo carregado como referência. Preencha e clique em Gerar documento: sai o '+nomeTipo(tipoBase)+' completo e segue para o Edital.');
+  renderPreviaAoVivo(); // mostra o miolo do documento já na abertura do modelo
+  toast('Modelo carregado como referência. O documento já aparece na prévia e vai se completando conforme você preenche.');
 }
 // Usa o modelo como MOLDE do passo: cai no tipo certo, abre os campos, miolo fixo, segue o fluxo.
 function usarModeloComoTemplate(d){
