@@ -1500,7 +1500,7 @@ var RE_ANCHOR=/^0*(\d{2,6})\s+(.*?)\s+([A-Za-zÀ-ÿ]{1,6})\s+([\d.]+,\d{1,4})\s+
 var RE_NOISE=/^(P[ÁA]G|RELAT[ÓO]RIO|PREG[ÃA]O\s*N|ESTADO DE|PREFEITURA|MUNIC[ÍI]PIO|PRODUTO\s+NOME|VLR\.|QUANTIDADE|UNID\.|TOTAL\b|SEQU[ÊE]NCIA)/i;
 function brNum(s){ if(s==null) return 0; s=String(s).replace(/\./g,'').replace(',','.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isNaN(n)?0:n; }
 // Lê o PDF do relatório de lotes (pdf.js) por COLUNAS e FAIXAS: usa a posição (x,y) do texto e as linhas da grade da tabela para reconstruir cada item exatamente como está impresso
-var UNIDS={UN:1,UND:1,UNID:1,UNIDADE:1,CX:1,KG:1,G:1,PC:1,PCT:1,PT:1,PAR:1,L:1,LT:1,ML:1,MT:1,M:1,M2:1,M3:1,DZ:1,FR:1,GL:1,RL:1,SC:1,SACO:1,BD:1,CT:1,CJ:1,JG:1,TB:1,GF:1,LATA:1,POTE:1,BJ:1,BL:1,RESMA:1,KIT:1,CAIXA:1,PACOTE:1,FARDO:1,FD:1,AMP:1,CP:1,COMP:1,FRS:1,GLS:1};
+var UNIDS={UN:1,UND:1,UNID:1,UNIDADE:1,CX:1,KG:1,G:1,PC:1,PCT:1,PT:1,PAR:1,L:1,LT:1,ML:1,MT:1,M:1,M2:1,M3:1,DZ:1,FR:1,GL:1,RL:1,SC:1,SACO:1,BD:1,CT:1,CJ:1,JG:1,TB:1,GF:1,LATA:1,POTE:1,BJ:1,BL:1,RESMA:1,KIT:1,CAIXA:1,PACOTE:1,FARDO:1,FD:1,AMP:1,CP:1,COMP:1,FRS:1,GLS:1,UNM:1,VD:1,FCO:1,GLA:1,BR:1,RESM:1};
 async function impLerPDF(file){
   var pdfjs=await anEnsurePdf();
   var buf=await file.arrayBuffer();
@@ -1571,11 +1571,19 @@ function parseRelatorioXY(pages){
     var addItem=function(band, y){
       var nums=band.filter(function(t){ return NUM.test(t.s) && t.x>=qtdX-10; }).sort(function(a,b){return a.x-b.x;});
       if(nums.length<2) return;
-      var descArr=band.filter(function(t){ return t.x>=nomeMin && t.x<unidX-6; }).sort(function(a,b){ return Math.abs(a.y-b.y)>2? a.y-b.y : a.x-b.x; });
+      var xNum=nums[0].x;
+      // unidade: token da coluna UNID (o token entre a descricao e o primeiro numero); prefere unidade conhecida
+      var uzone=band.filter(function(t){ return /^[A-Za-z\u00c0-\u00ff]{1,7}\.?$/.test(t.s) && t.x>=unidX-4 && t.x<xNum-2; });
+      var uknown=uzone.filter(function(t){ return UNIDS[t.s.replace('.','').toUpperCase()]; });
+      var uTok=(uknown.length?uknown:uzone).sort(function(a,b){return Math.abs(a.x-unidX)-Math.abs(b.x-unidX);})[0]||null;
+      var u=uTok? uTok.s.replace('.','').toUpperCase() : 'UN';
+      // descricao: TUDO a esquerda do primeiro numero (menos o codigo e os tokens da coluna de unidade). Sem margem fixa, para nao cortar palavra.
+      var dropU=uzone.filter(function(t){ return t===uTok || UNIDS[t.s.replace('.','').toUpperCase()]; });
+      var descArr=band.filter(function(t){ return t.x>=nomeMin && t.x<xNum-2 && dropU.indexOf(t)<0; }).sort(function(a,b){ return Math.abs(a.y-b.y)>2? a.y-b.y : a.x-b.x; });
       var d=descArr.map(function(t){return t.s;}).join(' ').replace(/[\u2013\u2014]/g,'-').replace(/\s+/g,' ').replace(/\s+([,.;:])/g,'$1').trim();
       if(!d || SKIP.test(d)) return;
       var lo=loteEm(y);
-      res.push({d:d, u:_unidDe(band,unidX,nums[0].x-2), q:brNum(nums[0].s), v:brNum(nums[1].s), lote:lo.num, loteNome:lo.nome});
+      res.push({d:d, u:u, q:brNum(nums[0].s), v:brNum(nums[1].s), lote:lo.num, loteNome:lo.nome});
     };
     if(rules.length>=4){
       // caminho robusto: cada faixa entre duas linhas da grade é um item
@@ -1588,9 +1596,10 @@ function parseRelatorioXY(pages){
       var anchors=[], descLines=[];
       lines.forEach(function(ln){ if(RE_LOTE.test(ln.text)||RE_DESC.test(ln.text)||/PRODUTO\s+NOME/i.test(ln.text)||SKIP.test(ln.text)) return;
         var nums=ln.toks.filter(function(t){ return NUM.test(t.s) && t.x>=qtdX-10; }).sort(function(a,b){return a.x-b.x;});
-        var frag=ln.toks.filter(function(t){ return t.x>=nomeMin && t.x<unidX-6; });
-        if(nums.length>=2) anchors.push({y:ln.y, toks:ln.toks, nums:nums, parts:frag.slice()});
-        else if(frag.length) descLines.push({y:ln.y, toks:frag});
+        var xNumRef=nums.length? nums[0].x : (qtdX-10);
+        var frag=ln.toks.filter(function(t){ return t.x>=nomeMin && t.x<xNumRef; });
+        if(nums.length>=2) anchors.push({y:ln.y, toks:ln.toks, nums:nums, parts:ln.toks.slice()});
+        else if(frag.length) descLines.push({y:ln.y, toks:ln.toks.slice()});
       });
       descLines.forEach(function(dl){ var best=null,bd=1e9; anchors.forEach(function(a){ var d=Math.abs(a.y-dl.y); if(d<bd){bd=d;best=a;} }); if(best) best.parts=best.parts.concat(dl.toks); });
       anchors.forEach(function(a){ addItem(a.parts.concat(a.toks), a.y); });
