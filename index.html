@@ -1015,6 +1015,7 @@ function abrirDoc(tipo, consulta){
   document.getElementById('ws-desc').textContent = m.d;
   document.getElementById('ws-formtitle').textContent = 'Preenchimento';
   document.getElementById('ws-doctitle').textContent = m.t+' (pré-visualização)';
+  var _ch=document.getElementById('ws-chain'); if(_ch){ _ch.style.display='none'; _ch.classList.remove('pulse'); } // esconde o botão de "gerar próximo" ate este documento ser gerado
   resetPreview();
   if(tipo==='tr'){ renderFormTR(); }
   else if(tipo==='etp'){ renderFormETP(); }
@@ -3085,7 +3086,7 @@ async function registrarDoc(tipo, html){
   else if(tipo==='aditivo') numero=gv('a-num');
   else numero=''; // etp, precos, minuta: numeração automática
   DB.seq=DB.seq||{};
-  if(!numero){ DB.seq[tipo]=(DB.seq[tipo]||0)+1; numero=String(DB.seq[tipo]).padStart(3,'0')+'/2026'; }
+  if(!numero){ var _usado={}; (DB.docs||[]).forEach(function(x){ if(x.tipo===tipo && x.numero && x.id!==DOC.id) _usado[x.numero]=1; }); do{ DB.seq[tipo]=(DB.seq[tipo]||0)+1; numero=String(DB.seq[tipo]).padStart(3,'0')+'/2026'; } while(_usado[numero]); }
   var proc=(fluxo[tipo] && PROC && PROC.objeto)?PROC:null; // só o fluxo guarda o processo p/ o contrato puxar depois
   var rec={id:DOC.id,tipo:tipo,numero:numero,objeto:objeto,secretaria:sec,data:dataHoje(),html:html,proc:proc};
   var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
@@ -3135,6 +3136,7 @@ async function carregarDoSupabase(){
     var orgS=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
     var ss=await SB.from('org_secretarias').select('lista').eq('orgao_id',orgS).maybeSingle();
     if(ss && !ss.error && ss.data && ss.data.lista && ss.data.lista.length) SECRETARIAS=ss.data.lista;
+    try{ dbSave(); }catch(e){} // Supabase é a fonte da verdade: sincroniza o cache local para não sobrar documento fantasma no refresh
   }catch(e){}
 }
 async function registrarAud(acao, item, orgao){
@@ -3259,10 +3261,12 @@ function renderCentral(){
 function abrirDocSalvo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
   if(!d) return;
-  DOC={tipo:d.tipo,consulta:true,itens:[],dot:[],id:d.id};
+  DOC={tipo:d.tipo,consulta:true,itens:[],dot:[],id:d.id,supaId:d.id};
   sairModoModelo();
   setTxt('ws-modulo','Documento salvo'); setTxt('ws-titulo',nomeTipo(d.tipo)+(d.numero?' '+d.numero:'')); setTxt('ws-desc',d.objeto);
-  document.getElementById('ws-fields').innerHTML='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-doc"/></svg><div>Documento salvo no sistema. Use <b>Exportar Word</b> para baixar.</div></div>';
+  setTxt('ws-doctitle', nomeTipo(d.tipo)+(d.numero?' '+d.numero:'')+' (documento salvo)');
+  var ch=document.getElementById('ws-chain'); if(ch){ ch.style.display='none'; ch.classList.remove('pulse'); } // documento salvo não mostra o botão de "gerar próximo"
+  document.getElementById('ws-fields').innerHTML='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-doc"/></svg><div>Documento salvo no sistema. Use <b>Exportar Word</b> para baixar, ou <b>Processo completo</b> para juntar as peças da contratação.</div></div>';
   var p=document.getElementById('ws-preview'); p.className='docpaper'; p.removeAttribute('contenteditable'); p.innerHTML=d.html;
   goto('workspace');
 }
