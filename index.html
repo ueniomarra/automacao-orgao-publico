@@ -3422,8 +3422,22 @@ function autoDetectarCampos(html){
   });
   return html;
 }
+// Modelo que é só PDF/.doc antigo (entrou como "consulta", sem texto reaproveitável): não dá para usar como molde. Abre o gerador NORMAL do sistema (miolo da lei + itens) e segue o fluxo TR > Edital > Contrato.
+function modeloEhConsulta(html){ return /entram s[óo] para consulta|s[óo] para consulta/i.test(html||''); }
+function modeloComoReferencia(d){
+  var tipoBase=inferTipoModelo(d.objeto);
+  window._abrindoModelo=true; abrirDoc(tipoBase, false); window._abrindoModelo=false;
+  setTxt('ws-titulo', nomeTipo(tipoBase)); setTxt('ws-desc', 'Baseado no seu modelo: '+d.objeto);
+  var ff=document.getElementById('ws-fields');
+  if(ff){ var av='<div class="fgroup" style="background:#FFF9EC;border:1px solid #E8C766;border-radius:10px;padding:12px"><div class="gl" style="color:#9a6a0a"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Seu modelo em PDF é a referência</div><div class="hint">O PDF fica guardado para consulta. Aqui você preenche os dados e os itens (pode usar <b>Importar planilha PDF ou Excel</b>) e clica em <b>Gerar documento</b>: sai o '+esc(nomeTipo(tipoBase))+' completo no padrão da Lei 14.133, e o sistema segue para o próximo passo.</div></div>'; ff.insertAdjacentHTML('afterbegin', av); }
+  goto('workspace');
+  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg=mod==='Compras'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
+  try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
+  toast('Modelo carregado como referência. Preencha e clique em Gerar documento: sai o '+nomeTipo(tipoBase)+' completo e segue para o Edital.');
+}
 // Usa o modelo como MOLDE do passo: cai no tipo certo, abre os campos, miolo fixo, segue o fluxo.
 function usarModeloComoTemplate(d){
+  if(d && modeloEhConsulta(d.html)){ modeloComoReferencia(d); return; }
   // modelos antigos (sem campos) são processados automaticamente na 1ª vez que forem usados
   if(d && d.html && !/\{\{/.test(d.html)){ var auto=autoDetectarCampos(d.html); if(/\{\{/.test(auto)){ d.html=auto; try{ dbSave(); if(SB&&CURRENT_USER) SB.from('documentos').update({html:auto}).eq('id',d.id).then(function(){},function(){}); }catch(e){} } }
   var tipoBase=inferTipoModelo(d.objeto);
