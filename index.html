@@ -775,7 +775,7 @@ function cardHTML(x){
     (x.lock?'<span class="locktag"><svg class="ic" style="width:11px;height:11px;stroke-width:2.4"><use href="#i-lock"/></svg> campos travados</span>':'')+
     '<div class="ti"><svg class="ic" style="width:24px;height:24px"><use href="#'+x.ic+'"/></svg></div>'+
     '<h4>'+x.t+'</h4><p>'+x.d+'</p>'+
-    '<div class="toolact"><button class="toolbtn" onclick="abrirDoc(\''+x.tp+'\',true)"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Consultar</button>'+
+    '<div class="toolact"><button class="toolbtn" onclick="consultarTipo(\''+x.tp+'\')"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Consultar</button>'+
     '<button class="toolbtn pri" onclick="abrirDoc(\''+x.tp+'\',false)"><svg class="ic" style="width:14px;height:14px;stroke:#fff"><use href="#i-plus"/></svg> Novo</button></div></div>';
 }
 function fillGrid(id,key){ document.getElementById(id).innerHTML = TOOLS[key].map(cardHTML).join(''); }
@@ -788,6 +788,15 @@ document.getElementById('doc-tabs').innerHTML = DOCTABS.map(function(d,i){
   return '<span class="secpill'+(i===0?' on':'')+'" data-t="'+d.t+'" onclick="docTab(this)">'+d.l+'</span>';
 }).join('');
 function docTab(el){ document.querySelectorAll('#doc-tabs .secpill').forEach(function(p){p.classList.remove('on')}); el.classList.add('on'); docTabAtual=el.getAttribute('data-t'); document.getElementById('doc-tabtitle').textContent=el.textContent; renderCentral(); }
+// Consultar: leva para a Central de Documentos JÁ na aba do tipo, mostrando a lista dos documentos existentes para abrir.
+function consultarTipo(tipo){
+  var pill=document.querySelector('#doc-tabs .secpill[data-t="'+tipo+'"]');
+  if(!pill){ abrirDoc(tipo,true); return; } // tipo que não tem lista na Central: mantém a consulta em formulário
+  docTabAtual=tipo;
+  document.querySelectorAll('#doc-tabs .secpill').forEach(function(p){p.classList.remove('on')}); pill.classList.add('on');
+  var tt=document.getElementById('doc-tabtitle'); if(tt) tt.textContent=pill.textContent;
+  goto('central');
+}
 
 // ---- navegacao ----
 function nav(el){
@@ -3281,7 +3290,8 @@ function renderCentral(){
     var acao = d.tipo==='modelo'
       ? '<span class="chip c-ok" style="cursor:pointer" onclick="usarModelo(\''+d.id+'\')"><svg class="ic"><use href="#i-check"/></svg> Usar este modelo</span> <span style="cursor:pointer;color:#C62D45;font-size:11.5px;font-weight:700;margin-left:8px" onclick="excluirModelo(\''+d.id+'\')">excluir</span>'
       : '<span class="chip c-edital" style="cursor:pointer" onclick="abrirDocSalvo(\''+d.id+'\')"><svg class="ic"><use href="#i-doc"/></svg> Abrir</span>'
-        + (d.tipo==='edital' ? ' <span class="chip c-ok" style="cursor:pointer;margin-left:6px" onclick="gerarContratoDoEdital(\''+d.id+'\')"><svg class="ic"><use href="#i-arrow"/></svg> Gerar contrato</span>' : '');
+        + (d.tipo==='edital' ? ' <span class="chip c-ok" style="cursor:pointer;margin-left:6px" onclick="gerarContratoDoEdital(\''+d.id+'\')"><svg class="ic"><use href="#i-arrow"/></svg> Gerar contrato</span>' : '')
+        + ' <span style="cursor:pointer;color:#C62D45;font-size:11.5px;font-weight:700;margin-left:8px" onclick="excluirDoc(\''+d.id+'\')">excluir</span>';
     return '<tr><td><div class="obj">'+esc(nomeTipo(d.tipo))+(d.numero?' '+esc(d.numero):'')+'</div></td><td>'+esc(d.objeto)+'</td><td>'+esc(d.data)+'</td><td>'+acao+'</td></tr>';
   }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:22px">Nenhum '+esc(nomeTipo(docTabAtual).toLowerCase())+' ainda. Os que você gerar ou importar aparecem aqui.</td></tr>';
 }
@@ -3536,6 +3546,21 @@ async function excluirModelo(id){
   if(SB && CURRENT_USER){ try{ await SB.from('documentos').delete().eq('id',id); registrarAud('Excluiu modelo', d.objeto, (CURRENT_USER.orgao!=='*'?CURRENT_USER.orgao:'tur')); }catch(e){} }
   DB.docs = (DB.docs||[]).filter(function(x){ return x.id!==id; });
   dbSave(); renderCentral(); toast('Modelo excluído.');
+}
+// Excluir um documento gerado (TR, Edital, Contrato, etc.) que você não quer mais.
+async function excluirDoc(id){
+  var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
+  if(!d) return;
+  if(!confirm('Excluir '+nomeTipo(d.tipo)+(d.numero?' '+d.numero:'')+'? Essa ação não pode ser desfeita.')) return;
+  var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
+  if(SB && CURRENT_USER){ try{ await SB.from('documentos').delete().eq('id',id);
+    if(d.tipo==='contrato' && d.numero){ try{ await SB.from('contratos').delete().eq('orgao_id',orgao).eq('numero',d.numero); }catch(e){} }
+    registrarAud('Excluiu '+nomeTipo(d.tipo)+(d.numero?' '+d.numero:''), d.objeto, orgao);
+  }catch(e){} }
+  DB.docs = (DB.docs||[]).filter(function(x){ return x.id!==id; });
+  if(d.tipo==='contrato' && typeof CONTRATOS!=='undefined'){ CONTRATOS = CONTRATOS.filter(function(c){ return c.n!==d.numero; }); }
+  dbSave(); renderCentral(); try{ renderContratos(); }catch(e){}
+  toast(nomeTipo(d.tipo)+(d.numero?' '+d.numero:'')+' excluído.');
 }
 function salvarAlteracoes(){
   var p=document.getElementById('ws-preview');
