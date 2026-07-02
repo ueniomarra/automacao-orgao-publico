@@ -1876,14 +1876,17 @@ async function gerarDoc(){
   if(!DOC.consulta) await registrarDoc(DOC.tipo, html);
   atualizarChain();
 }
-var PROX_FLUXO={etp:'tr',tr:'edital',edital:'contrato'};
+// Fluxo AUTOMÁTICO da fase interna: ETP > TR > Edital. O CONTRATO NÃO entra aqui: só se faz DEPOIS do certame, com o vencedor, pela Central (botão "Gerar contrato" no edital salvo).
+var PROX_FLUXO={etp:'tr',tr:'edital'};
 function atualizarChain(){
   var b=document.getElementById('ws-chain'); if(!b) return;
   if(!DOC.consulta && PROX_FLUXO[DOC.tipo]){ b.style.display='flex'; b.innerHTML='<svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-arrow"/></svg> Gerar '+nomeTipo(PROX_FLUXO[DOC.tipo])+' deste '+nomeTipo(DOC.tipo)+' (puxa tudo)';
     b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse');
     toast('Documento gerado. Clique no botão azul para seguir para o '+nomeTipo(PROX_FLUXO[DOC.tipo])+', já preenchido.');
   }
-  else b.style.display='none';
+  else { b.style.display='none';
+    if(!DOC.consulta && DOC.tipo==='edital'){ toast('Edital pronto (com a minuta de contrato em anexo). O contrato só é feito DEPOIS do certame: quando houver vencedor, gere o contrato na Central de Documentos, no botão "Gerar contrato" do edital.'); }
+  }
 }
 function proximoDoFluxo(){ var p=PROX_FLUXO[DOC.tipo]; if(!p) return; abrirDoc(p,false); }
 function gerarTR(){
