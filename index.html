@@ -289,6 +289,16 @@ td .modd{font-size:12px;color:var(--slate)}
 .itab .tdtot{font-weight:700;color:var(--navy);white-space:nowrap}
 .itab .del{border:0;background:#FBE9EC;color:#a11d33;border-radius:7px;width:28px;height:28px;cursor:pointer;font-weight:700}
 .addline{margin-top:8px;border:1px dashed var(--line);background:#FAFBFE;border-radius:9px;padding:9px;width:100%;font-family:'Plus Jakarta Sans';font-weight:600;font-size:12.5px;color:var(--royal);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.itab tr.lote-head td{background:#EEF2FB;border-top:2px solid var(--royal);padding:6px 8px}
+.lh-wrap{display:flex;align-items:center;gap:8px}
+.lh-tag{background:var(--navy);color:#fff;font-weight:800;font-size:10.5px;letter-spacing:.4px;border-radius:6px;padding:4px 9px;white-space:nowrap}
+.itab .lote-nome{flex:1;font-weight:700;color:var(--navy);border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+.lote-sub{font-family:'Plus Jakarta Sans';font-weight:800;color:var(--navy);white-space:nowrap;font-size:12px}
+.impzone{border:2px dashed var(--royal);background:var(--royal-soft);border-radius:12px;padding:22px;text-align:center;cursor:pointer;transition:.15s}
+.impzone:hover{background:#e4edff}
+.impzone .ib{font-weight:800;color:var(--navy);font-size:14px}
+.impzone .is{color:var(--slate);font-size:12px;margin-top:4px}
+.imp-tag{display:inline-block;background:var(--navy);color:#fff;font-weight:700;font-size:10.5px;border-radius:6px;padding:3px 8px;margin:0 6px 6px 0}
 .totbar{display:flex;align-items:center;justify-content:space-between;background:var(--gold-soft);border:1px solid #ECDDB4;border-radius:10px;padding:11px 14px;margin-top:10px}
 .totbar b{font-family:'Plus Jakarta Sans';font-size:17px;color:#6B5414}
 .wsactions{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:13px 20px;display:flex;gap:10px}
@@ -980,7 +990,7 @@ var DOC = {tipo:'tr', consulta:false, itens:[], dot:[]};
 function money(v){ v = Number(v)||0; return 'R$ ' + v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function pills(key,opts,sel){ return '<div class="pills" id="pill-'+key+'">'+opts.map(function(o){return '<button type="button" class="pill'+(o===sel?' on':'')+'" onclick="setPill(\''+key+'\',this)">'+o+'</button>';}).join('')+'</div>'; }
-function setPill(key,el){ var box=el.parentNode; box.querySelectorAll('.pill').forEach(function(p){p.classList.remove('on')}); el.classList.add('on'); if(key==='modalidade'){ renderCriterios(); renderModalidadeExtra(); } if(key==='engenharia'){ renderRegime(); } if(key==='qualtec'){ renderQualTec(); } if(key==='atipo'){ renderAditivoExtra(); } }
+function setPill(key,el){ var box=el.parentNode; box.querySelectorAll('.pill').forEach(function(p){p.classList.remove('on')}); el.classList.add('on'); if(key==='modalidade'){ renderCriterios(); renderModalidadeExtra(); } if(key==='engenharia'){ renderRegime(); } if(key==='qualtec'){ renderQualTec(); } if(key==='atipo'){ renderAditivoExtra(); } if(key==='porlote'){ onPorLoteChange(el); } }
 function renderRegime(){ var box=document.getElementById('regime-box'); if(!box) return; if(pillVal('engenharia')==='Sim'){ box.innerHTML='<div class="field"><label>Regime de execução (art. 46 da Lei 14.133/2021)</label>'+pills('regime',REGIMES,'Empreitada por preço global')+'</div>'; } else { box.innerHTML=''; } }
 function renderModalidadeExtra(){
   var box=document.getElementById('mod-extra'); if(!box) return;
@@ -1047,7 +1057,7 @@ function puxarDoETP(){
   var fo=document.getElementById('f-objeto'); if(fo && !fo.value) fo.value=ETP_DATA.objeto||'';
   var fj=document.getElementById('f-justif'); if(fj && !fj.value && ETP_DATA.necessidade) fj.value=ETP_DATA.necessidade;
   var fs=document.getElementById('f-secretaria'); if(fs && ETP_DATA.sec){ for(var i=0;i<fs.options.length;i++){ if(fs.options[i].value===ETP_DATA.sec){ fs.selectedIndex=i; break; } } }
-  if(ETP_DATA.itens && ETP_DATA.itens.length){ var tb=document.getElementById('itab-body'); if(tb){ tb.innerHTML=''; ETP_DATA.itens.forEach(function(it){ addLinha(it.d,it.u,it.q,it.v); }); calcTotal(); } }
+  if(ETP_DATA.itens && ETP_DATA.itens.length){ if(document.getElementById('itab-body')) preencherItens(ETP_DATA.itens); }
   var ff=document.getElementById('ws-fields');
   if(ff && !document.getElementById('etp-puxado')){ var d=document.createElement('div'); d.id='etp-puxado'; d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px'; d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Objeto, secretaria e itens puxados do ETP. Confira e complete o restante do TR.'; ff.insertBefore(d, ff.firstChild); }
 }
@@ -1076,7 +1086,7 @@ function salvarRascunho(){
   var ff=document.getElementById('ws-fields'); if(!ff) return;
   var campos={}; ff.querySelectorAll('input[id],select[id],textarea[id]').forEach(function(e){ if(e.id && e.type!=='file' && e.id.indexOf('prec-')<0 && e.id!=='f-precos-uf') campos[e.id]=e.value; });
   var pills={}; ff.querySelectorAll('[id^="pill-"]').forEach(function(p){ var on=p.querySelector('.pill.on'); if(on) pills[p.id.slice(5)]=on.textContent.trim(); });
-  var snap={c:campos,p:pills,itens:_rascRows('#itab-body',['i-d','i-u','i-q','i-v']),dot:_rascRows('#dot-body',['d-fi','d-fo','d-ac','d-dt','d-el']),qtp:_rascRows('#qtp-body',['q-d','q-q']),qto:_rascRows('#qto-body',['q-d','q-q'])};
+  var snap={c:campos,p:pills,itens:coletaItens(),dot:_rascRows('#dot-body',['d-fi','d-fo','d-ac','d-dt','d-el']),qtp:_rascRows('#qtp-body',['q-d','q-q']),qto:_rascRows('#qto-body',['q-d','q-q'])};
   try{ localStorage.setItem(rascKey(DOC.tipo), JSON.stringify(snap)); }catch(e){}
 }
 function limparRascunho(t){ try{ localStorage.removeItem(rascKey(t)); }catch(e){} }
@@ -1091,7 +1101,7 @@ function restaurarRascunho(tipo){
   function setPillByText(key,txt){ var box=document.getElementById('pill-'+key); if(!box) return; box.querySelectorAll('.pill').forEach(function(pp){ if(pp.textContent.trim()===txt) pp.click(); }); }
   if(s.p){ if(s.p.modalidade) setPillByText('modalidade',s.p.modalidade); if(s.p.engenharia) setPillByText('engenharia',s.p.engenharia); if(s.p.qualtec) setPillByText('qualtec',s.p.qualtec); Object.keys(s.p).forEach(function(k){ if(['modalidade','engenharia','qualtec'].indexOf(k)<0) setPillByText(k,s.p[k]); }); }
   if(s.c){ Object.keys(s.c).forEach(function(id){ var e=document.getElementById(id); if(e) e.value=s.c[id]; }); }
-  if(s.itens&&s.itens.length){ var tb=document.getElementById('itab-body'); if(tb){ tb.innerHTML=''; s.itens.forEach(function(r){ addLinha(r['i-d'],r['i-u'],r['i-q'],r['i-v']); }); calcTotal(); } }
+  if(s.itens&&s.itens.length){ if(document.getElementById('itab-body')){ var its=s.itens.map(function(r){ return ('d' in r)? r : {d:r['i-d'],u:r['i-u'],q:Number(r['i-q'])||0,v:Number(r['i-v'])||0}; }); preencherItens(its); } }
   if(s.dot&&s.dot.length){ var db=document.getElementById('dot-body'); if(db){ db.innerHTML=''; s.dot.forEach(function(r){ addDot(); var tr=db.lastChild; if(tr){ var g=function(c){return tr.querySelector('.'+c);}; if(g('d-fi'))g('d-fi').value=r['d-fi']; if(g('d-fo'))g('d-fo').value=r['d-fo']; if(g('d-ac'))g('d-ac').value=r['d-ac']; if(g('d-dt'))g('d-dt').value=r['d-dt']; if(g('d-el'))g('d-el').value=r['d-el']; } }); } }
   var fillQ=function(bid,rows){ var b=document.getElementById(bid); if(!b||!rows||!rows.length)return; b.innerHTML=''; rows.forEach(function(r){ addQual(bid); var tr=b.lastChild; if(tr){ if(tr.querySelector('.q-d'))tr.querySelector('.q-d').value=r['q-d']; if(tr.querySelector('.q-q'))tr.querySelector('.q-q').value=r['q-q']; } }); };
   fillQ('qtp-body',s.qtp); fillQ('qto-body',s.qto);
@@ -1129,8 +1139,9 @@ function renderFormTR(){
   h += '<div class="field"><label>Unidades beneficiárias (opcional)</label><input id="f-unidades" placeholder="ex.: escolas municipais, unidades de saúde"></div></div>';
 
   h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens</div>';
+  h += '<div class="field" style="margin-bottom:10px"><label>Esta contratação é dividida por lotes?</label>'+pills('porlote',['Não','Sim'],'Não')+'<div class="hint" style="margin-top:6px">Marque <b>Sim</b> para licitação por lotes (grupos): os itens ficam agrupados e o TR e o Edital saem lote a lote, com subtotal por lote. Ao importar um PDF ou Excel com lotes, isso liga sozinho.</div></div>';
   h += '<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h += '<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
+  h += '<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="novoLoteManual()"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Adicionar lote</button>';
   h += '<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h += '<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h += '<div class="hint" style="margin-top:6px">Um clique: o sistema busca o preço real de cada item no PNCP e preenche a coluna de valor. Ele preenche os que acha com segurança e lista os que você precisa revisar.</div>';
@@ -1243,7 +1254,7 @@ async function buscarPrecosPNCP(){
   var PKG={folhas:1,folha:1,resma:1,unidade:1,unidades:1,pacote:1,caixa:1,kit:1,jogo:1,litro:1,litros:1,frasco:1,rolo:1,metro:1,metros:1,formato:1,aproximado:1};
   var core=toks.filter(function(t){ return !/^[0-9]+$/.test(t) && !PKG[t]; }); if(!core.length) core=[primary]; // palavras-nucleo (sem numero/embalagem); exige TODAS p/ casar o produto certo
   res.textContent='Procurando "'+q+'" no PNCP ('+ondeBusca+')...';
-  var und=''; var sItem=document.getElementById('prec-item'); if(sItem && sItem.value && sItem.value!=='-1'){ var rws=document.querySelectorAll('#itab-body tr'); var rr=rws[parseInt(sItem.value,10)]; if(rr) und=(rr.querySelector('.i-u')||{}).value||''; }
+  var und=''; var sItem=document.getElementById('prec-item'); if(sItem && sItem.value && sItem.value!=='-1'){ var rr=itemRows()[parseInt(sItem.value,10)]; if(rr) und=(rr.querySelector('.i-u')||{}).value||''; }
   var R=await precoPNCP(q, uf, und);
   if(R.erro){ res.textContent='O PNCP não respondeu agora (instabilidade momentânea). Tente de novo.'; return; }
   if(!R.fontes || !R.fontes.length){ res.textContent='Nada encontrado para "'+q+'" '+(uf?('em '+uf):'no Brasil')+'. Tente outra palavra do item ou lance manual.'; return; }
@@ -1379,7 +1390,7 @@ function usarValorNoItem(){
   if(!s || s.value==='-1' || s.value===''){ if(res) res.textContent='Selecione o item do TR para aplicar o valor.'; return; }
   var ix=parseInt(s.value,10); var val=calcPrecos();
   if(!(val>0)){ if(res) res.textContent='Registre os preços antes de aplicar.'; return; }
-  var rows=document.querySelectorAll('#itab-body tr');
+  var rows=itemRows();
   if(rows[ix]){ rows[ix].querySelector('.i-v').value=val.toFixed(2); calcTotal(); if(res) res.innerHTML='<span style="color:var(--navy);font-weight:600"><svg class="ic" style="width:13px;height:13px;vertical-align:-2px"><use href="#i-check"/></svg> Valor '+money(val)+' aplicado no item. Total do TR atualizado.</span>'; }
 }
 // Buscar modelo no PNCP (Portal Nacional de Contratações Públicas) - busca AO VIVO, API oficial gratuita
@@ -1468,27 +1479,312 @@ function addLinha(d,u,q,v){
     '<td><button class="del" onclick="this.closest(\'tr\').remove();calcTotal()">✕</button></td>';
   tb.appendChild(tr); calcTotal();
 }
-// Importar muitos itens de uma vez (essencial p/ medicamento: centenas de itens). Cola da planilha do Excel.
+// Importar muitos itens de uma vez: sobe o PDF ou Excel do órgão (relatório de lotes do pregão) e o sistema puxa tudo sozinho, lote por lote. Também aceita colar da planilha.
 function importarItensPlanilha(){
-  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 10px">Cole aqui os itens copiados da sua planilha do Excel. <b>Um item por linha.</b> A ordem das colunas é: <b>descrição</b>, unidade, quantidade, valor unitário (as três últimas são opcionais). É só selecionar no Excel e colar (Ctrl+V).</p>'+
-    '<textarea id="imp-itens" style="width:100%;height:210px;font-family:monospace;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="Dipirona sódica 500mg comprimido&#9;comp&#9;50000&#9;0,18&#10;Paracetamol 750mg comprimido&#9;comp&#9;200000&#9;0,12"></textarea>'+
-    '<div class="hint" style="margin-top:6px">Os números seguem o formato do Brasil (vírgula no decimal). A pesquisa de preço continua sendo por item, depois de importar.</div>'+
-    '<button class="btn-gold" style="width:100%;justify-content:center;margin-top:12px" onclick="processarImportItens()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Importar itens</button>';
-  abrirModal('Importar itens da planilha', h);
+  window._impParsed=null;
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">Suba o arquivo de itens do órgão (o relatório de lotes do pregão, em <b>PDF</b> ou <b>Excel</b>). O sistema lê tudo sozinho, item a item, lote por lote, e monta a tabela. Confira antes de confirmar.</p>'+
+    '<label class="impzone" for="imp-file"><input type="file" id="imp-file" accept=".pdf,.xlsx,.xls,.csv" multiple style="display:none" onchange="impArquivo(this)"><div class="ib">Escolher arquivo (PDF ou Excel)</div><div class="is">Relatório de lotes em PDF, ou .xlsx / .xls / .csv. Pode selecionar vários lotes de uma vez.</div></label>'+
+    '<div id="imp-status" style="margin-top:12px"></div>'+
+    '<div id="imp-preview" style="margin-top:12px"></div>'+
+    '<div id="imp-confirm" style="margin-top:12px"></div>'+
+    '<details style="margin-top:16px"><summary style="cursor:pointer;color:var(--royal);font-weight:600;font-size:12.5px">ou colar da planilha (Excel), um item por linha</summary>'+
+    '<p style="color:var(--slate);font-size:12px;margin:8px 0">Ordem das colunas: <b>descrição</b>, unidade, quantidade, valor unitário (as três últimas são opcionais). Uma linha só com <b>LOTE 01 - nome</b> começa um novo lote.</p>'+
+    '<textarea id="imp-itens" style="width:100%;height:150px;font-family:monospace;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="LOTE 01 - Gêneros alimentícios&#10;Açúcar cristal 5 kg&#9;UN&#9;640&#9;15,72&#10;Café torrado 500g&#9;UN&#9;1269&#9;41,29"></textarea>'+
+    '<button class="btn-ghost" style="width:100%;justify-content:center;margin-top:10px" type="button" onclick="processarImportItens()"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Importar o que foi colado</button></details>';
+  abrirModal('Importar itens (PDF ou Excel)', h);
 }
-function impNum(s){ if(s==null) return ''; s=String(s).trim(); if(!s) return ''; s=s.replace(/\./g,'').replace(',','.').replace(/[^0-9.]/g,''); var n=parseFloat(s); return isNaN(n)?'':n; }
+function impNum(s){ if(s==null) return ''; s=String(s).trim(); if(!s) return ''; s=s.replace(/\./g,'').replace(',','.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isNaN(n)?'':n; }
+var RE_LOTE=/^\s*LOTE\s*N?[ºo\.]?\s*0*(\d+)\s*[-\u2013:]\s*(.+)$/i;
+var RE_DESC=/^\s*Descri[çc][ãa]o\s*:\s*(.+)$/i;
+var RE_ANCHOR=/^0*(\d{2,6})\s+(.*?)\s+([A-Za-zÀ-ÿ]{1,6})\s+([\d.]+,\d{1,4})\s+([\d.]+,\d{1,4})\s+([\d.]+,\d{1,4})\s+([\d.]+,\d{1,4})(?:\s+R\$?[\d.,]+)?\s*$/;
+var RE_NOISE=/^(P[ÁA]G|RELAT[ÓO]RIO|PREG[ÃA]O\s*N|ESTADO DE|PREFEITURA|MUNIC[ÍI]PIO|PRODUTO\s+NOME|VLR\.|QUANTIDADE|UNID\.|TOTAL\b|SEQU[ÊE]NCIA)/i;
+function brNum(s){ if(s==null) return 0; s=String(s).replace(/\./g,'').replace(',','.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isNaN(n)?0:n; }
+// Lê o PDF do relatório de lotes (pdf.js) por COLUNAS e FAIXAS: usa a posição (x,y) do texto e as linhas da grade da tabela para reconstruir cada item exatamente como está impresso
+var UNIDS={UN:1,UND:1,UNID:1,UNIDADE:1,CX:1,KG:1,G:1,PC:1,PCT:1,PT:1,PAR:1,L:1,LT:1,ML:1,MT:1,M:1,M2:1,M3:1,DZ:1,FR:1,GL:1,RL:1,SC:1,SACO:1,BD:1,CT:1,CJ:1,JG:1,TB:1,GF:1,LATA:1,POTE:1,BJ:1,BL:1,RESMA:1,KIT:1,CAIXA:1,PACOTE:1,FARDO:1,FD:1,AMP:1,CP:1,COMP:1,FRS:1,GLS:1};
+async function impLerPDF(file){
+  var pdfjs=await anEnsurePdf();
+  var buf=await file.arrayBuffer();
+  var doc=await pdfjs.getDocument({data:buf}).promise;
+  var pages=[];
+  for(var p=1;p<=doc.numPages;p++){
+    var page=await doc.getPage(p);
+    var vp=page.getViewport({scale:1});
+    var tc=await page.getTextContent();
+    var toks=[];
+    tc.items.forEach(function(it){ if(!it.str||!it.str.trim()) return; toks.push({x:it.transform[4], y:vp.height-it.transform[5], s:it.str.trim()}); });
+    var rules=[]; try{ rules=await _rulesY(page,vp,pdfjs); }catch(e){ rules=[]; }
+    pages.push({toks:toks, rules:rules});
+  }
+  return parseRelatorioXY(pages);
+}
+// extrai o Y das linhas horizontais da grade (fronteiras das linhas da tabela) via lista de operações do pdf.js
+async function _rulesY(page,vp,pdfjs){
+  var ol=await page.getOperatorList(); var OPS=pdfjs.OPS;
+  var mul=function(a,b){return [a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];};
+  var ap=function(m,x,y){return [m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];};
+  var ctm=[1,0,0,1,0,0], st=[], ys=[];
+  for(var i=0;i<ol.fnArray.length;i++){ var fn=ol.fnArray[i], a=ol.argsArray[i];
+    if(fn===OPS.save) st.push(ctm.slice());
+    else if(fn===OPS.restore) ctm=st.pop()||[1,0,0,1,0,0];
+    else if(fn===OPS.transform) ctm=mul(ctm,a);
+    else if(fn===OPS.constructPath){ var ops=a[0], co=a[1], k=0, cx=0, cy=0;
+      for(var j=0;j<ops.length;j++){ var op=ops[j];
+        if(op===OPS.moveTo){ cx=co[k++]; cy=co[k++]; }
+        else if(op===OPS.lineTo){ var x2=co[k++],y2=co[k++]; var p1=ap(ctm,cx,cy),p2=ap(ctm,x2,y2); if(Math.abs(p1[1]-p2[1])<0.8 && Math.abs(p1[0]-p2[0])>60) ys.push(vp.height-p1[1]); cx=x2; cy=y2; }
+        else if(op===OPS.curveTo){ k+=6; cx=co[k-2]; cy=co[k-1]; }
+        else if(op===OPS.curveTo2||op===OPS.curveTo3){ k+=4; cx=co[k-2]; cy=co[k-1]; }
+        else if(op===OPS.rectangle){ var rx=co[k++],ry=co[k++],rw=co[k++],rh=co[k++]; var pa=ap(ctm,rx,ry),pb=ap(ctm,rx+rw,ry+rh); if(Math.abs(pa[0]-pb[0])>60){ ys.push(vp.height-pa[1]); ys.push(vp.height-pb[1]); } }
+        else if(op===OPS.closePath){}
+      }
+    }
+  }
+  return [].concat(ys).map(function(y){return Math.round(y);}).sort(function(a,b){return a-b;}).filter(function(y,i,ar){ return i===0||Math.abs(y-ar[i-1])>3; });
+}
+function _linhasDe(toks){
+  var b={}; toks.forEach(function(t){ var k=Math.round(t.y/3); (b[k]=b[k]||[]).push(t); });
+  return Object.keys(b).map(Number).sort(function(a,c){return a-c;}).map(function(k){ var row=b[k].slice().sort(function(a,c){return a.x-c.x;}); return {y:k*3, toks:row, text:row.map(function(t){return t.s;}).join(' ').replace(/\s+/g,' ').trim()}; });
+}
+function _colunas(pages){
+  var col=null;
+  pages.forEach(function(pg){ if(col) return; _linhasDe(pg.toks).forEach(function(ln){ if(col) return; if(/PRODUTO/i.test(ln.text)&&/NOME/i.test(ln.text)&&/UNID/i.test(ln.text)){ var fx=function(re){ var t=ln.toks.filter(function(tk){return re.test(tk.s);}); return t.length? t[0].x : null; }; col={cod:fx(/^PRODUTO$|C[ÓO]DIGO/i), nome:fx(/NOME/i), unid:fx(/UNID/i), qtd:fx(/QUANT/i)}; } }); });
+  if(!col || col.unid==null || col.qtd==null){ col={cod:22,nome:67,unid:258,qtd:295}; }
+  return col;
+}
+function _unidDe(band, unidX, xLimite){
+  var zona=band.filter(function(t){ return /^[A-Za-zÀ-ÿ]{1,7}\.?$/.test(t.s) && t.x>=unidX-14 && t.x<xLimite; });
+  var conhec=zona.filter(function(t){ return UNIDS[t.s.replace('.','').toUpperCase()]; });
+  var lista=(conhec.length?conhec:zona).sort(function(a,b){return Math.abs(a.x-unidX)-Math.abs(b.x-unidX);});
+  return lista.length? lista[0].s.replace('.','').toUpperCase() : 'UN';
+}
+function parseRelatorioXY(pages){
+  var NUM=/^[\d.]+,\d{1,4}$/;
+  var SKIP=/TOTAL DO LOTE|TOTAL DO PREG|QUANTIDADE TOTAL|VLR\.\s*TOTAL DO/i;
+  var col=_colunas(pages);
+  var nomeMin=(col.cod!=null?col.cod:22)+25, unidX=col.unid, qtdX=col.qtd;
+  var res=[];
+  pages.forEach(function(pg){
+    var toks=pg.toks, rules=pg.rules||[];
+    var lines=_linhasDe(toks);
+    var loteMarks=[];
+    lines.forEach(function(ln){ var ml=ln.text.match(RE_LOTE); if(ml){ loteMarks.push({y:ln.y,num:String(parseInt(ml[1],10)),nome:(ml[2]||'').replace(/\s+/g,' ').trim()}); } var md=ln.text.match(RE_DESC); if(md&&loteMarks.length){ loteMarks[loteMarks.length-1].nome=(md[1]||'').replace(/\s+/g,' ').trim(); } });
+    var loteEm=function(y){ var lo={num:'',nome:''}; for(var m=0;m<loteMarks.length;m++){ if(loteMarks[m].y<=y+3){ lo={num:loteMarks[m].num,nome:loteMarks[m].nome}; } } return lo; };
+    var addItem=function(band, y){
+      var nums=band.filter(function(t){ return NUM.test(t.s) && t.x>=qtdX-10; }).sort(function(a,b){return a.x-b.x;});
+      if(nums.length<2) return;
+      var descArr=band.filter(function(t){ return t.x>=nomeMin && t.x<unidX-6; }).sort(function(a,b){ return Math.abs(a.y-b.y)>2? a.y-b.y : a.x-b.x; });
+      var d=descArr.map(function(t){return t.s;}).join(' ').replace(/[\u2013\u2014]/g,'-').replace(/\s+/g,' ').replace(/\s+([,.;:])/g,'$1').trim();
+      if(!d || SKIP.test(d)) return;
+      var lo=loteEm(y);
+      res.push({d:d, u:_unidDe(band,unidX,nums[0].x-2), q:brNum(nums[0].s), v:brNum(nums[1].s), lote:lo.num, loteNome:lo.nome});
+    };
+    if(rules.length>=4){
+      // caminho robusto: cada faixa entre duas linhas da grade é um item
+      for(var i=0;i<rules.length-1;i++){ var top=rules[i], bot=rules[i+1]; if(bot-top<8 || bot-top>240) continue;
+        var band=toks.filter(function(t){ return t.y>top+1 && t.y<bot+1; });
+        addItem(band, (top+bot)/2);
+      }
+    } else {
+      // reserva: sem linhas de grade (PDF sem vetor), agrupa a descrição pela âncora mais próxima
+      var anchors=[], descLines=[];
+      lines.forEach(function(ln){ if(RE_LOTE.test(ln.text)||RE_DESC.test(ln.text)||/PRODUTO\s+NOME/i.test(ln.text)||SKIP.test(ln.text)) return;
+        var nums=ln.toks.filter(function(t){ return NUM.test(t.s) && t.x>=qtdX-10; }).sort(function(a,b){return a.x-b.x;});
+        var frag=ln.toks.filter(function(t){ return t.x>=nomeMin && t.x<unidX-6; });
+        if(nums.length>=2) anchors.push({y:ln.y, toks:ln.toks, nums:nums, parts:frag.slice()});
+        else if(frag.length) descLines.push({y:ln.y, toks:frag});
+      });
+      descLines.forEach(function(dl){ var best=null,bd=1e9; anchors.forEach(function(a){ var d=Math.abs(a.y-dl.y); if(d<bd){bd=d;best=a;} }); if(best) best.parts=best.parts.concat(dl.toks); });
+      anchors.forEach(function(a){ addItem(a.parts.concat(a.toks), a.y); });
+    }
+  });
+  return _propagaLote(res);
+}
+function _propagaLote(items){ var last='',lastN=''; items.forEach(function(it){ if(it.lote){ last=it.lote; lastN=it.loteNome; } else { it.lote=last; it.loteNome=lastN; } }); return items; }
+// Lê Excel/CSV (SheetJS): detecta cabeçalho e linhas de lote
+async function impLerExcel(file){
+  var XLSX=await anEnsureXlsx();
+  var buf=await file.arrayBuffer();
+  var wb=XLSX.read(buf,{type:'array'});
+  var rows=[];
+  wb.SheetNames.forEach(function(nm){ var aoa=XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:false,defval:''}); rows=rows.concat(aoa); rows.push([]); });
+  return parsePlanilhaAOA(rows);
+}
+function parsePlanilhaAOA(rows){
+  var out=[], curLote='', curNome='', col=null;
+  function findHeader(r){
+    var idx={desc:-1,un:-1,qt:-1,vu:-1};
+    r.forEach(function(c,i){ var s=String(c||'').toLowerCase();
+      if(idx.desc<0 && /(descri|especifica|nome do|^nome$|material|produto\/)/.test(s)) idx.desc=i;
+      if(idx.un<0 && /(unid|^un\.?$|medida)/.test(s)) idx.un=i;
+      if(idx.qt<0 && /(quant|qtd|qtde)/.test(s)) idx.qt=i;
+      if(idx.vu<0 && /unit/.test(s) && /(vlr|valor|pre[çc]o|r\$)/.test(s)) idx.vu=i;
+    });
+    if(idx.vu<0){ r.forEach(function(c,i){ var s=String(c||'').toLowerCase(); if(idx.vu<0 && /(vlr|valor|pre[çc]o)/.test(s)) idx.vu=i; }); }
+    return (idx.desc>=0 && idx.qt>=0)? idx : null;
+  }
+  rows.forEach(function(r){
+    if(!r||!r.length) return;
+    var joined=r.map(function(c){return String(c||'');}).join(' ').replace(/\s+/g,' ').trim();
+    if(!joined) return;
+    var ml=joined.match(RE_LOTE); if(ml){ curLote=String(parseInt(ml[1],10)); curNome=(ml[2]||'').replace(/\s+/g,' ').trim(); return; }
+    var md=joined.match(RE_DESC); if(md){ if(curLote) curNome=(md[1]||'').trim(); return; }
+    if(!col){ var hd=findHeader(r); if(hd){ col=hd; return; } }
+    if(col){
+      var d=String(r[col.desc]||'').replace(/\s+/g,' ').trim();
+      var q=brNum(r[col.qt]);
+      if(!d || !(q>0)) return;
+      var u=col.un>=0? (String(r[col.un]||'UN').trim()||'UN') : 'UN';
+      var v=col.vu>=0? brNum(r[col.vu]) : 0;
+      out.push({d:d,u:u,q:q,v:v,lote:curLote,loteNome:curNome});
+    } else {
+      var texts=r.map(function(c){return String(c||'').trim();});
+      var di=-1,dlen=0; texts.forEach(function(s,i){ if(s.length>dlen && /[A-Za-zÀ-ÿ]{3,}/.test(s)){ dlen=s.length; di=i; } });
+      if(di<0) return;
+      var nums=[]; texts.forEach(function(s,i){ if(i!==di && /\d/.test(s) && /^[\d.,]+$/.test(s.replace(/\s/g,''))) nums.push(brNum(s)); });
+      if(!nums.length) return;
+      var u='UN'; texts.forEach(function(s,i){ if(i!==di && /^[A-Za-zÀ-ÿ]{1,6}\.?$/.test(s)) u=s.replace('.','').toUpperCase(); });
+      var q=nums[0]||0, v=nums[1]||0;
+      if(q>0) out.push({d:texts[di],u:u,q:q,v:v,lote:curLote,loteNome:curNome});
+    }
+  });
+  return out;
+}
+// renumera lotes na ordem em que aparecem (junta arquivos diferentes sem colidir)
+function impNormalizarLotes(items){
+  var out=[], seen={}, seq=0, curKey=null;
+  items.forEach(function(it){
+    if(it.lote!=null && it.lote!==''){ var k=it.lote+'|'+(it.loteNome||''); if(k!==curKey){ if(!seen[k]){ seq++; seen[k]=seq; } curKey=k; } it={d:it.d,u:it.u,q:it.q,v:it.v,lote:seen[k],loteNome:it.loteNome||('Lote '+seen[k])}; }
+    if(it.d && String(it.d).trim()) out.push(it);
+  });
+  return out;
+}
+async function impArquivo(input){
+  var files=[].slice.call(input.files||[]); if(!files.length) return;
+  var st=document.getElementById('imp-status'), pv=document.getElementById('imp-preview'), cf=document.getElementById('imp-confirm');
+  pv.innerHTML=''; cf.innerHTML='';
+  st.innerHTML='<div class="hint">Lendo '+files.length+' arquivo(s)...</div>';
+  var todos=[];
+  try{
+    for(var i=0;i<files.length;i++){
+      var f=files[i], nome=f.name.toLowerCase();
+      st.innerHTML='<div class="hint">Lendo <b>'+esc(f.name)+'</b> ('+(i+1)+' de '+files.length+')...</div>';
+      var res=[];
+      if(/\.pdf$/.test(nome)) res=await impLerPDF(f);
+      else if(/\.(xlsx|xls|csv)$/.test(nome)) res=await impLerExcel(f);
+      else continue;
+      todos=todos.concat(res);
+    }
+  }catch(e){ st.innerHTML='<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Não consegui ler automaticamente ('+esc(String((e&&e.message)||e))+'). Se for PDF escaneado (imagem), exporte em Excel ou cole os itens abaixo.</div>'; input.value=''; return; }
+  todos=impNormalizarLotes(todos);
+  if(!todos.length){ st.innerHTML='<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Não encontrei itens neste arquivo. Se for um PDF escaneado (imagem), exporte em Excel ou cole os itens abaixo.</div>'; input.value=''; return; }
+  window._impParsed=todos;
+  impMostrarPreview(todos);
+  input.value='';
+}
+function impMostrarPreview(items){
+  var st=document.getElementById('imp-status'), pv=document.getElementById('imp-preview'), cf=document.getElementById('imp-confirm');
+  var lotes={}, ordem=[], tot=0;
+  items.forEach(function(it){ var k=it.lote?('L'+it.lote):'_'; if(!lotes[k]){ lotes[k]={nome:it.loteNome||'',n:0,v:0,lote:it.lote}; ordem.push(k); } var t=(Number(it.q)||0)*(Number(it.v)||0); lotes[k].n++; lotes[k].v+=t; tot+=t; });
+  var nLotes=ordem.filter(function(k){return k!=='_';}).length;
+  st.innerHTML='<div class="precos-aviso av-ok" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Encontrei <b>'+items.length+' item(ns)</b>'+(nLotes?(' em <b>'+nLotes+' lote(s)</b>'):'')+', total estimado '+money(tot)+'. Confira abaixo.</div>';
+  var h='';
+  ordem.forEach(function(k){ if(k==='_')return; var g=lotes[k]; h+='<span class="imp-tag">LOTE '+esc(String(g.lote))+(g.nome?' - '+esc(g.nome):'')+' &bull; '+g.n+' itens &bull; '+money(g.v)+'</span>'; });
+  h+='<table class="itab" style="margin-top:8px"><thead><tr><th>Lote</th><th style="width:48%">Descrição</th><th>Un</th><th>Qtd</th><th>V. unit.</th></tr></thead><tbody>';
+  items.slice(0,8).forEach(function(it){ h+='<tr><td>'+esc(String(it.lote||'-'))+'</td><td style="font-size:11.5px">'+esc((it.d||'').slice(0,90))+'</td><td>'+esc(it.u||'')+'</td><td>'+esc(String(it.q||''))+'</td><td>'+money(it.v)+'</td></tr>'; });
+  h+='</tbody></table>'+(items.length>8?('<div class="hint" style="margin-top:4px">... e mais '+(items.length-8)+' item(ns).</div>'):'');
+  pv.innerHTML=h;
+  cf.innerHTML='<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--slate);margin-bottom:10px"><input type="checkbox" id="imp-replace" checked> Substituir os itens que já estão na tabela</label>'+
+    '<button class="btn-gold" style="width:100%;justify-content:center" type="button" onclick="impConfirmar()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Confirmar e trazer '+items.length+' item(ns) para o TR</button>';
+}
+function impConfirmar(){
+  var items=window._impParsed||[]; if(!items.length){ toast('Nada para importar.'); return; }
+  var rep=(document.getElementById('imp-replace')||{}).checked;
+  var base = rep? [] : coletaItens();
+  preencherItens(base.concat(items));
+  fecharModal();
+  var nl={}; (base.concat(items)).forEach(function(it){ if(it.lote) nl[it.lote]=1; });
+  var q=Object.keys(nl).length;
+  toast(items.length+' item(ns) importado(s)'+(q?(' em '+q+' lote(s)'):'')+'. Confira e busque os preços.');
+}
 function processarImportItens(){
   var txt=((document.getElementById('imp-itens')||{}).value||'');
   var linhas=txt.split(/\r?\n/).map(function(l){return l.replace(/\s+$/,'');}).filter(function(l){return l.trim();});
   if(!linhas.length){ toast('Cole os itens da planilha primeiro.'); return; }
-  var n=0;
+  var arr=[], curLote='', curNome='';
   linhas.forEach(function(l){
+    var m=l.match(RE_LOTE);
+    if(m){ curLote=String(parseInt(m[1],10)); curNome=(m[2]||'').replace(/\s+/g,' ').trim(); return; }
     var cols=l.split(/\t|;|\|/);
     var d=(cols[0]||'').trim(); if(!d) return;
     var u=(cols[1]||'UN').trim()||'UN';
-    addLinha(d, u, impNum(cols[2]), impNum(cols[3])); n++;
+    arr.push({d:d,u:u,q:brNum(cols[2]),v:brNum(cols[3]),lote:curLote,loteNome:curNome});
   });
-  calcTotal(); fecharModal(); toast(n+' item(ns) importado(s) na tabela. Confira e pesquise os preços.');
+  if(!arr.length){ toast('Não encontrei itens no texto colado.'); return; }
+  arr=impNormalizarLotes(arr);
+  preencherItens(coletaItens().concat(arr));
+  calcTotal(); fecharModal(); toast(arr.length+' item(ns) importado(s) na tabela. Confira e pesquise os preços.');
+}
+// ===== Lotes: agrupamento na tabela de itens e nos documentos =====
+function itemRows(){ return [].slice.call(document.querySelectorAll('#itab-body tr')).filter(function(r){return r.querySelector('.i-d');}); }
+function loteHeads(){ return [].slice.call(document.querySelectorAll('#itab-body tr.lote-head')); }
+function haLotes(){ return loteHeads().length>0; }
+function addLoteHead(num,nome){
+  var tb=document.getElementById('itab-body'); if(!tb) return null;
+  var tr=document.createElement('tr'); tr.className='lote-head'; tr.setAttribute('data-num', num==null?'':String(num));
+  tr.innerHTML='<td colspan="6"><div class="lh-wrap"><span class="lh-tag">LOTE '+esc(String(num==null?'':num).replace(/^0+/,'')||'')+'</span>'+
+    '<input class="lote-nome" value="'+esc(nome||'')+'" placeholder="nome do lote (ex.: gêneros alimentícios)">'+
+    '<span class="lote-sub">R$ 0,00</span>'+
+    '<button class="del" type="button" title="remover o lote e seus itens" onclick="removerLote(this)">✕</button></div></td>';
+  tb.appendChild(tr); return tr;
+}
+function removerLote(btn){
+  var head=btn.closest('tr'); if(!head) return;
+  var n=head.nextElementSibling;
+  while(n && !n.classList.contains('lote-head')){ var nx=n.nextElementSibling; n.remove(); n=nx; }
+  head.remove(); calcTotal();
+}
+function novoLoteManual(){ if(!haLotes()) setPorLotePill(true); var n=loteHeads().length+1; addLoteHead(n,''); calcTotal(); toast('Lote '+n+' adicionado. Os próximos itens entram nele. Use "Adicionar item".'); }
+function setPorLotePill(on){ var box=document.getElementById('pill-porlote'); if(!box) return; box.querySelectorAll('.pill').forEach(function(p){ p.classList.toggle('on', p.textContent.trim()===(on?'Sim':'Não')); }); }
+function setPillByTextG(key,txt){ var box=document.getElementById('pill-'+key); if(!box) return; box.querySelectorAll('.pill').forEach(function(p){ if(p.textContent.trim()===txt) p.click(); }); }
+function onPorLoteChange(el){
+  var sim=el.textContent.trim()==='Sim';
+  if(sim){ if(!haLotes()){ var its=coletaItens(); var tb=document.getElementById('itab-body'); if(tb){ tb.innerHTML=''; addLoteHead(1,''); if(its.length){ its.forEach(function(it){ addLinha(it.d,it.u,it.q,it.v); }); } else { addLinha(); } } calcTotal(); } }
+  else { loteHeads().forEach(function(h){ h.remove(); }); calcTotal(); }
+}
+function preencherItens(itens){
+  var tb=document.getElementById('itab-body'); if(!tb) return;
+  tb.innerHTML='';
+  var lotes=itens.some(function(it){ return it.lote!=null && it.lote!==''; });
+  var cur=null;
+  itens.forEach(function(it){
+    if(lotes){ var key=(it.lote||'')+'|'+(it.loteNome||''); if(key!==cur){ addLoteHead(it.lote,it.loteNome); cur=key; } }
+    addLinha(it.d,it.u,it.q,it.v);
+  });
+  if(!itens.length) addLinha();
+  setPorLotePill(lotes);
+  if(lotes) setPillByTextG('formajulg','Por grupo (lote)');
+  calcTotal();
+}
+// linhas de itens para os documentos (TR, Edital, proposta, mapa), agrupadas por lote quando houver
+function linhaItemDoc(it,n,proposta){
+  if(proposta) return '<tr><td>'+n+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>__________</td><td>R$ __________</td><td>R$ __________</td></tr>';
+  return '<tr><td>'+n+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>'+money(it.v)+'</td><td>'+money(it.t)+'</td></tr>';
+}
+function docItemRows(itens, opts){
+  opts=opts||{}; var prop=!!opts.proposta; var cols=prop?7:6;
+  itens=itens||[];
+  if(!itens.length) return '<tr><td colspan="'+cols+'">Itens conforme o Termo de Referência.</td></tr>';
+  var porlote=itens.some(function(it){ return it.lote!=null && it.lote!==''; });
+  if(!porlote) return itens.map(function(it,i){ return linhaItemDoc(it,i+1,prop); }).join('');
+  var groups=[], map={};
+  itens.forEach(function(it){ var k=(it.lote||'')+'|'+(it.loteNome||''); if(!map[k]){ map[k]={lote:it.lote,nome:it.loteNome,itens:[]}; groups.push(map[k]); } map[k].itens.push(it); });
+  var out='';
+  groups.forEach(function(g){
+    var st=0;
+    out+='<tr><td colspan="'+cols+'" style="background:#EEF2FB;font-weight:700;color:#0A2342">LOTE '+esc(String(g.lote||'').replace(/^0+/,'')||'')+(g.nome?' - '+esc(g.nome):'')+'</td></tr>';
+    g.itens.forEach(function(it,i){ out+=linhaItemDoc(it,i+1,prop); st+=(Number(it.q)||0)*(Number(it.v)||0); });
+    if(!prop) out+='<tr><td colspan="'+(cols-1)+'" style="text-align:right;font-weight:600">Subtotal do lote '+esc(String(g.lote||''))+'</td><td style="font-weight:700">'+money(st)+'</td></tr>';
+  });
+  return out;
 }
 function addDot(){
   var tb=document.getElementById('dot-body');
@@ -1497,19 +1793,25 @@ function addDot(){
   tb.appendChild(tr);
 }
 function calcTotal(){
-  var tot=0;
-  document.querySelectorAll('#itab-body tr').forEach(function(tr){
-    var q=Number(tr.querySelector('.i-q').value)||0, v=Number(tr.querySelector('.i-v').value)||0;
-    var t=q*v; tot+=t; tr.querySelector('.tdtot').textContent=money(t);
+  var tot=0, subEl=null, sub=0;
+  var flush=function(){ if(subEl) subEl.textContent=money(sub); };
+  [].slice.call(document.querySelectorAll('#itab-body tr')).forEach(function(tr){
+    if(tr.classList.contains('lote-head')){ flush(); subEl=tr.querySelector('.lote-sub'); sub=0; return; }
+    var qEl=tr.querySelector('.i-q'); if(!qEl) return;
+    var q=Number(qEl.value)||0, v=Number((tr.querySelector('.i-v')||{}).value)||0, t=q*v;
+    tot+=t; sub+=t; var td=tr.querySelector('.tdtot'); if(td) td.textContent=money(t);
   });
+  flush();
   var el=document.getElementById('f-total'); if(el) el.textContent=money(tot);
   return tot;
 }
 function coletaItens(){
-  var arr=[];
-  document.querySelectorAll('#itab-body tr').forEach(function(tr){
-    var d=tr.querySelector('.i-d').value, u=tr.querySelector('.i-u').value, q=Number(tr.querySelector('.i-q').value)||0, v=Number(tr.querySelector('.i-v').value)||0;
-    if(d) arr.push({d:d,u:u,q:q,v:v,t:q*v});
+  var arr=[], curNum='', curNome='';
+  [].slice.call(document.querySelectorAll('#itab-body tr')).forEach(function(tr){
+    if(tr.classList.contains('lote-head')){ curNum=tr.getAttribute('data-num')||''; var ni=tr.querySelector('.lote-nome'); curNome=ni?ni.value.trim():''; return; }
+    var dEl=tr.querySelector('.i-d'); if(!dEl) return;
+    var d=dEl.value, u=(tr.querySelector('.i-u')||{}).value||'UN', q=Number((tr.querySelector('.i-q')||{}).value)||0, v=Number((tr.querySelector('.i-v')||{}).value)||0;
+    if(d) arr.push({d:d,u:u,q:q,v:v,t:q*v,lote:curNum,loteNome:curNome});
   });
   return arr;
 }
@@ -1582,12 +1884,13 @@ function gerarTR(){
   var subst=(document.getElementById('f-subst')||{}).value||'3';
   var reaj=pillVal('reaj')==='Sim'; var indice=(document.getElementById('f-indice')||{}).value||'';
 
-  var linhas = itens.map(function(it,i){ return '<tr><td>'+(i+1)+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>'+money(it.v)+'</td><td>'+money(it.t)+'</td></tr>'; }).join('');
-  if(!linhas) linhas='<tr><td colspan="6">Adicione itens na tabela.</td></tr>';
+  var porlote = itens.some(function(it){ return it.lote!=null && it.lote!==''; });
+  var nLotes = (function(){ var s={}; itens.forEach(function(it){ if(it.lote) s[it.lote]=1; }); return Object.keys(s).length; })();
+  var linhas = itens.length? docItemRows(itens) : '<tr><td colspan="6">Adicione itens na tabela.</td></tr>';
   var dotrows = dot.length? dot.map(function(d){return '<tr><td>'+esc(d.fi)+'</td><td>'+esc(d.fo)+'</td><td>'+esc(d.ac)+'</td><td>'+esc(d.dt)+'</td><td>'+esc(d.el)+'</td></tr>';}).join('') : '<tr><td colspan="5">Dotação a informar pelo setor.</td></tr>';
 
   var qualtecOn=pillVal('qualtec')==='Sim', qtProf=qualtecOn?coletaQual('qtp-body'):[], qtOper=qualtecOn?coletaQual('qto-body'):[];
-  PROC={numTR:num,processo:proc,secretaria:sec,secNome:secNome,secCargo:secCargo,modalidade:mod,criterio:crit,fj:fj,objeto:obj,justif:just,itens:itens,dot:dot,local:local,entrega:entrega,recprov:recprov,recdef:recdef,vig:vig,gar:gar,pag:pag,tot:tot,eng:pillVal('engenharia'),regime:pillVal('regime'),forma:forma,modbase:modbase,srp:srptr,convenio:convenio,unidades:unidades,horario:horario,subst:subst,reaj:reaj,indice:indice,qualtec:{exige:qualtecOn,prof:qtProf,oper:qtOper}};
+  PROC={numTR:num,processo:proc,secretaria:sec,secNome:secNome,secCargo:secCargo,modalidade:mod,criterio:crit,fj:fj,objeto:obj,justif:just,itens:itens,porlote:porlote,nLotes:nLotes,dot:dot,local:local,entrega:entrega,recprov:recprov,recdef:recdef,vig:vig,gar:gar,pag:pag,tot:tot,eng:pillVal('engenharia'),regime:pillVal('regime'),forma:forma,modbase:modbase,srp:srptr,convenio:convenio,unidades:unidades,horario:horario,subst:subst,reaj:reaj,indice:indice,qualtec:{exige:qualtecOn,prof:qtProf,oper:qtOper}};
   var H='';
   H+=docHeader('TERMO DE REFERÊNCIA', esc(ORG.nome.toUpperCase())+'/'+ORG.uf+'<br>PROCESSO ADMINISTRATIVO Nº '+esc(proc)+' | TR Nº '+esc(num)+'<br>'+esc(sec.toUpperCase()));
 
@@ -1597,6 +1900,7 @@ function gerarTR(){
   H+='<p>1.3. Estimam-se as quantidades e os valores a seguir:</p>';
   H+='<table><thead><tr><th>Item</th><th>Descrição</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Valor total</th></tr></thead><tbody>'+linhas+'</tbody></table>';
   H+='<p>1.4. O valor total estimado para a contratação é de '+money(tot)+'.</p>';
+  if(porlote && nLotes>0){ H+='<p>1.4.1. O objeto está dividido em '+nLotes+' (lote(s)), conforme a tabela acima. O julgamento e a adjudicação serão realizados por lote (grupo), sagrando-se vencedora, em cada lote, a proposta de menor preço global do respectivo lote, facultada a participação em um, em alguns ou em todos os lotes.</p>'; }
   H+='<p>1.5. Os preços unitários estimados foram obtidos por meio de pesquisa de mercado, servindo como referência para a elaboração das propostas, nos termos do art. 23 da Lei nº 14.133/2021 e da Instrução Normativa SEGES/ME nº 65/2021.</p>';
   H+='<p>1.6. As imagens e representações eventualmente constantes têm caráter meramente ilustrativo, prevalecendo as especificações técnicas aqui descritas, em conformidade com os princípios da isonomia, competitividade e eficiência previstos na Lei nº 14.133/2021.</p>';
 
@@ -1677,7 +1981,7 @@ function renderFormPrecos(){
   h+='<div class="field"><label>Objeto</label><input id="f-objeto" placeholder="ex.: Aquisição de material de limpeza"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Itens a pesquisar</div>';
   h+='<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">Um clique: o sistema busca o preço real de cada item no PNCP e preenche a coluna de valor. Depois clique em <b>Gerar documento</b> para sair o Mapa de Pesquisa de Preços, com as fontes.</div>';
@@ -1688,12 +1992,12 @@ function renderFormPrecos(){
 function gerarMapaPrecos(){
   var obj=((document.getElementById('f-objeto')||{}).value||'').trim();
   var sec=(document.getElementById('f-secretaria')||{}).value||'';
-  var itens=[]; document.querySelectorAll('#itab-body tr').forEach(function(tr){ var d=tr.querySelector('.i-d'); if(d&&d.value.trim()){ var q=Number(tr.querySelector('.i-q').value)||0; var v=Number(tr.querySelector('.i-v').value)||0; itens.push({d:d.value.trim(),u:(tr.querySelector('.i-u').value||'UN'),q:q,v:v,t:q*v}); } });
+  var itens=coletaItens();
   if(!itens.length) return '<div class="selo" style="border-color:#C62D45;background:#FBE9EC;color:#8E1B2E"><b>Adicione os itens primeiro.</b> Inclua ou importe os itens e clique em "Buscar preço oficial dos itens (PNCP)".</div>';
   var H=docHeader('MAPA DE PESQUISA DE PREÇOS', esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+(sec?'<br>Interessado: '+esc(sec):'')+(obj?'<br>Objeto: '+esc(obj):''));
   H+='<p>Pesquisa de preços realizada para estimativa do valor da contratação, nos termos do art. 23 da Lei nº 14.133/2021 e da IN SEGES/ME nº 65/2021. Cada preço de referência tem a sua fonte registrada e rastreável; o sistema não estima preço sem fonte.</p>';
   H+='<h2>1. ITENS E PREÇOS ESTIMADOS</h2>';
-  var tot=0; var linhas=itens.map(function(it,i){ tot+=it.t; return '<tr><td>'+(i+1)+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>'+money(it.v)+'</td><td>'+money(it.t)+'</td></tr>'; }).join('');
+  var tot=0; itens.forEach(function(it){ tot+=it.t; }); var linhas=docItemRows(itens);
   H+='<table class="itab"><thead><tr><th>Item</th><th>Descrição</th><th>Unid.</th><th>Qtd</th><th>Valor unit. estimado</th><th>Total</th></tr></thead><tbody>'+linhas+'</tbody></table>';
   H+='<p style="text-align:right;margin-top:8px"><b>Valor total estimado: '+money(tot)+'</b></p>';
   var fontes=memoriaPrecos(itens);
@@ -1923,7 +2227,7 @@ function gerarEdital(){
   var srp=pillVal('srp')==='Sim', modo=pillVal('emodo'), plat=pillVal('eplat');
   var ini=fmtD(document.getElementById('e-ini').value), fim=fmtDT(document.getElementById('e-fim').value), sessao=fmtDT(document.getElementById('e-sessao').value), rec=document.getElementById('e-recursos').value||'3';
   var modbase=PROC.modbase, forma=PROC.forma, crit=PROC.criterio, fj=PROC.fj, valor=money(PROC.tot);
-  var linhas=(PROC.itens||[]).map(function(it,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>'+money(it.v)+'</td><td>'+money(it.t)+'</td></tr>';}).join('')||'<tr><td colspan="6">Itens no TR.</td></tr>';
+  var linhas=docItemRows(PROC.itens||[]);
   var H=docHeader('EDITAL DE '+modbase+' '+forma.toUpperCase()+' Nº '+esc(num), esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+'<br>PROCESSO ADMINISTRATIVO Nº '+esc(PROC.processo||'')+' | INTERESSADO: '+esc(PROC.secretaria.toUpperCase()));
   H+='<table><tbody><tr><th>Tipo</th><td>'+esc(crit)+'</td></tr><tr><th>Julgamento</th><td>'+esc(crit)+' '+esc(fj).toLowerCase()+'</td></tr><tr><th>Modo de disputa</th><td>'+esc(modo)+'</td></tr><tr><th>Plataforma</th><td>'+esc(plat)+'</td></tr><tr><th>Início das propostas</th><td>'+ini+'</td></tr><tr><th>Término das propostas</th><td>'+fim+'</td></tr><tr><th>Sessão de disputa</th><td>'+sessao+'</td></tr><tr><th>Valor estimado</th><td>'+valor+'</td></tr></tbody></table>';
   H+='<p>O '+esc(ORG.nome)+', CNPJ nº '+ORG.cnpj+', torna público que realizará licitação na modalidade '+esc(modbase)+', sob a forma '+forma+', com critério de julgamento por '+esc(crit).toLowerCase()+' ('+esc(fj).toLowerCase()+'), nos termos da Lei Federal nº 14.133/2021 e da Lei Complementar nº 123/2006, conforme as condições deste Edital'+(srp?', sob o sistema de Registro de Preços':'')+'.</p>';
@@ -1992,7 +2296,7 @@ function anexosEdital(num, srp){
   H+=ax('MODELO DE PROPOSTA COMERCIAL');
   H+='<p>Apresentamos nossa proposta para fornecimento do objeto da presente licitação '+esc(ref)+', acatando todas as estipulações consignadas no respectivo Edital e seus anexos.</p>';
   H+='<p><b>Identificação da empresa:</b><br>Nome da empresa: ______________________ CNPJ nº: ________________<br>Endereço: ______________________ Telefone: __________ E-mail: __________________<br>Representante (nome, cargo, RG e CPF): ______________________<br>Dados bancários: __________ Agência: __________ Conta: __________</p>';
-  var ln=((PROC&&PROC.itens)||[]).map(function(it,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>__________</td><td>R$ __________</td><td>R$ __________</td></tr>';}).join('')||'<tr><td colspan="7">Itens conforme o Termo de Referência.</td></tr>';
+  var ln=docItemRows((PROC&&PROC.itens)||[], {proposta:true});
   H+='<table><thead><tr><th>Item</th><th>Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Marca</th><th>Valor unit.</th><th>Valor total</th></tr></thead><tbody>'+ln+'</tbody></table>';
   H+='<p>Declaramos que: a) estamos cientes e concordamos com as condições do Edital e seus anexos e com as cláusulas da minuta do Contrato, e que cumprimos plenamente os requisitos de habilitação; b) o prazo de validade da proposta é de 60 (sessenta) dias, contados da abertura do certame; c) nos preços apresentados já estão contemplados todos os impostos, taxas, encargos sociais, obrigações trabalhistas, previdenciárias, fiscais e comerciais, transporte e demais despesas que incidam sobre a contratação; d) o prazo de entrega é o constante no Termo de Referência.</p>'+declAssina();
   // ME/EPP regime de tributação (Anexo II do Edital 11)
@@ -2098,7 +2402,7 @@ function renderFormDispensa(){
   h+='<div class="field" style="margin:12px 0"><label>Objeto</label><input id="d-obj" placeholder="o que será adquirido"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens</div>';
   h+='<table class="itab"><thead><tr><th style="width:40%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
   h+='<div class="totbar"><span>Valor total</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">Os itens entram no ato de dispensa. O valor total é somado da tabela.</div><div id="precos-todos-res"></div><div id="precos-box"></div></div>';
@@ -2199,7 +2503,7 @@ function renderFormETP(){
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens (alimenta os incisos IV e VI)</div>';
   h+='<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (vários itens)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">As quantidades viram a memória de cálculo do inciso IV; o total e as fontes viram o inciso VI (art. 23).</div>';
@@ -2580,6 +2884,8 @@ function anFecharLic(){ ANALISE.curLic=null; renderAnalise(); }
 function anLoadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=function(){res();}; s.onerror=function(){rej(new Error('falha ao carregar '+src));}; document.head.appendChild(s); }); }
 var _anPdf=null,_anTess=null;
 function anEnsurePdf(){ if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib); if(!_anPdf){ _anPdf=anLoadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js').then(function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; return window.pdfjsLib; }); } return _anPdf; }
+var _anXlsx=null;
+function anEnsureXlsx(){ if(window.XLSX) return Promise.resolve(window.XLSX); if(!_anXlsx){ _anXlsx=anLoadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js').then(function(){ return window.XLSX; }); } return _anXlsx; }
 function anEnsureTess(){ if(window.Tesseract) return Promise.resolve(window.Tesseract); if(!_anTess){ _anTess=anLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js').then(function(){ return window.Tesseract; }); } return _anTess; }
 async function anLerPdf(buf, prog){
   var pdfjs=await anEnsurePdf();
