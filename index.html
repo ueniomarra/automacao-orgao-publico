@@ -60,7 +60,8 @@ h1,h2,h3,h4,.ff{font-family:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif}
 .chkbox{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--slate);cursor:pointer}
 .chkbox i{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--line);display:inline-block}
 .link{color:var(--royal);font-size:13px;font-weight:600;text-decoration:none}
-.btn-primary{width:100%;height:52px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--royal),var(--electric));color:#fff;font-family:'Plus Jakarta Sans';font-weight:700;font-size:15.5px;letter-spacing:.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 12px 26px rgba(37,99,235,.32);transition:.15s}
+.btn-primary{width:100%;min-height:52px;height:auto;padding:10px 16px;line-height:1.25;text-align:center;border:0;border-radius:12px;background:linear-gradient(135deg,var(--royal),var(--electric));color:#fff;font-family:'Plus Jakarta Sans';font-weight:700;font-size:15px;letter-spacing:.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 12px 26px rgba(37,99,235,.32);transition:.15s}
+.btn-primary .ic{flex:0 0 auto}
 .btn-primary:hover{transform:translateY(-1px);box-shadow:0 16px 32px rgba(37,99,235,.4)}
 .loginerr{display:none;align-items:center;gap:8px;background:var(--amber-soft);color:#8a5e08;border:1px solid #F0D9A8;border-radius:10px;padding:10px 13px;font-size:13px;font-weight:600;margin-bottom:14px}
 .foot-login{margin-top:24px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--slate-soft);display:flex;align-items:center;gap:8px}
@@ -382,6 +383,7 @@ td .modd{font-size:12px;color:var(--slate)}
 .modal-row span{display:block;font-size:12px;color:var(--slate);margin-top:2px}
 @media(max-width:1080px){.metrics,.bigstat{grid-template-columns:1fr 1fr}.grid2,.ws,.frow.c2,.frow.c3{grid-template-columns:1fr}.login{grid-template-columns:1fr}.login .left{display:none}}
 @media(max-width:900px){.app{grid-template-columns:1fr}.side{max-height:none;flex-direction:row;align-items:center;gap:6px;padding:10px 12px;overflow-x:auto;overflow-y:hidden;position:sticky;top:0;z-index:50}.side .brand{padding:0;border-bottom:none;margin:0 8px 0 0;flex:none}.side .brand img{max-width:96px}.side .navlabel{display:none}.side .botcard{display:none}.nav-i{flex:none;white-space:nowrap;padding:9px 11px;font-size:13px}.nav-i.on:before{display:none}.main{padding:16px 12px}.pagehead{flex-direction:column;align-items:flex-start;gap:10px}.itab{display:block;overflow-x:auto}}
+@media(max-width:900px){.topbar{height:auto;flex-wrap:wrap;padding:10px 12px;gap:8px}.muni{min-width:0}.muni b{font-size:14px}.tbright{flex-wrap:wrap;gap:7px;justify-content:flex-end}.search{order:9;flex:1 1 100%;min-width:0}.btn-save{padding:0 12px;font-size:13px;height:40px}.ws-actions{flex-wrap:wrap}.docpaper{overflow-x:auto}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
@@ -523,16 +525,18 @@ td .modd{font-size:12px;color:var(--slate)}
           <div class="passo-h">
             <span class="passo-badge"><svg class="ic" style="width:13px;height:13px;stroke:#3a2c06"><use href="#i-check"/></svg> COMECE AQUI</span>
             <h3>Como montar um processo, passo a passo</h3>
-            <p>Siga os 4 passos na ordem. Cada passo já vem preenchido com o anterior: você só confere e completa. Clique no passo para começar.</p>
+            <p>Siga o fluxo na ordem. Cada passo já vem preenchido com o anterior: você só confere e completa. Clique no passo para começar.</p>
           </div>
           <div class="fluxo4">
-            <div class="f4" onclick="abrirDoc('etp',false)"><div class="f4n">1</div><b>ETP</b><span>O estudo que justifica a compra. Comece por aqui.</span></div>
+            <div class="f4" onclick="abrirDoc('dfd',false)"><div class="f4n">1</div><b>DFD</b><span>O pedido da secretaria. O ponto de partida.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('tr',false)"><div class="f4n">2</div><b>Termo de Referência</b><span>Puxa tudo do ETP. Você só confere.</span></div>
+            <div class="f4" onclick="abrirDoc('etp',false)"><div class="f4n">2</div><b>ETP</b><span>O estudo que justifica a compra.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('edital',false)"><div class="f4n">3</div><b>Edital</b><span>Puxa do TR. Já sai com a minuta do contrato e as declarações anexas.</span></div>
+            <div class="f4" onclick="abrirDoc('tr',false)"><div class="f4n">3</div><b>Termo de Referência</b><span>Puxa tudo do ETP. Você só confere.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('contrato',false)"><div class="f4n">4</div><b>Contrato</b><span>Puxa do edital. Sai pronto para assinar.</span></div>
+            <div class="f4" onclick="abrirDoc('edital',false)"><div class="f4n">4</div><b>Edital</b><span>Puxa do TR. Já sai com a minuta e as declarações anexas.</span></div>
+            <div class="f4a">➜</div>
+            <div class="f4" onclick="abrirDoc('contrato',false)"><div class="f4n">5</div><b>Contrato</b><span>Puxa do edital. Sai pronto para assinar.</span></div>
           </div>
           <div class="passo-foot">Ao gerar cada documento, aparece um <b>botão azul</b> que leva direto ao próximo passo, já preenchido. A conferência final é sempre do servidor responsável.</div>
         </div>
@@ -559,15 +563,17 @@ td .modd{font-size:12px;color:var(--slate)}
       <div class="page" id="pg-licitacao">
         <div class="pagehead"><div><div class="hello">Módulo 1</div><h1>Licitações e Contratos</h1><p>Siga o fluxo da lei: o Termo de Referência é a base, e cada etapa puxa a anterior automaticamente. Nada redigitado.</p></div></div>
         <div class="flow">
-          <div class="flowstep"><div class="n">1</div><div><b>ETP</b><span>Estudo Técnico Preliminar</span></div></div>
+          <div class="flowstep"><div class="n">A</div><div><b>Demanda</b><span>DFD e portarias</span></div></div>
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
-          <div class="flowstep"><div class="n">2</div><div><b>TR</b><span>Termo de Referência</span></div></div>
+          <div class="flowstep"><div class="n">B</div><div><b>Preparação</b><span>ETP, riscos, TR, preços</span></div></div>
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
-          <div class="flowstep"><div class="n">3</div><div><b>Edital</b><span>com a Minuta e os anexos</span></div></div>
+          <div class="flowstep"><div class="n">C</div><div><b>Publicação</b><span>Edital e minuta</span></div></div>
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
-          <div class="flowstep"><div class="n">4</div><div><b>Contrato</b><span>dados do vencedor</span></div></div>
+          <div class="flowstep"><div class="n">D</div><div><b>Certame</b><span>homologação</span></div></div>
           <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
-          <div class="flowstep"><div class="n">5</div><div><b>Aditivo</b><span>se houver</span></div></div>
+          <div class="flowstep"><div class="n">E</div><div><b>Contrato</b><span>assinatura e ordem</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">F</div><div><b>Execução</b><span>aditivos, recebimento</span></div></div>
         </div>
         <div class="toolgrid" id="grid-licitacao"></div>
       </div>
