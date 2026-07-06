@@ -771,6 +771,7 @@ var TOOLS = {
     {tp:'apostilamento', ic:'i-contract', cls:'', t:'Apostilamento', d:'Reajuste previsto e ajustes que não exigem aditivo (art. 136).'},
     {tp:'sancao', ic:'i-alert', cls:'', t:'Notificação / Sanção', d:'Descumprimento, com contraditório (arts. 155 a 158).'},
     {tp:'extincao', ic:'i-contract', cls:'', t:'Extinção / Encerramento', d:'Distrato motivado ou encerramento da vigência (arts. 137 a 139).'},
+    {tp:'ocorrencia', ic:'i-file', cls:'', t:'Registro de Ocorrências', d:'Diário do fiscal sobre a execução (art. 117, §1º).'},
     {tp:'oficio', ic:'i-doc',  cls:'',     t:'Ofícios e Documentos', d:'Geração de ofícios e documentos no timbre do órgão.'},
     {tp:'processo', ic:'i-folder', cls:'navy', t:'Processos', d:'Agrupa o fluxo de uma mesma contratação.'},
   ],
@@ -798,7 +799,7 @@ function fillGrid(id,key){ document.getElementById(id).innerHTML = TOOLS[key].ma
 fillGrid('grid-licitacao','licitacao'); fillGrid('grid-compras','compras'); fillGrid('grid-ambiente','ambiente');
 
 // ---- abas da central de documentos (ligadas ao banco) ----
-var DOCTABS=[{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
+var DOCTABS=[{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Ocorrências',t:'ocorrencia'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
 var docTabAtual='edital';
 document.getElementById('doc-tabs').innerHTML = DOCTABS.map(function(d,i){
   return '<span class="secpill'+(i===0?' on':'')+'" data-t="'+d.t+'" onclick="docTab(this)">'+d.l+'</span>';
@@ -1008,6 +1009,7 @@ var DOCMETA = {
   apostilamento:{mod:'Licitações e Contratos',t:'Termo de Apostilamento',d:'Ajustes que não exigem aditivo, como reajuste previsto (art. 136).'},
   sancao:{mod:'Licitações e Contratos',t:'Notificação / Sanção',d:'Descumprimento contratual, com contraditório (arts. 155 a 158).'},
   extincao:{mod:'Licitações e Contratos',t:'Extinção / Encerramento',d:'Extinção motivada ou encerramento da vigência (arts. 137 a 139).'},
+  ocorrencia:{mod:'Licitações e Contratos',t:'Registro de Ocorrência da Fiscalização',d:'Anotação do fiscal sobre a execução do contrato (art. 117, §1º).'},
   aviso:{mod:'Compras',t:'Aviso de Dispensa Eletrônica',d:'Aviso de contratação direta em sítio oficial (art. 75, §3º).'},
   etp:{mod:'Licitações e Contratos',t:'Estudo Técnico Preliminar (ETP)',d:'Vem antes do TR (art. 18 da Lei 14.133/2021 e IN SEGES 58/2022).'},
   edital:{mod:'Licitações e Contratos',t:'Edital',d:'Nasce do TR, com a Minuta de Contrato como anexo.'},
@@ -1072,6 +1074,7 @@ function abrirDoc(tipo, consulta){
   else if(tipo==='apostilamento'){ renderFormApostilamento(); }
   else if(tipo==='sancao'){ renderFormSancao(); }
   else if(tipo==='extincao'){ renderFormExtincao(); }
+  else if(tipo==='ocorrencia'){ renderFormOcorrencia(); }
   else if(tipo==='aviso'){ renderFormAviso(); }
   else if(tipo==='etp'){ renderFormETP(); }
   else if(tipo==='edital'){ renderFormEdital(); }
@@ -1934,6 +1937,7 @@ async function gerarDoc(){
     else if(DOC.tipo==='apostilamento') html=gerarApostilamento();
     else if(DOC.tipo==='sancao') html=gerarSancao();
     else if(DOC.tipo==='extincao') html=gerarExtincao();
+    else if(DOC.tipo==='ocorrencia') html=gerarOcorrencia();
     else if(DOC.tipo==='aviso') html=gerarAviso();
     else if(DOC.tipo==='etp') html=gerarETP();
     else if(DOC.tipo==='edital') html=gerarEdital();
@@ -2135,7 +2139,7 @@ var ESTEIRA_FASES=[
   {id:'C', nome:'C. Publicação', tipos:['edital','minuta','publicacao','impugnacao']},
   {id:'D', nome:'D. Certame', tipos:['homologacao']},
   {id:'E', nome:'E. Contrato', tipos:['contrato','convocacao','ordem']},
-  {id:'F', nome:'F. Execução', tipos:['aditivo','apostilamento','recebimento','sancao','extincao']}
+  {id:'F', nome:'F. Execução', tipos:['aditivo','apostilamento','recebimento','ocorrencia','sancao','extincao']}
 ];
 function esteiraTipos(){ var t={}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
 function renderFormProcesso(){
@@ -2567,7 +2571,9 @@ function gerarDispensa(){
   H+='<p><b>Art. 2º.</b> Este ato entra em vigor na data de sua publicação.</p>';
   H+=memoriaPrecos(itens);
   H+='<div class="assina">'+esc(ORG.nome)+'/'+ORG.uf+', ____ de __________ de 2026.<br><br>____________________________________________<br>'+esc(ORG.ordenador)+'<br>'+esc(ORG.cargo)+'</div>';
-  H+='<div class="selo"><b>Minuta de dispensa gerada pelo sistema</b> no padrão da Lei nº 14.133/2021 (art. 75). Limite 2026: inciso I R$ 130.984,20; inciso II R$ 65.492,11. Sujeita à validação do setor e da autoridade competente.</div>';
+  H+='<h2>INSTRUÇÃO DO PROCESSO (art. 72 da Lei nº 14.133/2021)</h2>';
+  H+='<p>A contratação direta deve estar instruída com: I documento de formalização da demanda e, se o caso, estudo técnico preliminar, análise de riscos e termo de referência; II estimativa de despesa, pela regra do art. 23; III parecer jurídico e pareceres técnicos, quando exigidos; IV demonstração de compatibilidade com a lei orçamentária; V comprovação da habilitação e da regularidade fiscal, social e trabalhista; VI razão da escolha do contratado; VII justificativa de preço; VIII autorização da autoridade competente.</p>';
+  H+='<div class="selo"><b>Minuta de dispensa gerada pelo sistema</b> no padrão da Lei nº 14.133/2021 (arts. 72 e 75). Limite 2026: inciso I R$ 130.984,20; inciso II R$ 65.492,11. Sujeita à validação do setor e da autoridade competente.</div>';
   return H;
 }
 
@@ -2863,7 +2869,7 @@ function puxarDoDFD(){
   var ff=document.getElementById('ws-fields');
   if(ff && !document.getElementById('dfd-puxado')){ var d=document.createElement('div'); d.id='dfd-puxado'; d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px'; d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Objeto, necessidade, secretaria e itens vieram do DFD. Confira e complete o ETP.'; ff.insertBefore(d, ff.firstChild); }
 }
-var DOCFIELDS={portaria:['por-obj','por-sec','por-num'],publicacao:['pub-obj','pub-sec','pub-num'],impugnacao:['imp-obj','imp-sec','imp-num'],homologacao:['hom-obj','hom-sec','hom-num'],convocacao:['cvc-obj','cvc-sec','cvc-num'],ordem:['ord-obj','ord-sec','ord-num'],recebimento:['rec-obj','rec-sec','rec-num'],apostilamento:['apo-obj','apo-sec','apo-num'],sancao:['snc-obj','snc-sec','snc-num'],extincao:['ext-obj','ext-sec','ext-num'],aviso:['avs-obj','avs-sec','avs-num']};
+var DOCFIELDS={portaria:['por-obj','por-sec','por-num'],publicacao:['pub-obj','pub-sec','pub-num'],impugnacao:['imp-obj','imp-sec','imp-num'],homologacao:['hom-obj','hom-sec','hom-num'],convocacao:['cvc-obj','cvc-sec','cvc-num'],ordem:['ord-obj','ord-sec','ord-num'],recebimento:['rec-obj','rec-sec','rec-num'],apostilamento:['apo-obj','apo-sec','apo-num'],sancao:['snc-obj','snc-sec','snc-num'],extincao:['ext-obj','ext-sec','ext-num'],ocorrencia:['oco-obj','oco-sec','oco-num'],aviso:['avs-obj','avs-sec','avs-num']};
 // ==================== FATIA 2: ETAPAS C a F (Lei 14.133/2021) ====================
 // Helpers comuns
 function _v(id){ return ((document.getElementById(id)||{}).value||'').trim(); }
@@ -3183,6 +3189,30 @@ function gerarAviso(){
   H+='<p>Ficam abertas propostas por no mínimo '+esc(prazo)+' dias úteis'+((ini||fim)?' (de '+esc(ini||'____')+' a '+esc(fim||'____')+')':'')+', a serem apresentadas em '+esc(local||'sítio oficial do órgão')+'. Será selecionada a proposta mais vantajosa, observada a habilitação exigida.</p>';
   H+='<div class="assina" style="margin-top:20px">____________________________________________<br>'+esc(ORG.nome)+'/'+ORG.uf+'</div>';
   H+='<div class="selo"><b>Aviso gerado pelo sistema</b> (art. 75, §§ e Decreto nº 12.807/2025, valores 2026). A instrução completa da contratação direta segue o art. 72 (DFD, estimativa, pareceres, dotação, habilitação, razão da escolha, justificativa de preço, autorização). Sujeito à validação.</div>';
+  return H;
+}
+
+// -------- REGISTRO / DIÁRIO DE OCORRÊNCIAS DA FISCALIZAÇÃO (art. 117, §1º) --------
+function renderFormOcorrencia(){
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Registro de ocorrência</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do contrato</label><input id="oco-contrato" placeholder="ex.: 112/2026" onblur="preencheContratoOco()"></div><div class="field"><label>Secretaria / órgão</label><select id="oco-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Objeto do contrato</label><input id="oco-obj" placeholder="objeto"></div><div class="field"><label>Nº do registro</label><input id="oco-num" placeholder="ex.: 004/2026"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Data da ocorrência</label><input id="oco-data" placeholder="dd/mm/2026"></div><div class="field"><label>Fiscal responsável</label><input id="oco-fiscal" placeholder="nome do fiscal"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Ocorrência (fato observado na execução)</label><textarea id="oco-fato" style="min-height:60px" placeholder="o que foi verificado: entrega, medição, atraso, defeito, conformidade"></textarea></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Providência adotada / determinada</label><textarea id="oco-prov" style="min-height:48px" placeholder="notificação, ajuste, encaminhamento, atesto"></textarea></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function preencheContratoOco(){ var c=achaContrato(_v('oco-contrato')); if(c){ var e=document.getElementById('oco-obj'); if(e&&!e.value&&c.obj)e.value=c.obj; } }
+function gerarOcorrencia(){
+  var contrato=_v('oco-contrato'), sec=_v('oco-sec'), obj=_v('oco-obj'), num=_v('oco-num'), data=_v('oco-data'), fiscal=_v('oco-fiscal'), fato=_v('oco-fato'), prov=_v('oco-prov');
+  if(!fato){ toast('Descreva a ocorrência observada na execução.'); return false; }
+  var H=_cabPeca('REGISTRO DE OCORRÊNCIA DA FISCALIZAÇÃO'+(num?' Nº '+esc(num):''), sec, '');
+  H+='<p>Referente ao Contrato nº '+esc(contrato||'________')+(obj?', cujo objeto é '+esc(obj):'')+'. Registro lavrado pelo fiscal do contrato, nos termos do art. 117, §1º, da Lei nº 14.133/2021, que determina a anotação em registro próprio de todas as ocorrências relacionadas à execução.</p>';
+  H+='<p><b>Data:</b> '+esc(data||'____/____/____')+'</p>';
+  H+='<h2>OCORRÊNCIA</h2><p>'+esc(fato)+'</p>';
+  if(prov) H+='<h2>PROVIDÊNCIA</h2><p>'+esc(prov)+'</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>'+(fiscal?esc(fiscal):'Fiscal do Contrato')+'</div>';
+  H+='<div class="selo"><b>Registro gerado pelo sistema</b> (art. 117, §1º, da Lei nº 14.133/2021). O fiscal anota as ocorrências e determina o que for necessário à regularização; o que ultrapassar sua competência é comunicado à autoridade. Sujeito à validação.</div>';
   return H;
 }
 
@@ -3783,7 +3813,7 @@ function anGerarParecer(){
 function anExportParecer(){ var l=anLic(); if(!l||!l.parecerHtml) return; var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body style="font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#111">'+l.parecerHtml+'</body></html>'; var blob=new Blob(['﻿'+html],{type:'application/msword'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Parecer_'+String(l.razao||'licitante').replace(/[^a-z0-9]+/ig,'_')+'.doc'; document.body.appendChild(a); a.click(); setTimeout(function(){ try{URL.revokeObjectURL(a.href); a.remove();}catch(e){} },1500); toast('Parecer exportado em Word.'); }
 function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
-function nomeTipo(t){ var m={tr:'Termo de Referência',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',portaria:'Portaria',publicacao:'Extrato de Publicação',impugnacao:'Impugnação',homologacao:'Adjudicação e Homologação',convocacao:'Convocação',ordem:'Ordem de Fornecimento',recebimento:'Termo de Recebimento',apostilamento:'Apostilamento',sancao:'Notificação/Sanção',extincao:'Extinção/Encerramento',aviso:'Aviso de Dispensa',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
+function nomeTipo(t){ var m={tr:'Termo de Referência',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',portaria:'Portaria',publicacao:'Extrato de Publicação',impugnacao:'Impugnação',homologacao:'Adjudicação e Homologação',convocacao:'Convocação',ordem:'Ordem de Fornecimento',recebimento:'Termo de Recebimento',apostilamento:'Apostilamento',sancao:'Notificação/Sanção',extincao:'Extinção/Encerramento',ocorrencia:'Registro de Ocorrência',aviso:'Aviso de Dispensa',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
 async function registrarDoc(tipo, html){
   // Objeto/secretaria/processo corretos POR TIPO (evita um documento herdar dados de outro)
