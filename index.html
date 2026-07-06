@@ -761,11 +761,22 @@ var TOOLS = {
     {tp:'contrato', ic:'i-contract', cls:'gold', t:'Contrato', d:'Pós-certame. Insere só os dados do vencedor.'},
     {tp:'aditivo', ic:'i-contract', cls:'', t:'Aditivo', d:'Busca pelo nº do contrato. 6 tipos previstos em lei.'},
     {tp:'precos', ic:'i-money', cls:'gold', t:'Pesquisa de Preços', d:'Só fonte real e rastreável. O sistema nunca inventa preço.', lock:1},
+    {tp:'publicacao', ic:'i-file', cls:'', t:'Extrato / Publicação', d:'Extrato do edital para o diário e registro no PNCP (art. 54 e 55).'},
+    {tp:'impugnacao', ic:'i-alert', cls:'', t:'Esclarecimento / Impugnação', d:'Resposta no timbre do órgão (art. 164).'},
+    {tp:'homologacao', ic:'i-gavel', cls:'gold', t:'Adjudicação e Homologação', d:'Termo com o resultado do certame (art. 71).'},
+    {tp:'portaria', ic:'i-shield', cls:'', t:'Portarias de Designação', d:'Agente/pregoeiro (arts. 7 e 8) e fiscal do contrato (art. 117).'},
+    {tp:'convocacao', ic:'i-doc', cls:'', t:'Convocação do Vencedor', d:'Ofício para assinatura do contrato (art. 90).'},
+    {tp:'ordem', ic:'i-doc', cls:'', t:'Ordem de Fornecimento / Serviço', d:'Autoriza o início da execução, vinculada ao contrato.'},
+    {tp:'recebimento', ic:'i-contract', cls:'', t:'Termo de Recebimento', d:'Provisório e definitivo do objeto (art. 140).'},
+    {tp:'apostilamento', ic:'i-contract', cls:'', t:'Apostilamento', d:'Reajuste previsto e ajustes que não exigem aditivo (art. 136).'},
+    {tp:'sancao', ic:'i-alert', cls:'', t:'Notificação / Sanção', d:'Descumprimento, com contraditório (arts. 155 a 158).'},
+    {tp:'extincao', ic:'i-contract', cls:'', t:'Extinção / Encerramento', d:'Distrato motivado ou encerramento da vigência (arts. 137 a 139).'},
     {tp:'oficio', ic:'i-doc',  cls:'',     t:'Ofícios e Documentos', d:'Geração de ofícios e documentos no timbre do órgão.'},
     {tp:'processo', ic:'i-folder', cls:'navy', t:'Processos', d:'Agrupa o fluxo de uma mesma contratação.'},
   ],
   compras:[
     {tp:'dispensa', ic:'i-cart', cls:'',     t:'Dispensa', d:'Art. 75. Limite 2026 já travado: R$ 65.492,11 (inciso II).', lock:1},
+    {tp:'aviso', ic:'i-cart', cls:'gold', t:'Aviso de Dispensa Eletrônica', d:'Aviso em sítio oficial, mínimo 3 dias úteis (art. 75, §3º).'},
     {tp:'inexigibilidade', ic:'i-gavel',cls:'gold', t:'Inexigibilidade', d:'Art. 74. Para quando a competição é inviável.', lock:1},
   ],
   ambiente:[
@@ -787,7 +798,7 @@ function fillGrid(id,key){ document.getElementById(id).innerHTML = TOOLS[key].ma
 fillGrid('grid-licitacao','licitacao'); fillGrid('grid-compras','compras'); fillGrid('grid-ambiente','ambiente');
 
 // ---- abas da central de documentos (ligadas ao banco) ----
-var DOCTABS=[{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Ofícios',t:'oficio'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
+var DOCTABS=[{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
 var docTabAtual='edital';
 document.getElementById('doc-tabs').innerHTML = DOCTABS.map(function(d,i){
   return '<span class="secpill'+(i===0?' on':'')+'" data-t="'+d.t+'" onclick="docTab(this)">'+d.l+'</span>';
@@ -987,6 +998,17 @@ var DOCMETA = {
   riscos:{mod:'Licitações e Contratos',t:'Mapa de Análise de Riscos',d:'A análise dos riscos que podem comprometer a licitação e a execução do contrato (art. 18, X da Lei nº 14.133/2021).'},
   declaracao:{mod:'Licitações e Contratos',t:'Declaração de Adequação Orçamentária',d:'Declaração do ordenador de adequação orçamentária e financeira (art. 16 da LC nº 101/2000 e art. 18 da Lei nº 14.133/2021).'},
   despacho:{mod:'Licitações e Contratos',t:'Despacho',d:'Autorização de instrução, encaminhamento ao jurídico (art. 53) ou autorização de abertura da licitação.'},
+  portaria:{mod:'Licitações e Contratos',t:'Portaria de Designação',d:'Designa o agente de contratação/pregoeiro (arts. 7 e 8) ou o fiscal e gestor do contrato (art. 117).'},
+  publicacao:{mod:'Licitações e Contratos',t:'Extrato de Publicação',d:'Extrato do edital para o diário e registro do PNCP (arts. 54 e 55 da Lei nº 14.133/2021).'},
+  impugnacao:{mod:'Licitações e Contratos',t:'Esclarecimento / Impugnação',d:'Resposta a pedido de esclarecimento ou decisão de impugnação (art. 164).'},
+  homologacao:{mod:'Licitações e Contratos',t:'Adjudicação e Homologação',d:'Termo com o resultado do certame (art. 71 da Lei nº 14.133/2021).'},
+  convocacao:{mod:'Licitações e Contratos',t:'Convocação do Vencedor',d:'Ofício de convocação para assinatura do contrato (art. 90).'},
+  ordem:{mod:'Licitações e Contratos',t:'Ordem de Fornecimento / Serviço',d:'Autoriza o início da execução, vinculada ao contrato.'},
+  recebimento:{mod:'Licitações e Contratos',t:'Termo de Recebimento',d:'Recebimento provisório e definitivo do objeto (art. 140).'},
+  apostilamento:{mod:'Licitações e Contratos',t:'Termo de Apostilamento',d:'Ajustes que não exigem aditivo, como reajuste previsto (art. 136).'},
+  sancao:{mod:'Licitações e Contratos',t:'Notificação / Sanção',d:'Descumprimento contratual, com contraditório (arts. 155 a 158).'},
+  extincao:{mod:'Licitações e Contratos',t:'Extinção / Encerramento',d:'Extinção motivada ou encerramento da vigência (arts. 137 a 139).'},
+  aviso:{mod:'Compras',t:'Aviso de Dispensa Eletrônica',d:'Aviso de contratação direta em sítio oficial (art. 75, §3º).'},
   etp:{mod:'Licitações e Contratos',t:'Estudo Técnico Preliminar (ETP)',d:'Vem antes do TR (art. 18 da Lei 14.133/2021 e IN SEGES 58/2022).'},
   edital:{mod:'Licitações e Contratos',t:'Edital',d:'Nasce do TR, com a Minuta de Contrato como anexo.'},
   minuta:{mod:'Licitações e Contratos',t:'Minuta de Contrato',d:'Anexa ao edital. O nº do pregão entra sozinho em todos os pontos.'},
@@ -1040,6 +1062,17 @@ function abrirDoc(tipo, consulta){
   else if(tipo==='riscos'){ renderFormRiscos(); }
   else if(tipo==='declaracao'){ renderFormDeclaracao(); }
   else if(tipo==='despacho'){ renderFormDespacho(); }
+  else if(tipo==='portaria'){ renderFormPortaria(); }
+  else if(tipo==='publicacao'){ renderFormPublicacao(); }
+  else if(tipo==='impugnacao'){ renderFormImpugnacao(); }
+  else if(tipo==='homologacao'){ renderFormHomologacao(); }
+  else if(tipo==='convocacao'){ renderFormConvocacao(); }
+  else if(tipo==='ordem'){ renderFormOrdem(); }
+  else if(tipo==='recebimento'){ renderFormRecebimento(); }
+  else if(tipo==='apostilamento'){ renderFormApostilamento(); }
+  else if(tipo==='sancao'){ renderFormSancao(); }
+  else if(tipo==='extincao'){ renderFormExtincao(); }
+  else if(tipo==='aviso'){ renderFormAviso(); }
   else if(tipo==='etp'){ renderFormETP(); }
   else if(tipo==='edital'){ renderFormEdital(); }
   else if(tipo==='contrato'){ renderFormContrato(); }
@@ -1891,6 +1924,17 @@ async function gerarDoc(){
     else if(DOC.tipo==='riscos') html=gerarRiscos();
     else if(DOC.tipo==='declaracao') html=gerarDeclaracao();
     else if(DOC.tipo==='despacho') html=gerarDespacho();
+    else if(DOC.tipo==='portaria') html=gerarPortaria();
+    else if(DOC.tipo==='publicacao') html=gerarPublicacao();
+    else if(DOC.tipo==='impugnacao') html=gerarImpugnacao();
+    else if(DOC.tipo==='homologacao') html=gerarHomologacao();
+    else if(DOC.tipo==='convocacao') html=gerarConvocacao();
+    else if(DOC.tipo==='ordem') html=gerarOrdem();
+    else if(DOC.tipo==='recebimento') html=gerarRecebimento();
+    else if(DOC.tipo==='apostilamento') html=gerarApostilamento();
+    else if(DOC.tipo==='sancao') html=gerarSancao();
+    else if(DOC.tipo==='extincao') html=gerarExtincao();
+    else if(DOC.tipo==='aviso') html=gerarAviso();
     else if(DOC.tipo==='etp') html=gerarETP();
     else if(DOC.tipo==='edital') html=gerarEdital();
     else if(DOC.tipo==='contrato') html=gerarContrato();
@@ -2086,12 +2130,12 @@ function gerarGenerico(){
 // Processos: agrupa os documentos de uma mesma contratação (mesmo objeto) e baixa o processo inteiro.
 // Esteira das fases da Lei 14.133 (A demanda > B preparação > C publicação > D certame > E contrato > F execução).
 var ESTEIRA_FASES=[
-  {id:'A', nome:'A. Demanda', tipos:['dfd']},
+  {id:'A', nome:'A. Demanda', tipos:['dfd','portaria']},
   {id:'B', nome:'B. Preparação', tipos:['etp','riscos','precos','tr','declaracao','despacho']},
-  {id:'C', nome:'C. Publicação', tipos:['edital','minuta']},
-  {id:'D', nome:'D. Certame', tipos:[]},
-  {id:'E', nome:'E. Contrato', tipos:['contrato']},
-  {id:'F', nome:'F. Execução', tipos:['aditivo']}
+  {id:'C', nome:'C. Publicação', tipos:['edital','minuta','publicacao','impugnacao']},
+  {id:'D', nome:'D. Certame', tipos:['homologacao']},
+  {id:'E', nome:'E. Contrato', tipos:['contrato','convocacao','ordem']},
+  {id:'F', nome:'F. Execução', tipos:['aditivo','apostilamento','recebimento','sancao','extincao']}
 ];
 function esteiraTipos(){ var t={}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
 function renderFormProcesso(){
@@ -2819,6 +2863,329 @@ function puxarDoDFD(){
   var ff=document.getElementById('ws-fields');
   if(ff && !document.getElementById('dfd-puxado')){ var d=document.createElement('div'); d.id='dfd-puxado'; d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px'; d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Objeto, necessidade, secretaria e itens vieram do DFD. Confira e complete o ETP.'; ff.insertBefore(d, ff.firstChild); }
 }
+var DOCFIELDS={portaria:['por-obj','por-sec','por-num'],publicacao:['pub-obj','pub-sec','pub-num'],impugnacao:['imp-obj','imp-sec','imp-num'],homologacao:['hom-obj','hom-sec','hom-num'],convocacao:['cvc-obj','cvc-sec','cvc-num'],ordem:['ord-obj','ord-sec','ord-num'],recebimento:['rec-obj','rec-sec','rec-num'],apostilamento:['apo-obj','apo-sec','apo-num'],sancao:['snc-obj','snc-sec','snc-num'],extincao:['ext-obj','ext-sec','ext-num'],aviso:['avs-obj','avs-sec','avs-num']};
+// ==================== FATIA 2: ETAPAS C a F (Lei 14.133/2021) ====================
+// Helpers comuns
+function _v(id){ return ((document.getElementById(id)||{}).value||'').trim(); }
+function achaContrato(num){ num=(num||'').trim(); if(!num) return null; for(var i=0;i<(CONTRATOS||[]).length;i++){ if(String(CONTRATOS[i].n).trim()===num) return CONTRATOS[i]; } var ds=(DB.docs||[]).filter(function(d){return d.tipo==='contrato'&&String(d.numero).trim()===num;}); if(ds.length) return {n:num,obj:ds[0].objeto,sec:ds[0].secretaria,razao:''}; return null; }
+function diasUteis(ini,fim){ if(!ini||!fim) return null; var a=new Date(ini),b=new Date(fim); if(isNaN(a)||isNaN(b)||b<a) return null; var n=0,d=new Date(a); d.setDate(d.getDate()+1); while(d<=b){ var w=d.getDay(); if(w!==0&&w!==6) n++; d.setDate(d.getDate()+1);} return n; }
+function selSecId(id, val){ var s=document.getElementById(id); if(s&&val){ for(var i=0;i<s.options.length;i++){ if(s.options[i].value===val){ s.selectedIndex=i; break; } } } }
+function _cabPeca(titulo,sec,proc){ return docHeader(titulo, esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+'<br>'+esc((sec||'').toUpperCase())+(proc?'<br>PROCESSO ADMINISTRATIVO Nº '+esc(proc):'')); }
+function _assina(nome,cargo){ return '<div class="assina">'+esc(ORG.nome)+'/'+ORG.uf+', ____ de __________ de 2026.<br><br>____________________________________________<br>'+(nome?esc(nome):'Autoridade competente')+(cargo?'<br>'+esc(cargo):'')+'</div>'; }
+
+// -------- PORTARIA DE DESIGNAÇÃO (art. 7º, 8º agente/pregoeiro; art. 117 fiscal/gestor) --------
+function renderFormPortaria(){
+  var ctxSec=ctxProcSec(), ctxObj=ctxProcObj();
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo de portaria</div><div class="field">'+pills('portipo',['Agente de contratação e equipe de apoio','Fiscal e gestor do contrato'],'Agente de contratação e equipe de apoio')+'</div><div class="hint" style="margin-top:8px">Agente/pregoeiro conduz a licitação (arts. 7º e 8º). Fiscal e gestor acompanham a execução do contrato (art. 117).</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº da portaria</label><input id="por-num" placeholder="ex.: 045/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="por-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Objeto / finalidade</label><input id="por-obj" value="'+esc(ctxObj)+'" placeholder="a que se refere a designação"></div><div class="field"><label>Processo administrativo nº (opcional)</label><input id="por-proc" placeholder="ex.: 57/2026"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Autoridade que assina</label><input id="por-aut" value="'+esc(ORG.ordenador||'')+'"></div><div class="field"><label>Cargo</label><input id="por-cargo" value="'+esc(ORG.cargo||'')+'"></div></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-shield"/></svg> Designados</div>';
+  h+='<div class="frow c3"><div class="field"><label>Nome do principal (agente ou fiscal)</label><input id="por-nome" placeholder="nome"></div><div class="field"><label>Matrícula</label><input id="por-mat" placeholder="matrícula"></div><div class="field"><label>Cargo</label><input id="por-pcargo" placeholder="cargo"></div></div>';
+  h+='<div class="field" style="margin-top:10px"><label>Equipe de apoio / substituto (um por linha, opcional)</label><textarea id="por-equipe" style="min-height:52px" placeholder="nome, matrícula e cargo de cada membro"></textarea></div>';
+  h+='<div class="field" style="margin-top:10px"><label>Nº do contrato (só para fiscal/gestor)</label><input id="por-contrato" placeholder="ex.: 112/2026"></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function gerarPortaria(){
+  var tipo=pillVal('portipo')||'Agente de contratação e equipe de apoio';
+  var num=_v('por-num'), sec=_v('por-sec'), obj=_v('por-obj'), proc=_v('por-proc'), aut=_v('por-aut'), cargo=_v('por-cargo');
+  var nome=_v('por-nome'), mat=_v('por-mat'), pcargo=_v('por-pcargo'), equipe=_v('por-equipe'), contrato=_v('por-contrato');
+  if(!nome){ toast('Informe o nome do agente ou fiscal a ser designado.'); return false; }
+  var fiscal=/Fiscal/.test(tipo);
+  var H=_cabPeca('PORTARIA'+(num?' Nº '+esc(num):''), sec, proc);
+  H+='<p>O(A) '+(cargo?esc(cargo):'titular do órgão')+', no uso de suas atribuições legais e nos termos da Lei nº 14.133/2021, RESOLVE:</p>';
+  if(fiscal){
+    H+='<h2>Art. 1º</h2><p>Designar '+esc(nome)+(mat?', matrícula '+esc(mat):'')+(pcargo?', '+esc(pcargo):'')+', para exercer a fiscalização'+(contrato?' do Contrato nº '+esc(contrato):' do contrato')+(obj?', referente a '+esc(obj):'')+', com as atribuições do art. 117 da Lei nº 14.133/2021, incumbindo-lhe anotar em registro próprio as ocorrências relacionadas à execução.</p>';
+    if(equipe) H+='<h2>Art. 2º</h2><p>Designar como gestor e/ou substituto(s): '+esc(equipe).replace(/\n/g,'; ')+'.</p>';
+    H+='<h2>Art. '+(equipe?'3º':'2º')+'</h2><p>Esta portaria entra em vigor na data de sua publicação.</p>';
+  } else {
+    H+='<h2>Art. 1º</h2><p>Designar '+esc(nome)+(mat?', matrícula '+esc(mat):'')+(pcargo?', '+esc(pcargo):'')+', como agente de contratação (pregoeiro, quando pregão) responsável pela condução do procedimento'+(obj?' referente a '+esc(obj):'')+', nos termos dos arts. 7º e 8º da Lei nº 14.133/2021.</p>';
+    if(equipe) H+='<h2>Art. 2º</h2><p>Designar a equipe de apoio: '+esc(equipe).replace(/\n/g,'; ')+'.</p>';
+    H+='<h2>Art. '+(equipe?'3º':'2º')+'</h2><p>Esta portaria entra em vigor na data de sua publicação.</p>';
+  }
+  H+=_assina(aut,cargo);
+  H+='<div class="selo"><b>Portaria gerada pelo sistema</b> (arts. 7º, 8º e 117 da Lei nº 14.133/2021). Ato da autoridade competente; a designação recai preferencialmente sobre servidor efetivo, sem conflito de interesse. Sujeita a assinatura e publicação.</div>';
+  return H;
+}
+
+// -------- EXTRATO / PUBLICAÇÃO (art. 54 publicação; art. 55 prazos) --------
+function renderFormPublicacao(){
+  var ctxObj=ctxProcObj(), ctxSec=ctxProcSec();
+  var mod=(PROC&&PROC.modbase)?(PROC.modbase+(PROC.forma?' '+PROC.forma:'')):'';
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo</div><div class="field">'+pills('pubtipo',['Extrato de publicação','Aviso de republicação (errata)'],'Extrato de publicação')+'</div><div class="hint" style="margin-top:8px">O edital é publicado no PNCP (inteiro teor) e o extrato no Diário Oficial e em jornal (art. 54). Alteração que afete a proposta reabre o prazo (art. 55, §1º).</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados do certame</div>';
+  h+='<div class="frow c2"><div class="field"><label>Modalidade</label><input id="pub-mod" value="'+esc(mod)+'" placeholder="ex.: Pregão Eletrônico"></div><div class="field"><label>Nº do certame</label><input id="pub-num" value="'+esc((PROC&&PROC.numTR)||'')+'" placeholder="ex.: 15/2026"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="pub-obj" value="'+esc(ctxObj)+'" placeholder="objeto da licitação"></div>';
+  h+='<input type="hidden" id="pub-sec" value="'+esc(ctxSec)+'">';
+  h+='<div class="field" style="margin-top:12px"><label>Critério de julgamento</label><input id="pub-crit" value="'+esc((PROC&&PROC.criterio)||'')+'" placeholder="ex.: menor preço"></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-money"/></svg> Publicação e prazos (art. 55)</div>';
+  h+='<div class="frow c2"><div class="field"><label>Data da publicação (PNCP/diário)</label><input type="date" id="pub-dtpub"></div><div class="field"><label>Data da sessão de abertura</label><input type="date" id="pub-dtses"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Nº de controle PNCP</label><input id="pub-pncp" placeholder="ex.: 00000000-0-000000/2026"></div><div class="field"><label>Plataforma</label><input id="pub-plat" value="'+esc((PROC&&PROC.plataforma)||'BNC')+'"></div></div>';
+  h+='<div id="pub-prazoaviso" class="hint" style="margin-top:8px"></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function gerarPublicacao(){
+  var tipo=pillVal('pubtipo')||'Extrato de publicação';
+  var mod=_v('pub-mod'), num=_v('pub-num'), obj=_v('pub-obj'), sec=_v('pub-sec'), crit=_v('pub-crit');
+  var dtpub=_v('pub-dtpub'), dtses=_v('pub-dtses'), pncp=_v('pub-pncp'), plat=_v('pub-plat');
+  if(!obj){ toast('Informe o objeto da licitação.'); return false; }
+  var errata=/errata|republica/i.test(tipo);
+  var H=_cabPeca(errata?'AVISO DE REPUBLICAÇÃO':'EXTRATO DE PUBLICAÇÃO', sec, '');
+  var fmt=function(d){ if(!d) return '____/____/____'; var p=d.split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):d; };
+  H+='<p><b>Órgão:</b> '+esc(ORG.nome)+'/'+ORG.uf+'<br><b>Modalidade:</b> '+esc(mod||'a definir')+' Nº '+esc(num||'____/2026')+'<br><b>Objeto:</b> '+esc(obj)+'<br><b>Critério de julgamento:</b> '+esc(crit||'a definir')+'</p>';
+  if(errata){ H+='<p>Comunica-se a REPUBLICAÇÃO do edital em epígrafe, em razão de alteração que afeta a formulação das propostas. Fica REABERTO o prazo legal, nos termos do art. 55, §1º, da Lei nº 14.133/2021.</p>'; }
+  H+='<p><b>Sessão de abertura:</b> '+fmt(dtses)+(plat?' na plataforma '+esc(plat):'')+'.<br><b>Publicação:</b> '+fmt(dtpub)+(pncp?'. Nº de controle PNCP: '+esc(pncp):'')+'.</p>';
+  H+='<p>O inteiro teor do edital e seus anexos encontra-se disponível no Portal Nacional de Contratações Públicas (PNCP) e no sítio oficial do órgão, na forma do art. 54 da Lei nº 14.133/2021.</p>';
+  var du=diasUteis(dtpub,dtses);
+  if(du!=null){
+    var minimo = /Preg/i.test(mod)?8:(/Concorr/i.test(mod)?10:8);
+    var alerta = du<minimo;
+    H+='<p><b>Prazo até a sessão:</b> '+du+' dias úteis a contar da divulgação. '+(alerta?'ATENÇÃO: abaixo do mínimo de referência do art. 55 para esta modalidade ('+minimo+' dias úteis); confira o inciso aplicável e eventuais feriados antes de publicar.':'Compatível com o mínimo de referência do art. 55 ('+minimo+' dias úteis); confira o inciso aplicável e feriados.')+'</p>';
+  }
+  H+='<div class="selo"><b>Extrato gerado pelo sistema</b> (arts. 54 e 55 da Lei nº 14.133/2021). Os prazos correm da divulgação; a contagem em dias úteis e os feriados devem ser conferidos pelo setor. Sujeito à validação.</div>';
+  return H;
+}
+
+// -------- RESPOSTA A ESCLARECIMENTO / IMPUGNAÇÃO (art. 164) --------
+function renderFormImpugnacao(){
+  var ctxObj=ctxProcObj(), ctxSec=ctxProcSec();
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo de manifestação</div><div class="field">'+pills('imptipo',['Resposta a esclarecimento','Decisão de impugnação'],'Decisão de impugnação')+'</div><div class="hint" style="margin-top:8px">Cabimento até 3 dias úteis antes da abertura; resposta em até 3 dias úteis, limitada ao último dia útil anterior à sessão (art. 164).</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do certame</label><input id="imp-num" value="'+esc((PROC&&PROC.numTR)||'')+'" placeholder="ex.: 15/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="imp-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="imp-obj" value="'+esc(ctxObj)+'"></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Requerente</label><input id="imp-req" placeholder="quem pediu"></div><div class="field"><label>Data do pedido</label><input id="imp-data" placeholder="dd/mm/2026"></div></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Teor e decisão</div>';
+  h+='<div class="field"><label>Resumo do pedido</label><textarea id="imp-teor" style="min-height:56px" placeholder="o que foi questionado"></textarea></div>';
+  h+='<div class="field" style="margin-top:10px"><label>Decisão</label>'+pills('impdec',['Esclarecido','Improcedente','Procedente (altera o edital)'],'Improcedente')+'</div>';
+  h+='<div class="field" style="margin-top:10px"><label>Fundamentação da resposta</label><textarea id="imp-fund" style="min-height:70px" placeholder="razões da decisão"></textarea></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function gerarImpugnacao(){
+  var tipo=pillVal('imptipo')||'Decisão de impugnação', dec=pillVal('impdec')||'Improcedente';
+  var num=_v('imp-num'), sec=_v('imp-sec'), obj=_v('imp-obj'), req=_v('imp-req'), data=_v('imp-data'), teor=_v('imp-teor'), fund=_v('imp-fund');
+  if(!teor){ toast('Descreva o resumo do pedido de esclarecimento ou impugnação.'); return false; }
+  var titulo=/esclarec/i.test(tipo)?'RESPOSTA A PEDIDO DE ESCLARECIMENTO':'DECISÃO DE IMPUGNAÇÃO AO EDITAL';
+  var H=_cabPeca(titulo, sec, '');
+  H+='<p><b>Certame:</b> '+esc(num||'____/2026')+(obj?' &#8212; '+esc(obj):'')+'<br><b>Requerente:</b> '+esc(req||'____________')+(data?'<br><b>Data do pedido:</b> '+esc(data):'')+'</p>';
+  H+='<h2>1. DO PEDIDO</h2><p>'+esc(teor)+'</p>';
+  H+='<h2>2. DA ANÁLISE E DECISÃO</h2><p>'+(fund?esc(fund):'Analisado o pedido pelo agente de contratação.')+'</p>';
+  var frase = dec==='Esclarecido' ? 'Presta-se o esclarecimento nos termos acima, mantidas as condições do edital.' : (dec==='Procedente (altera o edital)' ? 'Decide-se pela PROCEDÊNCIA da impugnação, com a consequente alteração do edital. Havendo repercussão na formulação das propostas, o prazo será reaberto e o edital republicado, nos termos do art. 55, §1º, da Lei nº 14.133/2021.' : 'Decide-se pela IMPROCEDÊNCIA da impugnação, mantendo-se o edital nos seus termos.');
+  H+='<p>'+frase+' Tudo na forma do art. 164 da Lei nº 14.133/2021.</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>Agente de Contratação</div>';
+  H+='<div class="selo"><b>Documento gerado pelo sistema</b> (art. 164 da Lei nº 14.133/2021). A resposta é do agente de contratação; prazos em dias úteis, a conferir pelo setor. Sujeito à validação.</div>';
+  return H;
+}
+
+// -------- TERMO DE ADJUDICAÇÃO E HOMOLOGAÇÃO (art. 71) --------
+function renderFormHomologacao(){
+  var ctxObj=ctxProcObj(), ctxSec=ctxProcSec();
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do certame</label><input id="hom-num" value="'+esc((PROC&&PROC.numTR)||'')+'" placeholder="ex.: 15/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="hom-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="hom-obj" value="'+esc(ctxObj)+'"></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Autoridade que homologa</label><input id="hom-aut" value="'+esc(ORG.ordenador||'')+'"></div><div class="field"><label>Cargo</label><input id="hom-cargo" value="'+esc(ORG.cargo||'')+'"></div></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Resultado (vencedor por item ou lote)</div>';
+  h+='<table class="itab"><thead><tr><th>Item / lote</th><th>Vencedor</th><th>CNPJ</th><th>Valor</th><th></th></tr></thead><tbody id="hom-body"></tbody></table>';
+  h+='<button class="addline" type="button" onclick="addVencedor()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar vencedor</button></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+  if(!document.querySelectorAll('#hom-body tr').length) addVencedor();
+}
+function addVencedor(l,v,c,val){ var tb=document.getElementById('hom-body'); if(!tb) return; var tr=document.createElement('tr'); tr.innerHTML='<td><input class="hv-l" style="width:80px" value="'+esc(l||'')+'" placeholder="1"></td><td><input class="hv-v" value="'+esc(v||'')+'" placeholder="razão social"></td><td><input class="hv-c" style="width:130px" value="'+esc(c||'')+'" placeholder="CNPJ"></td><td><input class="hv-val" style="width:110px" value="'+esc(val||'')+'" placeholder="R$"></td><td><button class="del" onclick="this.closest(\'tr\').remove()">&#10005;</button></td>'; tb.appendChild(tr); }
+function gerarHomologacao(){
+  var num=_v('hom-num'), sec=_v('hom-sec'), obj=_v('hom-obj'), aut=_v('hom-aut'), cargo=_v('hom-cargo');
+  if(!obj){ toast('Informe o objeto do certame.'); return false; }
+  var venc=[]; document.querySelectorAll('#hom-body tr').forEach(function(tr){ var v=(tr.querySelector('.hv-v')||{}).value||''; if(v.trim()) venc.push({l:(tr.querySelector('.hv-l')||{}).value||'',v:v,c:(tr.querySelector('.hv-c')||{}).value||'',val:(tr.querySelector('.hv-val')||{}).value||''}); });
+  if(!venc.length){ toast('Adicione ao menos um vencedor.'); return false; }
+  var H=_cabPeca('TERMO DE ADJUDICAÇÃO E HOMOLOGAÇÃO', sec, '');
+  H+='<p>A autoridade superior, exauridas as fases de julgamento, habilitação e recursal do certame '+esc(num||'____/2026')+', que tem por objeto '+esc(obj)+', e verificada a regularidade do procedimento, ADJUDICA o objeto e HOMOLOGA o resultado, nos termos do art. 71, inciso IV, da Lei nº 14.133/2021, em favor de:</p>';
+  H+='<table><thead><tr><th>Item / lote</th><th>Vencedor</th><th>CNPJ</th><th>Valor</th></tr></thead><tbody>'+venc.map(function(x){return '<tr><td>'+esc(x.l)+'</td><td>'+esc(x.v)+'</td><td>'+esc(x.c)+'</td><td>'+esc(x.val)+'</td></tr>';}).join('')+'</tbody></table>';
+  H+='<p>Publique-se o resultado no Portal Nacional de Contratações Públicas (PNCP), na forma do art. 54, §3º, da Lei nº 14.133/2021, e convoque-se o(s) adjudicatário(s) para a assinatura do contrato.</p>';
+  H+=_assina(aut,cargo);
+  H+='<div class="selo"><b>Termo gerado pelo sistema</b> (art. 71, IV, da Lei nº 14.133/2021). Ato da autoridade superior; a adjudicação e a homologação pressupõem a regularidade das fases anteriores. Sujeito à validação e assinatura.</div>';
+  return H;
+}
+
+// -------- OFÍCIO DE CONVOCAÇÃO DO VENCEDOR (art. 90) --------
+function renderFormConvocacao(){
+  var ctxObj=ctxProcObj(), ctxSec=ctxProcSec();
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Convocação para assinatura</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do ofício</label><input id="cvc-num" placeholder="ex.: 120/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="cvc-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="cvc-obj" value="'+esc(ctxObj)+'"></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Empresa vencedora</label><input id="cvc-emp" placeholder="razão social"></div><div class="field"><label>CNPJ</label><input id="cvc-cnpj" placeholder="CNPJ"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Certame nº</label><input id="cvc-cert" value="'+esc((PROC&&PROC.numTR)||'')+'"></div><div class="field"><label>Prazo para assinar (dias úteis)</label><input id="cvc-prazo" value="5"></div></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function gerarConvocacao(){
+  var num=_v('cvc-num'), sec=_v('cvc-sec'), obj=_v('cvc-obj'), emp=_v('cvc-emp'), cnpj=_v('cvc-cnpj'), cert=_v('cvc-cert'), prazo=_v('cvc-prazo')||'5';
+  if(!emp){ toast('Informe a empresa vencedora a ser convocada.'); return false; }
+  var H=_cabPeca('OFÍCIO DE CONVOCAÇÃO'+(num?' Nº '+esc(num):''), sec, '');
+  H+='<p>À empresa <b>'+esc(emp)+'</b>'+(cnpj?', CNPJ '+esc(cnpj):'')+'.</p>';
+  H+='<p>Referente ao certame '+esc(cert||'____/2026')+', cujo objeto é '+esc(obj||'________')+', e considerando a adjudicação e homologação do resultado em favor dessa empresa, fica Vossa Senhoria CONVOCADA para, no prazo de '+esc(prazo)+' dias úteis, comparecer para a assinatura do contrato, nos termos do art. 90 da Lei nº 14.133/2021.</p>';
+  H+='<p>O não comparecimento injustificado no prazo enseja a convocação dos licitantes remanescentes, na ordem de classificação, e a aplicação das sanções cabíveis, sem prejuízo do prazo poder ser prorrogado uma vez, a critério da Administração.</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>'+esc(ORG.nome)+'/'+ORG.uf+'</div>';
+  H+='<div class="selo"><b>Ofício gerado pelo sistema</b> (art. 90 da Lei nº 14.133/2021). Prazos em dias úteis, a conferir pelo setor. Sujeito à validação.</div>';
+  return H;
+}
+
+// -------- ORDEM DE FORNECIMENTO / SERVIÇO (operacional, vinculada ao contrato) --------
+function renderFormOrdem(){
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo</div><div class="field">'+pills('ordtipo',['Ordem de Fornecimento','Ordem de Serviço'],'Ordem de Fornecimento')+'</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº da ordem</label><input id="ord-num" placeholder="ex.: 030/2026"></div><div class="field"><label>Nº do contrato</label><input id="ord-contrato" placeholder="ex.: 112/2026" onblur="preencheContratoOrd()"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Secretaria / órgão</label><select id="ord-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div><div class="field"><label>Contratada</label><input id="ord-emp" placeholder="razão social"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto / itens desta ordem</label><textarea id="ord-obj" style="min-height:56px" placeholder="o que deve ser fornecido ou executado nesta ordem"></textarea></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Prazo de entrega/execução</label><input id="ord-prazo" placeholder="ex.: 10 dias"></div><div class="field"><label>Local</label><input id="ord-local" placeholder="onde entregar/executar"></div></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function preencheContratoOrd(){ var c=achaContrato(_v('ord-contrato')); if(c){ if(!_v('ord-emp')&&c.razao){var e=document.getElementById('ord-emp');if(e)e.value=c.razao;} } }
+function gerarOrdem(){
+  var tipo=pillVal('ordtipo')||'Ordem de Fornecimento';
+  var num=_v('ord-num'), contrato=_v('ord-contrato'), sec=_v('ord-sec'), emp=_v('ord-emp'), obj=_v('ord-obj'), prazo=_v('ord-prazo'), local=_v('ord-local');
+  if(!obj){ toast('Descreva o objeto ou os itens desta ordem.'); return false; }
+  var H=_cabPeca(tipo.toUpperCase()+(num?' Nº '+esc(num):''), sec, '');
+  H+='<p>Referente ao Contrato Administrativo nº '+esc(contrato||'________')+', firmado com '+esc(emp||'a contratada')+', AUTORIZA-SE o início do '+(/Serviço/.test(tipo)?'serviço':'fornecimento')+' a seguir, nos termos do respectivo contrato e do Termo de Referência:</p>';
+  H+='<h2>OBJETO DESTA ORDEM</h2><p>'+esc(obj)+'</p>';
+  H+='<p><b>Prazo:</b> '+esc(prazo||'conforme o contrato')+'.'+(local?'<br><b>Local:</b> '+esc(local):'')+'</p>';
+  H+='<p>A execução observará as condições, os prazos e as obrigações pactuadas no contrato, sob acompanhamento do fiscal designado.</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>Gestor / Fiscal do Contrato</div>';
+  H+='<div class="selo"><b>Ordem gerada pelo sistema.</b> Documento operacional vinculado ao contrato; a vigência corre do contrato e a execução, desta ordem. Sujeito à validação.</div>';
+  return H;
+}
+
+// -------- TERMO DE RECEBIMENTO PROVISÓRIO / DEFINITIVO (art. 140) --------
+function renderFormRecebimento(){
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo de recebimento</div><div class="field">'+pills('rectipo',['Provisório','Definitivo'],'Provisório')+'</div><div class="hint" style="margin-top:8px">O recebimento provisório é do fiscal; o definitivo é de servidor ou comissão designada (art. 140).</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do contrato</label><input id="rec-contrato" placeholder="ex.: 112/2026" onblur="preencheContratoRec()"></div><div class="field"><label>Secretaria / órgão</label><select id="rec-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="rec-obj" placeholder="o que foi entregue/executado"></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Contratada</label><input id="rec-emp" placeholder="razão social"></div><div class="field"><label>Nº do recebimento</label><input id="rec-num" placeholder="ex.: 010/2026"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Responsável pelo recebimento</label><input id="rec-resp" placeholder="fiscal (provisório) ou comissão/servidor (definitivo)"></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Observações (opcional)</label><textarea id="rec-obs" style="min-height:48px" placeholder="conformidades, ressalvas, medições"></textarea></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function preencheContratoRec(){ var c=achaContrato(_v('rec-contrato')); if(c){ var e=document.getElementById('rec-obj'); if(e&&!e.value&&c.obj)e.value=c.obj; var g=document.getElementById('rec-emp'); if(g&&!g.value&&c.razao)g.value=c.razao; } }
+function gerarRecebimento(){
+  var tipo=pillVal('rectipo')||'Provisório';
+  var contrato=_v('rec-contrato'), sec=_v('rec-sec'), obj=_v('rec-obj'), emp=_v('rec-emp'), num=_v('rec-num'), resp=_v('rec-resp'), obs=_v('rec-obs');
+  if(!obj){ toast('Informe o objeto recebido.'); return false; }
+  var def=/Defin/.test(tipo);
+  var H=_cabPeca('TERMO DE RECEBIMENTO '+(def?'DEFINITIVO':'PROVISÓRIO')+(num?' Nº '+esc(num):''), sec, '');
+  H+='<p>Referente ao Contrato nº '+esc(contrato||'________')+', firmado com '+esc(emp||'a contratada')+', cujo objeto é '+esc(obj)+', ATESTA-SE o recebimento '+(def?'DEFINITIVO':'PROVISÓRIO')+' do objeto, nos termos do art. 140 da Lei nº 14.133/2021.</p>';
+  if(def){ H+='<p>Verificada a conformidade do objeto com as especificações e as condições contratuais, dá-se por recebido em definitivo, para efeito de liquidação e pagamento na ordem cronológica (art. 141 da Lei nº 14.133/2021).</p>'; }
+  else { H+='<p>O objeto é recebido em caráter provisório, para posterior verificação da conformidade com as especificações e o subsequente recebimento definitivo, no prazo previsto no Termo de Referência.</p>'; }
+  if(obs) H+='<p><b>Observações:</b> '+esc(obs)+'</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>'+(resp?esc(resp):(def?'Servidor ou comissão designada':'Fiscal do contrato'))+'</div>';
+  H+='<div class="selo"><b>Termo gerado pelo sistema</b> (art. 140 da Lei nº 14.133/2021). O recebimento não exclui a responsabilidade da contratada pela qualidade do objeto. Sujeito à validação.</div>';
+  return H;
+}
+
+// -------- TERMO DE APOSTILAMENTO (art. 136, distinto de aditivo) --------
+function renderFormApostilamento(){
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Apostilamento (art. 136)</div><div class="hint" style="margin-bottom:8px">O apostilamento NÃO exige termo aditivo: serve para reajuste JÁ previsto no contrato, atualizações financeiras, empenho de dotações e alteração de razão social. Mudança que dependa de acordo (revisão por fato novo) é ADITIVO, não apostila.</div>';
+  h+='<div class="field">'+pills('apotipo',['Reajuste previsto no contrato','Atualização financeira','Empenho de dotação','Alteração de razão social / dados'],'Reajuste previsto no contrato')+'</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do contrato</label><input id="apo-contrato" placeholder="ex.: 112/2026" onblur="preencheContratoApo()"></div><div class="field"><label>Nº da apostila</label><input id="apo-num" placeholder="ex.: 1ª"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Secretaria / órgão</label><select id="apo-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div><div class="field"><label>Contratada</label><input id="apo-emp" placeholder="razão social"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto do contrato</label><input id="apo-obj" placeholder="objeto"></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Descrição da apostila (índice, percentual, novo valor, dotação ou nova razão social)</label><textarea id="apo-desc" style="min-height:60px" placeholder="ex.: reajuste pelo IPCA de X%, novo valor mensal R$ ..."></textarea></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function preencheContratoApo(){ var c=achaContrato(_v('apo-contrato')); if(c){ var e=document.getElementById('apo-obj'); if(e&&!e.value&&c.obj)e.value=c.obj; var g=document.getElementById('apo-emp'); if(g&&!g.value&&c.razao)g.value=c.razao; } }
+function gerarApostilamento(){
+  var tipo=pillVal('apotipo')||'Reajuste previsto no contrato';
+  var contrato=_v('apo-contrato'), num=_v('apo-num'), sec=_v('apo-sec'), emp=_v('apo-emp'), obj=_v('apo-obj'), desc=_v('apo-desc');
+  if(!desc){ toast('Descreva a apostila (índice, percentual, valor ou dado alterado).'); return false; }
+  var H=_cabPeca('TERMO DE APOSTILAMENTO'+(num?' - '+esc(num):''), sec, '');
+  H+='<p>Referente ao Contrato nº '+esc(contrato||'________')+', firmado com '+esc(emp||'a contratada')+(obj?', cujo objeto é '+esc(obj):'')+', registra-se, por simples APOSTILA, a alteração a seguir, que independe de termo aditivo, na forma do art. 136 da Lei nº 14.133/2021.</p>';
+  H+='<h2>ESPÉCIE: '+esc(tipo).toUpperCase()+'</h2><p>'+esc(desc)+'</p>';
+  H+='<p>A presente apostila não altera o objeto nem depende de acordo entre as partes, limitando-se ao registro previsto contratualmente ou à atualização administrativa cabível.</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>'+esc(ORG.nome)+'/'+ORG.uf+'</div>';
+  H+='<div class="selo"><b>Apostila gerada pelo sistema</b> (art. 136 da Lei nº 14.133/2021). Reajuste previsto = apostila; revisão por fato novo = aditivo. Sujeito à validação do setor.</div>';
+  return H;
+}
+
+// -------- NOTIFICAÇÃO DE DESCUMPRIMENTO / SANÇÃO (arts. 155 a 158) --------
+function renderFormSancao(){
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-alert"/></svg> Ato</div><div class="field">'+pills('snctipo',['Notificação para defesa','Abertura de processo sancionatório'],'Notificação para defesa')+'</div><div class="hint" style="margin-top:8px">A aplicação de sanção exige contraditório e ampla defesa. O sistema prepara a notificação; a decisão é da autoridade (arts. 155 a 158).</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do contrato</label><input id="snc-contrato" placeholder="ex.: 112/2026" onblur="preencheContratoSnc()"></div><div class="field"><label>Secretaria / órgão</label><select id="snc-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Contratada</label><input id="snc-emp" placeholder="razão social"></div><div class="field"><label>Nº da notificação</label><input id="snc-num" placeholder="ex.: 007/2026"></div></div>';
+  h+='<input type="hidden" id="snc-obj">';
+  h+='<div class="field" style="margin-top:12px"><label>Fato / descumprimento</label><textarea id="snc-fato" style="min-height:60px" placeholder="descreva objetivamente o inadimplemento (atraso, entrega em desacordo, inexecução)"></textarea></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Prazo para defesa (dias úteis)</label><input id="snc-prazo" value="15"></div><div class="field"><label>Cláusula/obrigação descumprida</label><input id="snc-clausula" placeholder="ex.: cláusula de prazo"></div></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function preencheContratoSnc(){ var c=achaContrato(_v('snc-contrato')); if(c){ var g=document.getElementById('snc-emp'); if(g&&!g.value&&c.razao)g.value=c.razao; var o=document.getElementById('snc-obj'); if(o&&c.obj)o.value=c.obj; } }
+function gerarSancao(){
+  var tipo=pillVal('snctipo')||'Notificação para defesa';
+  var contrato=_v('snc-contrato'), sec=_v('snc-sec'), emp=_v('snc-emp'), num=_v('snc-num'), obj=_v('snc-obj'), fato=_v('snc-fato'), prazo=_v('snc-prazo')||'15', clausula=_v('snc-clausula');
+  if(!fato){ toast('Descreva o fato ou descumprimento.'); return false; }
+  var H=_cabPeca('NOTIFICAÇÃO'+(num?' Nº '+esc(num):''), sec, '');
+  H+='<p>À contratada <b>'+esc(emp||'________')+'</b>, referente ao Contrato nº '+esc(contrato||'________')+(obj?', cujo objeto é '+esc(obj):'')+'.</p>';
+  H+='<h2>1. DO FATO</h2><p>'+esc(fato)+(clausula?' Configura-se possível descumprimento de '+esc(clausula)+'.':'')+'</p>';
+  H+='<h2>2. DA ABERTURA DE PRAZO PARA DEFESA</h2><p>Fica a contratada NOTIFICADA para, no prazo de '+esc(prazo)+' dias úteis, apresentar defesa prévia, em observância ao contraditório e à ampla defesa, sob pena de aplicação das sanções cabíveis previstas nos arts. 155 a 158 da Lei nº 14.133/2021, quais sejam: advertência, multa, impedimento de licitar e contratar e declaração de inidoneidade, conforme a gravidade da conduta.</p>';
+  if(/processo sancionat/i.test(tipo)) H+='<p>Fica instaurado o respectivo processo administrativo sancionatório, assegurada a produção de provas.</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>Autoridade / Fiscal do Contrato</div>';
+  H+='<div class="selo"><b>Documento gerado pelo sistema</b> (arts. 155 a 158 da Lei nº 14.133/2021). A sanção só se aplica após contraditório e decisão fundamentada da autoridade competente. Sujeito à validação.</div>';
+  return H;
+}
+
+// -------- TERMO DE EXTINÇÃO / ENCERRAMENTO (arts. 137 a 139) --------
+function renderFormExtincao(){
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo</div><div class="field">'+pills('exttipo',['Extinção antecipada (motivada)','Encerramento (fim da vigência)'],'Encerramento (fim da vigência)')+'</div><div class="hint" style="margin-top:8px">A extinção antecipada é motivada e com contraditório (arts. 137 a 139). O encerramento normal ocorre ao fim da vigência, com recebimento definitivo e quitação.</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do contrato</label><input id="ext-contrato" placeholder="ex.: 112/2026" onblur="preencheContratoExt()"></div><div class="field"><label>Secretaria / órgão</label><select id="ext-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Contratada</label><input id="ext-emp" placeholder="razão social"></div><div class="field"><label>Nº do termo</label><input id="ext-num" placeholder="ex.: 003/2026"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="ext-obj" placeholder="objeto do contrato"></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Motivo / fundamento (extinção) ou situação final (encerramento)</label><textarea id="ext-motivo" style="min-height:60px" placeholder="ex.: conclusão do objeto e quitação; ou motivo da extinção antecipada"></textarea></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function preencheContratoExt(){ var c=achaContrato(_v('ext-contrato')); if(c){ var e=document.getElementById('ext-obj'); if(e&&!e.value&&c.obj)e.value=c.obj; var g=document.getElementById('ext-emp'); if(g&&!g.value&&c.razao)g.value=c.razao; } }
+function gerarExtincao(){
+  var tipo=pillVal('exttipo')||'Encerramento (fim da vigência)';
+  var contrato=_v('ext-contrato'), sec=_v('ext-sec'), emp=_v('ext-emp'), num=_v('ext-num'), obj=_v('ext-obj'), motivo=_v('ext-motivo');
+  var ext=/Extin/.test(tipo);
+  if(ext && !motivo){ toast('Na extinção antecipada, informe o motivo e o fundamento.'); return false; }
+  var H=_cabPeca(ext?('TERMO DE EXTINÇÃO CONTRATUAL'+(num?' Nº '+esc(num):'')):('TERMO DE ENCERRAMENTO'+(num?' Nº '+esc(num):'')), sec, '');
+  H+='<p>Referente ao Contrato nº '+esc(contrato||'________')+', firmado com '+esc(emp||'a contratada')+(obj?', cujo objeto é '+esc(obj):'')+'.</p>';
+  if(ext){
+    H+='<h2>DA EXTINÇÃO</h2><p>Declara-se a EXTINÇÃO do contrato, de forma motivada e assegurados o contraditório e a ampla defesa, nos termos dos arts. 137 a 139 da Lei nº 14.133/2021, pelas razões a seguir: '+esc(motivo)+'.</p>';
+    H+='<p>Procede-se ao acerto de contas e à adoção das providências relativas às garantias, aos pagamentos devidos e às eventuais penalidades, na forma da lei e do contrato.</p>';
+  } else {
+    H+='<h2>DO ENCERRAMENTO</h2><p>Cumprido o objeto e esgotada a vigência, dá-se por ENCERRADO o contrato, com o recebimento definitivo do objeto e a quitação recíproca das obrigações. '+(motivo?esc(motivo):'')+'</p>';
+  }
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>'+esc(ORG.nome)+'/'+ORG.uf+'</div>';
+  H+='<div class="selo"><b>Termo gerado pelo sistema</b> (arts. 137 a 140 da Lei nº 14.133/2021). A extinção antecipada exige motivação e contraditório. Sujeito à validação e assinatura.</div>';
+  return H;
+}
+
+// -------- AVISO DE DISPENSA ELETRÔNICA / CONTRATAÇÃO DIRETA (art. 75, §3º) --------
+function renderFormAviso(){
+  var ctxObj=ctxProcObj(), ctxSec=ctxProcSec(), ctxTot=ctxProcTot();
+  var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-cart"/></svg> Aviso de dispensa (art. 75, §3º)</div><div class="hint" style="margin-bottom:8px">Dispensas por valor (art. 75, I e II) preferencialmente têm aviso em sítio oficial por no mínimo 3 dias úteis, aberto a propostas adicionais. Limites 2026: obras/engenharia R$ 130.984,20; demais R$ 65.492,11.</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados</div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do aviso / dispensa</label><input id="avs-num" placeholder="ex.: DE 005/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="avs-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="avs-obj" value="'+esc(ctxObj)+'" placeholder="o que será contratado diretamente"></div>';
+  h+='<div class="frow c3" style="margin-top:12px"><div class="field"><label>Inciso do art. 75</label>'+pills('avsinc',['II (demais)','I (engenharia)'],'II (demais)')+'</div><div class="field"><label>Valor estimado</label><input id="avs-valor" value="'+(ctxTot?money(ctxTot):'')+'" placeholder="R$"></div><div class="field"><label>Prazo do aviso (dias úteis)</label><input id="avs-prazo" value="3"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Início do recebimento de propostas</label><input id="avs-ini" placeholder="dd/mm/2026"></div><div class="field"><label>Fim do recebimento</label><input id="avs-fim" placeholder="dd/mm/2026"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Local / plataforma para propostas</label><input id="avs-local" value="sítio oficial do órgão" ></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+}
+function gerarAviso(){
+  var num=_v('avs-num'), sec=_v('avs-sec'), obj=_v('avs-obj'), valor=_v('avs-valor'), prazo=_v('avs-prazo')||'3', ini=_v('avs-ini'), fim=_v('avs-fim'), local=_v('avs-local');
+  var inc=pillVal('avsinc')||'II (demais)';
+  if(!obj){ toast('Informe o objeto da contratação direta.'); return false; }
+  var limite = /I \(eng/.test(inc)?'R$ 130.984,20':'R$ 65.492,11';
+  var incTxt = /I \(eng/.test(inc)?'inciso I':'inciso II';
+  var H=_cabPeca('AVISO DE DISPENSA ELETRÔNICA'+(num?' Nº '+esc(num):''), sec, '');
+  H+='<p>O órgão torna público o AVISO DE CONTRATAÇÃO DIRETA por dispensa de licitação, com fundamento no art. 75, '+incTxt+', da Lei nº 14.133/2021 (limite 2026: '+limite+', Decreto nº 12.807/2025), e no art. 75, §3º, para recebimento de propostas.</p>';
+  H+='<p><b>Objeto:</b> '+esc(obj)+'.<br><b>Valor estimado:</b> '+esc(valor||'a informar')+'.</p>';
+  H+='<p>Ficam abertas propostas por no mínimo '+esc(prazo)+' dias úteis'+((ini||fim)?' (de '+esc(ini||'____')+' a '+esc(fim||'____')+')':'')+', a serem apresentadas em '+esc(local||'sítio oficial do órgão')+'. Será selecionada a proposta mais vantajosa, observada a habilitação exigida.</p>';
+  H+='<div class="assina" style="margin-top:20px">____________________________________________<br>'+esc(ORG.nome)+'/'+ORG.uf+'</div>';
+  H+='<div class="selo"><b>Aviso gerado pelo sistema</b> (art. 75, §§ e Decreto nº 12.807/2025, valores 2026). A instrução completa da contratação direta segue o art. 72 (DFD, estimativa, pareceres, dotação, habilitação, razão da escolha, justificativa de preço, autorização). Sujeito à validação.</div>';
+  return H;
+}
+
 function renderFormETP(){
   var objOpts=Object.keys(OBJETOS);
   var h='<div class="fgroup"><div class="frow c2"><button class="btn-ghost" type="button" onclick="buscarPNCP()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-search"/></svg> Buscar modelo no PNCP</button><button class="btn-ghost" type="button" onclick="abrirPrecos()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-money"/></svg> Pesquisa de Preços (art. 23)</button></div>';
@@ -3416,7 +3783,7 @@ function anGerarParecer(){
 function anExportParecer(){ var l=anLic(); if(!l||!l.parecerHtml) return; var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body style="font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#111">'+l.parecerHtml+'</body></html>'; var blob=new Blob(['﻿'+html],{type:'application/msword'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Parecer_'+String(l.razao||'licitante').replace(/[^a-z0-9]+/ig,'_')+'.doc'; document.body.appendChild(a); a.click(); setTimeout(function(){ try{URL.revokeObjectURL(a.href); a.remove();}catch(e){} },1500); toast('Parecer exportado em Word.'); }
 function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
-function nomeTipo(t){ var m={tr:'Termo de Referência',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
+function nomeTipo(t){ var m={tr:'Termo de Referência',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',portaria:'Portaria',publicacao:'Extrato de Publicação',impugnacao:'Impugnação',homologacao:'Adjudicação e Homologação',convocacao:'Convocação',ordem:'Ordem de Fornecimento',recebimento:'Termo de Recebimento',apostilamento:'Apostilamento',sancao:'Notificação/Sanção',extincao:'Extinção/Encerramento',aviso:'Aviso de Dispensa',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
 async function registrarDoc(tipo, html){
   // Objeto/secretaria/processo corretos POR TIPO (evita um documento herdar dados de outro)
@@ -3431,6 +3798,7 @@ async function registrarDoc(tipo, html){
   else if(tipo==='riscos'){ objeto=gv('r-obj'); sec=gv('r-sec'); }
   else if(tipo==='declaracao'){ objeto=gv('dcl-obj'); sec=gv('dcl-sec'); }
   else if(tipo==='despacho'){ objeto=gv('dsp-obj'); sec=gv('dsp-sec'); }
+  else if(DOCFIELDS[tipo]){ objeto=gv(DOCFIELDS[tipo][0]); sec=gv(DOCFIELDS[tipo][1]); }
   else if(fluxo[tipo]){ objeto=(PROC&&PROC.objeto)||gv('f-objeto'); sec=(PROC&&PROC.secretaria)||gv('f-secretaria'); }
   else { objeto=gv('f-objeto')||(PROC&&PROC.objeto); sec=gv('f-secretaria')||gv('etp-sec'); } // etp, precos
   if(!objeto) objeto='(sem objeto)';
@@ -3445,6 +3813,7 @@ async function registrarDoc(tipo, html){
   else if(tipo==='oficio') numero=gv('o-num');
   else if(tipo==='aditivo') numero=gv('a-num');
   else if(tipo==='dfd') numero=gv('dfd-num');
+  else if(DOCFIELDS[tipo]) numero=gv(DOCFIELDS[tipo][2]);
   else numero=''; // etp, precos, minuta: numeração automática
   DB.seq=DB.seq||{};
   if(!numero){ var _usado={}; (DB.docs||[]).forEach(function(x){ if(x.tipo===tipo && x.numero && x.id!==DOC.id) _usado[x.numero]=1; }); do{ DB.seq[tipo]=(DB.seq[tipo]||0)+1; numero=String(DB.seq[tipo]).padStart(3,'0')+'/2026'; } while(_usado[numero]); }
