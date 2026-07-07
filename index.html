@@ -528,15 +528,17 @@ td .modd{font-size:12px;color:var(--slate)}
             <p>Siga o fluxo na ordem. Cada passo já vem preenchido com o anterior: você só confere e completa. Clique no passo para começar.</p>
           </div>
           <div class="fluxo4">
-            <div class="f4" onclick="abrirDoc('dfd',false)"><div class="f4n">1</div><b>DFD</b><span>O pedido da secretaria. O ponto de partida.</span></div>
+            <div class="f4" onclick="abrirDoc('dfd',false)"><div class="f4n">A</div><b>Demanda</b><span>DFD e portarias. O pedido da secretaria, ponto de partida.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('etp',false)"><div class="f4n">2</div><b>ETP</b><span>O estudo que justifica a compra.</span></div>
+            <div class="f4" onclick="abrirDoc('etp',false)"><div class="f4n">B</div><b>Preparação</b><span>ETP, mapa de riscos, TR e pesquisa de preços.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('tr',false)"><div class="f4n">3</div><b>Termo de Referência</b><span>Puxa tudo do ETP. Você só confere.</span></div>
+            <div class="f4" onclick="abrirDoc('edital',false)"><div class="f4n">C</div><b>Publicação</b><span>Edital, com a minuta de contrato e as declarações anexas.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('edital',false)"><div class="f4n">4</div><b>Edital</b><span>Puxa do TR. Já sai com a minuta e as declarações anexas.</span></div>
+            <div class="f4" onclick="abrirDoc('homologacao',false)"><div class="f4n">D</div><b>Certame</b><span>Disputa na plataforma e homologação do vencedor.</span></div>
             <div class="f4a">➜</div>
-            <div class="f4" onclick="abrirDoc('contrato',false)"><div class="f4n">5</div><b>Contrato</b><span>Puxa do edital. Sai pronto para assinar.</span></div>
+            <div class="f4" onclick="abrirDoc('contrato',false)"><div class="f4n">E</div><b>Contrato</b><span>Assinatura, convocação do vencedor e ordem de fornecimento.</span></div>
+            <div class="f4a">➜</div>
+            <div class="f4" onclick="abrirDoc('aditivo',false)"><div class="f4n">F</div><b>Execução</b><span>Aditivos, recebimento, sanções e encerramento.</span></div>
           </div>
           <div class="passo-foot">Ao gerar cada documento, aparece um <b>botão azul</b> que leva direto ao próximo passo, já preenchido. A conferência final é sempre do servidor responsável.</div>
         </div>
