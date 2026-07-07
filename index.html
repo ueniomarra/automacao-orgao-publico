@@ -473,6 +473,7 @@ td .modd{font-size:12px;color:var(--slate)}
     <div class="nav-i" data-pg="compras" onclick="nav(this)"><svg class="ic"><use href="#i-cart"/></svg> Compras</div>
     <div class="nav-i" data-pg="ambiente" onclick="nav(this)"><svg class="ic"><use href="#i-leaf"/></svg> Meio Ambiente</div>
     <div class="nav-i" data-pg="analise" onclick="nav(this)"><svg class="ic"><use href="#i-shield"/></svg> Análise de Licitação Online</div>
+    <div class="nav-i" data-pg="camara" onclick="nav(this)"><svg class="ic"><use href="#i-scale"/></svg> Câmara Municipal</div>
 
     <div class="navlabel">Documentos</div>
     <div class="nav-i" data-pg="central" onclick="nav(this)"><svg class="ic"><use href="#i-folder"/></svg> Central de Documentos</div>
@@ -608,6 +609,24 @@ td .modd{font-size:12px;color:var(--slate)}
           #pg-analise input:focus,#pg-analise select:focus,#pg-analise textarea:focus{border-color:#0A2342;box-shadow:0 0 0 3px rgba(201,169,97,.25);outline:none}
         </style>
         <div id="an-root"></div>
+      </div>
+
+      <!-- MODULO CAMARA MUNICIPAL -->
+      <div class="page" id="pg-camara">
+        <style>
+          #pg-camara .cam-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+          #pg-camara .cam-tab{padding:9px 15px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--slate);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px}
+          #pg-camara .cam-tab.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+          #pg-camara .cam-tab.on svg{stroke:#C9A961}
+          #pg-camara .panel{border-top:3px solid #C9A961;box-shadow:0 2px 10px rgba(10,35,66,.06)}
+          #pg-camara input,#pg-camara select,#pg-camara textarea{transition:border-color .15s,box-shadow .15s}
+          #pg-camara input:focus,#pg-camara select:focus,#pg-camara textarea:focus{border-color:#0A2342;box-shadow:0 0 0 3px rgba(201,169,97,.25);outline:none}
+          #pg-camara .cam-hint{background:#FFF9EC;border:1px solid #E8C766;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#7a5b00;line-height:1.5}
+          #pg-camara table.cam-t{border-collapse:collapse;width:100%;font-size:13px}
+          #pg-camara table.cam-t th,#pg-camara table.cam-t td{border:1px solid var(--line);padding:7px 8px;text-align:left}
+          #pg-camara table.cam-t th{background:#F3F6FB;color:var(--navy);font-size:12px}
+        </style>
+        <div id="cam-root"></div>
       </div>
 
       <!-- CENTRAL DE DOCUMENTOS -->
@@ -837,17 +856,17 @@ function modulosPermitidos(){
   var papel=(CURRENT_USER&&CURRENT_USER.papel)||'staff';
   var perm=((CURRENT_USER&&CURRENT_USER.perm)||'').toLowerCase();
   var full = papel==='admin' || papel==='superadmin' || perm.indexOf('total')>=0;
-  return { licitacao: full||/contrato/.test(perm), compras: full||/compras/.test(perm), ambiente: full||/ambient|meio/.test(perm), analise: full||/an[aá]lise/.test(perm) };
+  return { licitacao: full||/contrato/.test(perm), compras: full||/compras/.test(perm), ambiente: full||/ambient|meio/.test(perm), analise: full||/an[aá]lise/.test(perm), camara: full||/c[aâ]mara|vereador|legislat/.test(perm) };
 }
 function aplicarPermissoes(){
   var pode=modulosPermitidos();
-  ['licitacao','compras','ambiente','analise'].forEach(function(m){
+  ['licitacao','compras','ambiente','analise','camara'].forEach(function(m){
     var el=document.querySelector('.nav-i[data-pg="'+m+'"]'); if(el) el.style.display = pode[m]?'':'none';
   });
 }
 function show(pg){
   // trava de permissao: bloqueia modulo que o usuario nao tem
-  if(['licitacao','compras','ambiente','analise'].indexOf(pg)>=0 && CURRENT_USER && !modulosPermitidos()[pg]){
+  if(['licitacao','compras','ambiente','analise','camara'].indexOf(pg)>=0 && CURRENT_USER && !modulosPermitidos()[pg]){
     toast('Você não tem permissão para este módulo. Fale com o administrador do órgão.'); pg='dashboard';
   }
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
@@ -862,6 +881,7 @@ function show(pg){
   if(pg==='baselegal') renderBaseLegal();
   if(pg==='secretarias') renderSecretarias();
   if(pg==='analise') anEntrar();
+  if(pg==='camara') camEntrar();
 }
 // ===== Secretarias / Fundos do órgão (alimentam os campos de seleção dos documentos) =====
 function renderSecretarias(){
@@ -4529,7 +4549,357 @@ function abrirModal(titulo, html){
   ov.style.display='flex';
 }
 function fecharModal(){ var ov=document.getElementById('aop-modal'); if(ov) ov.style.display='none'; }
-dbLoad(); renderContratos(); renderDashboard(); renderAdmin();
+
+/* ==================== MODULO CAMARA MUNICIPAL ====================
+   Motor DETERMINISTICO (sem IA em runtime): a camara importa seus proprios modelos .docx
+   (placeholders {{campo}}) ou parte dos modelos base nacionais neutros; preenche um formulario
+   e o sistema gera o .doc no timbre da camara, com numeracao automatica. Documentos compostos
+   (ata de sessao) sao montados por blocos de texto fixos + dados registrados (montagem programatica).
+   Reusa: window.mammoth, tplCampos/tplPreencher/tplKey, esc, dataHoje, toast, abrirModal, SB, CURRENT_USER. */
+var CAM_KEY='aop_camara_v1';
+var CAM={config:null, vereadores:[], comissoes:[], docs:[], sessoes:[], seq:{}};
+var CAM_TAB='cadastro', CAM_CLOUD=false, CAM_WORK=null, CAM_SESS=null;
+function camOrg(){ return (CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; }
+function camLoad(){ try{ var s=localStorage.getItem(CAM_KEY); if(s){ var o=JSON.parse(s); CAM.config=o.config||null; CAM.vereadores=o.vereadores||[]; CAM.comissoes=o.comissoes||[]; CAM.docs=o.docs||[]; CAM.sessoes=o.sessoes||[]; CAM.seq=o.seq||{}; } }catch(e){} }
+function camSaveLocal(){ try{ localStorage.setItem(CAM_KEY, JSON.stringify(CAM)); }catch(e){} }
+function camSave(){ camSaveLocal(); camPersistConfig(); }
+async function camPersistConfig(){ if(!SB||!CURRENT_USER) return; try{ await SB.from('camara_config').upsert({orgao_id:camOrg(), dados:{config:CAM.config,vereadores:CAM.vereadores,comissoes:CAM.comissoes,seq:CAM.seq}, updated_at:new Date().toISOString()}); }catch(e){} }
+async function camPersistDoc(d){ if(!SB||!CURRENT_USER) return; try{ if(d.cloud){ await SB.from('camara_documentos').update({numero:d.numero,objeto:d.objeto,data:d.data,html:d.html,meta:d.meta||{}}).eq('id',d.id); } else { var ins=await SB.from('camara_documentos').insert({orgao_id:camOrg(),tipo:d.tipo,numero:d.numero,objeto:d.objeto,data:d.data,html:d.html,meta:d.meta||{}}).select('id').single(); if(ins.data){ d.id=ins.data.id; d.cloud=true; } } camSaveLocal(); }catch(e){} }
+async function camPersistSessao(s){ if(!SB||!CURRENT_USER) return; try{ if(s.cloud){ await SB.from('camara_sessoes').update({numero:s.numero,tipo:s.tipo,data:s.data,hora:s.hora,dados:{expediente:s.expediente,ordemDia:s.ordemDia,presencas:s.presencas,aberta:s.aberta},updated_at:new Date().toISOString()}).eq('id',s.id); } else { var ins=await SB.from('camara_sessoes').insert({orgao_id:camOrg(),numero:s.numero,tipo:s.tipo,data:s.data,hora:s.hora,dados:{expediente:s.expediente,ordemDia:s.ordemDia,presencas:s.presencas,aberta:s.aberta}}).select('id').single(); if(ins.data){ s.id=ins.data.id; s.cloud=true; } } camSaveLocal(); }catch(e){} }
+async function camCloudLoad(){
+  if(!SB||!CURRENT_USER||CAM_CLOUD) return; CAM_CLOUD=true;
+  try{
+    var cf=await SB.from('camara_config').select('dados').eq('orgao_id',camOrg()).maybeSingle();
+    if(cf&&!cf.error&&cf.data&&cf.data.dados){ var d=cf.data.dados; if(d.config) CAM.config=d.config; CAM.vereadores=d.vereadores||CAM.vereadores; CAM.comissoes=d.comissoes||CAM.comissoes; CAM.seq=d.seq||CAM.seq; }
+    var dd=await SB.from('camara_documentos').select('id,tipo,numero,objeto,data,html,meta').order('created_at',{ascending:false});
+    if(dd&&!dd.error&&dd.data){ CAM.docs=dd.data.map(function(r){ return {id:r.id,tipo:r.tipo,numero:r.numero,objeto:r.objeto,data:r.data,html:r.html,meta:r.meta||{},cloud:true}; }); }
+    var ss=await SB.from('camara_sessoes').select('id,numero,tipo,data,hora,dados').order('created_at',{ascending:false});
+    if(ss&&!ss.error&&ss.data){ CAM.sessoes=ss.data.map(function(r){ var x=r.dados||{}; return {id:r.id,numero:r.numero,tipo:r.tipo,data:r.data,hora:r.hora,expediente:x.expediente||[],ordemDia:x.ordemDia||[],presencas:x.presencas||{},aberta:x.aberta!==false,cloud:true}; }); }
+    camSaveLocal();
+  }catch(e){}
+}
+// ---- registro de tipos de documento da camara ----
+var CAM_GRUPOS=['Proposições','Normas finais','Manifestações','Comissões','Administrativo'];
+var CAM_DOCS=[
+  {tp:'projeto_lei', g:'Proposições', ic:'i-doc', t:'Projeto de Lei', d:'Proposição de norma de competência do Legislativo, com ementa, articulado e justificativa.'},
+  {tp:'projeto_lei_complementar', g:'Proposições', ic:'i-doc', t:'Projeto de Lei Complementar', d:'Matéria que a Lei Orgânica exige por lei complementar.'},
+  {tp:'projeto_resolucao', g:'Proposições', ic:'i-doc', t:'Projeto de Resolução', d:'Matéria de economia interna da Câmara (interna corporis).'},
+  {tp:'projeto_decreto_legislativo', g:'Proposições', ic:'i-doc', t:'Projeto de Decreto Legislativo', d:'Matéria de competência exclusiva da Câmara com efeitos externos.'},
+  {tp:'emenda', g:'Proposições', ic:'i-file', t:'Emenda', d:'Alteração a uma proposição em tramitação (aditiva, supressiva, modificativa, substitutiva).'},
+  {tp:'substitutivo', g:'Proposições', ic:'i-file', t:'Substitutivo', d:'Emenda que substitui integralmente a proposição.'},
+  {tp:'autografo', g:'Normas finais', ic:'i-contract', t:'Autógrafo de Lei', d:'Texto final aprovado, encaminhado ao Executivo para sanção.'},
+  {tp:'lei', g:'Normas finais', ic:'i-scale', t:'Lei (promulgação)', d:'Promulgação pela Câmara quando cabível (ex.: sanção tácita ou rejeição de veto).'},
+  {tp:'decreto_legislativo', g:'Normas finais', ic:'i-scale', t:'Decreto Legislativo', d:'Norma de competência exclusiva da Câmara, promulgada pelo Presidente.'},
+  {tp:'resolucao', g:'Normas finais', ic:'i-scale', t:'Resolução', d:'Norma interna da Câmara, promulgada pela Mesa/Presidente.'},
+  {tp:'requerimento', g:'Manifestações', ic:'i-doc', t:'Requerimento', d:'Pedido à Mesa ou ao Plenário sobre matéria de competência da Câmara.'},
+  {tp:'indicacao', g:'Manifestações', ic:'i-doc', t:'Indicação', d:'Sugestão ao Executivo sobre providência de sua competência.'},
+  {tp:'mocao', g:'Manifestações', ic:'i-doc', t:'Moção', d:'Manifestação de aplauso, pesar, repúdio ou apoio.'},
+  {tp:'parecer_comissao', g:'Comissões', ic:'i-file', t:'Parecer de Comissão', d:'Relatório, voto do relator e conclusão da comissão sobre uma proposição.'},
+  {tp:'oficio', g:'Administrativo', ic:'i-doc', t:'Ofício', d:'Comunicação oficial da Câmara no seu timbre.'},
+  {tp:'portaria', g:'Administrativo', ic:'i-doc', t:'Portaria', d:'Ato administrativo do Presidente da Câmara.'},
+  {tp:'ato_mesa', g:'Administrativo', ic:'i-doc', t:'Ato da Mesa', d:'Ato da Mesa Diretora sobre organização interna.'},
+  {tp:'edital_convocacao', g:'Administrativo', ic:'i-file', t:'Edital de Convocação', d:'Convocação de sessão (ordinária, extraordinária ou solene).'},
+  {tp:'edital_audiencia', g:'Administrativo', ic:'i-file', t:'Edital de Audiência Pública', d:'Convocação de audiência pública.'}
+];
+function camMeta(tp){ for(var i=0;i<CAM_DOCS.length;i++){ if(CAM_DOCS[i].tp===tp) return CAM_DOCS[i]; } return {tp:tp,t:tp,d:'',g:''}; }
+// campos preenchidos automaticamente pelo cadastro da camara (nao viram input manual)
+var CAM_AUTO={camara:1,cnpj:1,endereco:1,telefone:1,email:1,municipio:1,uf:1,legislatura:1,sessao_legislativa:1,presidente:1,vice_presidente:1,primeiro_secretario:1,segundo_secretario:1,numero:1,data:1};
+var CAM_LONG={texto:1,justificativa:1,relatorio:1,voto:1,conclusao:1,pauta:1};
+var CAM_ROT={ementa:'Ementa (resumo)',texto:'Texto / conteúdo',justificativa:'Justificativa',autor:'Autor (vereador que assina)',proposicao:'Proposição referida',tipo_emenda:'Tipo de emenda',tipo_mocao:'Tipo de moção',destinatario:'Destinatário',comissao:'Comissão',relator:'Relator(a)',relatorio:'Relatório',voto:'Voto do relator',conclusao:'Conclusão',assunto:'Assunto',tema:'Tema',local:'Local',tipo_sessao:'Tipo de sessão',data_sessao:'Data da sessão',hora_sessao:'Hora da sessão',data_audiencia:'Data da audiência',hora_audiencia:'Hora da audiência',pauta:'Pauta / ordem do dia'};
+function camRot(raw){ var k=tplKey(raw); if(CAM_ROT[k]) return CAM_ROT[k]; raw=(raw||'').replace(/_/g,' ').trim(); return raw.charAt(0).toUpperCase()+raw.slice(1); }
+// ---- modelos base nacionais neutros (ponto de partida; a camara substitui pelo dela) ----
+var CAM_SEED={
+  projeto_lei:'<h1>PROJETO DE LEI Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, no uso de suas atribuições legais, aprova a seguinte Lei:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Esta Lei entra em vigor na data de sua publicação, revogadas as disposições em contrário.</p><p style="margin-top:16pt">Sala das Sessões da Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p>',
+  projeto_lei_complementar:'<h1>PROJETO DE LEI COMPLEMENTAR Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, aprova a seguinte Lei Complementar:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Esta Lei Complementar entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p>',
+  projeto_resolucao:'<h1>PROJETO DE RESOLUÇÃO Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, no uso de sua competência privativa, resolve:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Esta Resolução entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p>',
+  projeto_decreto_legislativo:'<h1>PROJETO DE DECRETO LEGISLATIVO Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, no uso de sua competência exclusiva, decreta:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Este Decreto Legislativo entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p>',
+  emenda:'<h1>EMENDA Nº {{numero}}</h1><p><strong>À proposição:</strong> {{proposicao}}</p><p><strong>Tipo de emenda:</strong> {{tipo_emenda}}</p><p>{{texto}}</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p>',
+  substitutivo:'<h1>SUBSTITUTIVO Nº {{numero}}</h1><p><strong>À proposição:</strong> {{proposicao}}</p><p>Substitui-se integralmente o texto da proposição pelo seguinte:</p><p>{{texto}}</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p>',
+  autografo:'<h1>AUTÓGRAFO Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, aprovou e encaminha ao Chefe do Poder Executivo, para os fins de sanção, o seguinte texto:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Este ato entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>',
+  lei:'<h1>LEI Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>O Presidente da Câmara Municipal de {{municipio}}, Estado de {{uf}}, no uso da atribuição que lhe confere a Lei Orgânica do Município, promulga a seguinte Lei:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Esta Lei entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>',
+  decreto_legislativo:'<h1>DECRETO LEGISLATIVO Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, decreta e o seu Presidente promulga:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Este Decreto Legislativo entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>',
+  resolucao:'<h1>RESOLUÇÃO Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, resolve:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Esta Resolução entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>',
+  requerimento:'<h1>REQUERIMENTO Nº {{numero}}</h1><p>Senhor Presidente,</p><p>O(A) Vereador(a) que este subscreve, na forma regimental, requer a Vossa Excelência, ouvido o Plenário, {{texto}}.</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p>',
+  indicacao:'<h1>INDICAÇÃO Nº {{numero}}</h1><p>Senhor Presidente,</p><p>O(A) Vereador(a) que este subscreve, na forma regimental, indica ao Chefe do Poder Executivo Municipal que {{texto}}.</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p>',
+  mocao:'<h1>MOÇÃO Nº {{numero}}</h1><p style="text-align:center"><strong>Moção de {{tipo_mocao}}</strong></p><p>A Câmara Municipal de {{municipio}}, por seus membros que ao final subscrevem, manifesta {{tipo_mocao}} a {{destinatario}}, {{texto}}.</p><h2>JUSTIFICATIVA</h2><p>{{justificativa}}</p><p style="margin-top:16pt">Sala das Sessões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{autor}}</strong><br>Vereador(a)</p>',
+  parecer_comissao:'<h1>PARECER Nº {{numero}}</h1><p><strong>Comissão:</strong> {{comissao}}</p><p><strong>Proposição analisada:</strong> {{proposicao}}</p><p><strong>Relator(a):</strong> {{relator}}</p><h2>RELATÓRIO</h2><p>{{relatorio}}</p><h2>VOTO DO RELATOR</h2><p>{{voto}}</p><h2>CONCLUSÃO</h2><p>{{conclusao}}</p><p style="margin-top:16pt">Sala das Comissões, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{relator}}</strong><br>Relator(a)</p>',
+  oficio:'<h1>OFÍCIO Nº {{numero}}</h1><p style="text-align:right">{{municipio}}, {{data}}.</p><p><strong>A(o) Senhor(a) {{destinatario}}</strong></p><p><strong>Assunto:</strong> {{assunto}}</p><p>Senhor(a),</p><p>{{texto}}</p><p style="margin-top:12pt">Atenciosamente,</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>',
+  portaria:'<h1>PORTARIA Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>O Presidente da Câmara Municipal de {{municipio}}, no uso de suas atribuições, resolve:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Esta Portaria entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>',
+  ato_mesa:'<h1>ATO DA MESA Nº {{numero}}</h1><p style="text-align:center"><em>{{ementa}}</em></p><p>A Mesa Diretora da Câmara Municipal de {{municipio}}, no uso de suas atribuições, resolve:</p><p><strong>Art. 1º</strong> {{texto}}</p><p><strong>Art. 2º</strong> Este Ato entra em vigor na data de sua publicação.</p><p style="margin-top:16pt">Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:26pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente</p><p style="text-align:center;margin-top:14pt">_____________________________________<br><strong>{{primeiro_secretario}}</strong><br>1º Secretário</p>',
+  edital_convocacao:'<h1>EDITAL DE CONVOCAÇÃO Nº {{numero}}</h1><p>O Presidente da Câmara Municipal de {{municipio}}, no uso de suas atribuições regimentais, CONVOCA os Senhores Vereadores para a Sessão {{tipo_sessao}} a realizar-se em {{data_sessao}}, às {{hora_sessao}}, na sede da Câmara Municipal, para deliberação da seguinte pauta:</p><p>{{pauta}}</p><p style="margin-top:16pt">Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>',
+  edital_audiencia:'<h1>EDITAL DE AUDIÊNCIA PÚBLICA Nº {{numero}}</h1><p>A Câmara Municipal de {{municipio}}, Estado de {{uf}}, torna público que realizará AUDIÊNCIA PÚBLICA para tratar de {{tema}}, no dia {{data_audiencia}}, às {{hora_audiencia}}, na {{local}}, ficando convidada toda a população para participar.</p><p style="margin-top:16pt">Câmara Municipal de {{municipio}}, em {{data}}.</p><p style="text-align:center;margin-top:30pt">_____________________________________<br><strong>{{presidente}}</strong><br>Presidente da Câmara Municipal</p>'
+};
+function camMesaNome(role){ var m=(CAM.config&&CAM.config.mesa)||{}; return (m[role]&&m[role].nome)||''; }
+function camValores(){
+  var c=CAM.config||{};
+  var v={ camara:esc(c.nome||''), cnpj:esc(c.cnpj||''), endereco:esc(c.endereco||''), telefone:esc(c.telefone||''), email:esc(c.email||''),
+    municipio:esc(c.municipio||''), uf:esc(c.uf||''), legislatura:esc(c.legislatura||''), sessao_legislativa:esc(c.sessaoLeg||''),
+    presidente:esc(camMesaNome('presidente')), vice_presidente:esc(camMesaNome('vice')), primeiro_secretario:esc(camMesaNome('sec1')), segundo_secretario:esc(camMesaNome('sec2')),
+    data:dataHoje() };
+  (CAM_WORK&&CAM_WORK.campos||[]).forEach(function(cp){ var el=document.getElementById('cm-'+cp.key); if(el){ var val=el.value||''; if(val!==''){ v[cp.key]= CAM_LONG[cp.key] ? esc(val).replace(/\n/g,'<br>') : esc(val); } } });
+  return v;
+}
+function camHeader(){ var c=CAM.config||{}; return '<div style="text-align:center;margin-bottom:14px">'+(c.brasao?'<img src="'+c.brasao+'" style="height:54px;width:auto;margin-bottom:6px"><br>':'')+'<span style="font-weight:700;font-size:13pt;color:#0A2342">'+esc(c.nome||'Câmara Municipal')+'</span>'+(c.endereco?'<br><span style="font-size:9pt;color:#444">'+esc(c.endereco)+'</span>':'')+'</div>'; }
+function camFooter(){ return '<div class="selo" style="border:1px solid #d9b94f;background:#FBF3DF;padding:8pt;font-size:9pt;margin-top:18pt;border-radius:4px">Minuta gerada pelo sistema para conferência. O servidor responsável valida e o parlamentar ou a Mesa assina. O sistema não garante conformidade; a base legal aplicável é a Lei Orgânica do Município e o Regimento Interno da Câmara.</div>'; }
+// numeracao automatica por tipo e por ano (sequencia editavel pelo servidor)
+function camAno(){ return new Date().getFullYear(); }
+function camPeekNum(tp){ var k=tp+'_'+camAno(); var n=CAM.seq[k]||1; return String(n).padStart(3,'0')+'/'+camAno(); }
+function camBumpNum(tp, numeroStr){ var k=tp+'_'+camAno(); var m=(numeroStr||'').match(/(\d+)/); var n=m?parseInt(m[1],10):(CAM.seq[k]||1); CAM.seq[k]=n+1; }
+// ============ ENTRADA E ABAS ============
+function camEntrar(){ if(!CAM.config) camLoad(); camCloudLoad().then(function(){ camRender(); }); camRender(); }
+function camRender(){
+  var root=document.getElementById('cam-root'); if(!root) return;
+  var tabs=[['cadastro','Cadastro da Câmara','i-grid'],['documentos','Documentos','i-doc'],['sessao','Sessão Plenária','i-users'],['modelos','Modelos importados','i-folder']];
+  var head='<div class="pagehead"><div><div class="hello">Módulo Câmara</div><h1>Câmara Municipal</h1><p>Vereadores geram proposições, normas, manifestações, pareceres, documentos administrativos e a ata da sessão, no timbre da própria Câmara. Motor determinístico: a Câmara usa os modelos base ou importa os seus em Word, e o sistema preenche e numera. O servidor confere e assina.</p></div></div>';
+  var tabbar='<div class="cam-tabs">'+tabs.map(function(t){ return '<div class="cam-tab'+(CAM_TAB===t[0]?' on':'')+'" onclick="camTab(\''+t[0]+'\')"><svg class="ic" style="width:15px;height:15px"><use href="#'+t[2]+'"/></svg> '+t[1]+'</div>'; }).join('')+'</div>';
+  var body='<div id="cam-body"></div>';
+  root.innerHTML=head+tabbar+body;
+  if(CAM_TAB==='cadastro') camRenderCadastro();
+  else if(CAM_TAB==='documentos') camRenderDocs();
+  else if(CAM_TAB==='sessao') camRenderSessoes();
+  else if(CAM_TAB==='modelos') camRenderModelos();
+}
+function camTab(t){ CAM_TAB=t; CAM_WORK=null; CAM_SESS=null; camRender(); }
+// ============ CADASTRO BASE ============
+function camRenderCadastro(){
+  var b=document.getElementById('cam-body'); if(!b) return;
+  var c=CAM.config||{}; var m=c.mesa||{};
+  function inp(id,lbl,val,ph){ return '<div class="field" style="margin-bottom:10px"><label>'+lbl+'</label><input id="'+id+'" value="'+esc(val||'')+'" placeholder="'+(ph||'')+'"></div>'; }
+  function mesaRow(role,lbl){ var r=m[role]||{}; return '<div style="display:flex;gap:8px;margin-bottom:8px"><div class="field" style="flex:2"><label>'+lbl+' (nome)</label><input id="cmesa-'+role+'-nome" value="'+esc(r.nome||'')+'"></div><div class="field" style="flex:1"><label>Partido</label><input id="cmesa-'+role+'-part" value="'+esc(r.partido||'')+'"></div></div>'; }
+  var h='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:18px">'+
+    '<div class="cam-hint" style="margin-bottom:16px">Preencha uma vez. Estes dados entram automaticamente em todo documento (timbre, presidente, legislatura, numeração). Você pode editar quando a Mesa mudar.</div>'+
+    '<h3 style="color:var(--navy);margin:0 0 12px">Identificação da Câmara</h3>'+
+    inp('c-nome','Nome oficial da Câmara',c.nome,'Câmara Municipal de ...')+
+    '<div style="display:flex;gap:10px">'+
+      '<div style="flex:2">'+inp('c-municipio','Município',c.municipio,'ex.: Turvelândia')+'</div>'+
+      '<div style="flex:1">'+inp('c-uf','UF',c.uf||'GO','GO')+'</div>'+
+      '<div style="flex:2">'+inp('c-cnpj','CNPJ da Câmara',c.cnpj,'00.000.000/0001-00')+'</div>'+
+    '</div>'+
+    inp('c-endereco','Endereço',c.endereco,'logradouro, nº, bairro, cidade/UF')+
+    '<div style="display:flex;gap:10px"><div style="flex:1">'+inp('c-telefone','Telefone',c.telefone,'(64) 0000-0000')+'</div><div style="flex:1">'+inp('c-email','E-mail',c.email,'contato@camara...')+'</div></div>'+
+    '<div style="display:flex;gap:10px"><div style="flex:1">'+inp('c-legislatura','Legislatura',c.legislatura,'ex.: 2025-2028')+'</div><div style="flex:1">'+inp('c-sessaoLeg','Sessão legislativa',c.sessaoLeg,'ex.: 2ª sessão legislativa')+'</div></div>'+
+    '<div class="field" style="margin-bottom:10px"><label>Brasão / logo da Câmara (opcional)</label><input type="file" accept="image/*" id="c-brasao-file" onchange="camBrasaoFile(this)"><div class="hint" id="c-brasao-info" style="font-size:12px;color:var(--slate);margin-top:4px">'+(c.brasao?'Brasão carregado. Envie outro para substituir.':'Sem brasão. O documento sai só com o nome da Câmara.')+'</div></div>'+
+    '<h3 style="color:var(--navy);margin:18px 0 12px">Mesa Diretora</h3>'+
+    mesaRow('presidente','Presidente')+mesaRow('vice','Vice-presidente')+mesaRow('sec1','1º Secretário')+mesaRow('sec2','2º Secretário')+
+    '<button class="btn-gold" style="margin-top:8px;justify-content:center" onclick="camSalvarConfig()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-save"/></svg> Salvar cadastro da Câmara</button>'+
+    '</div>';
+  // vereadores
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="color:var(--navy);margin:0">Vereadores ('+CAM.vereadores.length+')</h3><button class="btn-ghost" onclick="camAddVereador()"><svg class="ic" style="width:15px;height:15px"><use href="#i-plus"/></svg> Adicionar vereador</button></div>';
+  h+= CAM.vereadores.length ? ('<table class="cam-t"><thead><tr><th>Nome completo</th><th>Nome parlamentar</th><th>Partido</th><th style="width:90px">Ação</th></tr></thead><tbody>'+CAM.vereadores.map(function(v,i){ return '<tr><td>'+esc(v.nome||'')+'</td><td>'+esc(v.parlamentar||'')+'</td><td>'+esc(v.partido||'')+'</td><td><span style="cursor:pointer;color:var(--royal);font-weight:700;font-size:12px" onclick="camEditVereador('+i+')">editar</span> <span style="cursor:pointer;color:#C62D45;font-weight:700;font-size:12px" onclick="camDelVereador('+i+')">excluir</span></td></tr>'; }).join('')+'</tbody></table>') : '<div class="hint" style="color:var(--slate);font-size:13px">Nenhum vereador cadastrado ainda. A lista alimenta a presença e a votação nominal da sessão.</div>';
+  h+='</div>';
+  // comissoes
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="color:var(--navy);margin:0">Comissões permanentes ('+CAM.comissoes.length+')</h3><button class="btn-ghost" onclick="camAddComissao()"><svg class="ic" style="width:15px;height:15px"><use href="#i-plus"/></svg> Adicionar comissão</button></div>';
+  h+= CAM.comissoes.length ? CAM.comissoes.map(function(co,i){ return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px"><div style="display:flex;justify-content:space-between"><b style="color:var(--navy)">'+esc(co.nome||'')+'</b><span style="cursor:pointer;color:#C62D45;font-weight:700;font-size:12px" onclick="camDelComissao('+i+')">excluir</span></div><div style="font-size:12.5px;color:var(--slate);margin-top:4px">'+(co.membros&&co.membros.length? co.membros.map(function(mb){return esc(mb.nome)+' ('+esc(mb.cargo)+')';}).join(', ') : 'sem membros')+'</div></div>'; }).join('') : '<div class="hint" style="color:var(--slate);font-size:13px">Ex.: Comissão de Constituição e Justiça, Comissão de Finanças e Orçamento.</div>';
+  h+='</div>';
+  b.innerHTML=h;
+}
+function camBrasaoFile(inp){ var f=inp.files&&inp.files[0]; if(!f) return; var r=new FileReader(); r.onload=function(){ CAM.config=CAM.config||{}; CAM.config.brasao=r.result; var i=document.getElementById('c-brasao-info'); if(i) i.textContent='Brasão carregado. Clique em Salvar cadastro para guardar.'; }; r.readAsDataURL(f); }
+function camSalvarConfig(){
+  function gv(id){ var e=document.getElementById(id); return e?e.value.trim():''; }
+  var nome=gv('c-nome'); if(!nome){ toast('Informe o nome oficial da Câmara.'); return; }
+  var prev=CAM.config||{};
+  CAM.config={ nome:nome, municipio:gv('c-municipio'), uf:gv('c-uf')||'GO', cnpj:gv('c-cnpj'), endereco:gv('c-endereco'), telefone:gv('c-telefone'), email:gv('c-email'), legislatura:gv('c-legislatura'), sessaoLeg:gv('c-sessaoLeg'), brasao:prev.brasao||'',
+    mesa:{ presidente:{nome:gv('cmesa-presidente-nome'),partido:gv('cmesa-presidente-part')}, vice:{nome:gv('cmesa-vice-nome'),partido:gv('cmesa-vice-part')}, sec1:{nome:gv('cmesa-sec1-nome'),partido:gv('cmesa-sec1-part')}, sec2:{nome:gv('cmesa-sec2-nome'),partido:gv('cmesa-sec2-part')} } };
+  camSave(); try{ registrarAud('Câmara: salvou cadastro', nome, camOrg()); }catch(e){}
+  toast('Cadastro da Câmara salvo. Já entra no timbre de todos os documentos.'); camRender();
+}
+function camAddVereador(idx){ var v=(idx!=null)?CAM.vereadores[idx]:{}; var h='<div class="field"><label>Nome completo</label><input id="cv-nome" value="'+esc(v.nome||'')+'"></div><div class="field" style="margin-top:8px"><label>Nome parlamentar</label><input id="cv-parl" value="'+esc(v.parlamentar||'')+'"></div><div class="field" style="margin-top:8px"><label>Partido</label><input id="cv-part" value="'+esc(v.partido||'')+'"></div><button class="btn-gold" style="width:100%;justify-content:center;margin-top:14px" onclick="camSaveVereador('+(idx!=null?idx:-1)+')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Salvar</button>'; abrirModal((idx!=null?'Editar':'Novo')+' vereador', h); }
+function camEditVereador(i){ camAddVereador(i); }
+function camSaveVereador(idx){ function gv(id){ var e=document.getElementById(id); return e?e.value.trim():''; } var nome=gv('cv-nome'); if(!nome){ toast('Informe o nome.'); return; } var obj={nome:nome,parlamentar:gv('cv-parl'),partido:gv('cv-part')}; if(idx>=0) CAM.vereadores[idx]=obj; else CAM.vereadores.push(obj); camSave(); fecharModal(); camRender(); }
+function camDelVereador(i){ if(!confirm('Excluir este vereador?')) return; CAM.vereadores.splice(i,1); camSave(); camRender(); }
+function camAddComissao(){ var h='<div class="field"><label>Nome da comissão</label><input id="cc-nome" placeholder="ex.: Comissão de Constituição e Justiça"></div><div class="field" style="margin-top:8px"><label>Membros (um por linha: Nome, cargo)</label><textarea id="cc-membros" rows="4" placeholder="Fulano, Presidente&#10;Beltrano, Relator&#10;Sicrano, Membro"></textarea></div><button class="btn-gold" style="width:100%;justify-content:center;margin-top:14px" onclick="camSaveComissao()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Salvar comissão</button>'; abrirModal('Nova comissão', h); }
+function camSaveComissao(){ function gv(id){ var e=document.getElementById(id); return e?e.value:''; } var nome=(gv('cc-nome')||'').trim(); if(!nome){ toast('Informe o nome da comissão.'); return; } var membros=(gv('cc-membros')||'').split('\n').map(function(l){ l=l.trim(); if(!l) return null; var p=l.split(','); return {nome:(p[0]||'').trim(), cargo:(p[1]||'Membro').trim()}; }).filter(Boolean); CAM.comissoes.push({nome:nome,membros:membros}); camSave(); fecharModal(); camRender(); }
+function camDelComissao(i){ if(!confirm('Excluir esta comissão?')) return; CAM.comissoes.splice(i,1); camSave(); camRender(); }
+// ============ BIBLIOTECA DE DOCUMENTOS ============
+function camRenderDocs(){
+  var b=document.getElementById('cam-body'); if(!b) return;
+  if(!CAM.config){ b.innerHTML='<div class="cam-hint">Antes de gerar documentos, preencha o <b>Cadastro da Câmara</b> (aba anterior). É de lá que sai o timbre, o presidente e a numeração.</div>'; return; }
+  var h='';
+  CAM_GRUPOS.forEach(function(g){
+    var docs=CAM_DOCS.filter(function(d){ return d.g===g; });
+    h+='<div style="margin-bottom:8px;font-size:13px;font-weight:800;color:var(--navy);letter-spacing:.3px">'+g.toUpperCase()+'</div><div class="toolgrid" style="margin-bottom:20px">';
+    h+=docs.map(function(x){ return '<div class="tool"><div class="ti"><svg class="ic" style="width:24px;height:24px"><use href="#'+x.ic+'"/></svg></div><h4>'+esc(x.t)+'</h4><p>'+esc(x.d)+'</p><div class="toolact"><button class="toolbtn" onclick="camImportarModelo(\''+x.tp+'\')"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Modelo próprio</button><button class="toolbtn pri" onclick="camNovoDoc(\''+x.tp+'\')"><svg class="ic" style="width:14px;height:14px;stroke:#fff"><use href="#i-plus"/></svg> Novo</button></div></div>'; }).join('');
+    h+='</div>';
+  });
+  // documentos gerados recentes
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px"><h3 style="color:var(--navy);margin:0 0 10px">Documentos gerados ('+CAM.docs.length+')</h3>';
+  h+= CAM.docs.length ? ('<table class="cam-t"><thead><tr><th>Tipo</th><th>Número</th><th>Objeto</th><th>Data</th><th style="width:150px">Ação</th></tr></thead><tbody>'+CAM.docs.slice(0,40).map(function(d,i){ return '<tr><td>'+esc(camMeta(d.tipo).t)+'</td><td>'+esc(d.numero||'')+'</td><td>'+esc(d.objeto||'')+'</td><td>'+esc(d.data||'')+'</td><td><span style="cursor:pointer;color:var(--royal);font-weight:700;font-size:12px" onclick="camBaixarDoc(\''+d.id+'\')">baixar Word</span> <span style="cursor:pointer;color:#C62D45;font-weight:700;font-size:12px" onclick="camExcluirDoc(\''+d.id+'\')">excluir</span></td></tr>'; }).join('')+'</tbody></table>') : '<div class="hint" style="color:var(--slate);font-size:13px">Nenhum documento gerado ainda.</div>';
+  h+='</div>';
+  b.innerHTML=h;
+}
+// workspace de um documento (form + previa)
+function camNovoDoc(tp, tplHtml, tplNome){
+  var meta=camMeta(tp);
+  var tpl = tplHtml || CAM_SEED[tp] || '<h1>'+esc(meta.t)+' Nº {{numero}}</h1><p>{{texto}}</p>';
+  var campos=tplCampos(tpl).filter(function(cp){ return !CAM_AUTO[cp.key]; });
+  CAM_WORK={tipo:tp, tpl:tpl, campos:campos, nome:tplNome||null};
+  var b=document.getElementById('cam-body'); if(!b) return;
+  var isMocao=(tp==='mocao'); var isEmenda=(tp==='emenda');
+  var fields=campos.map(function(cp){
+    if(cp.key==='tipo_mocao'){ return '<div class="field" style="margin-bottom:10px"><label>Tipo de moção</label><select id="cm-tipo_mocao" oninput="camPreview()"><option>aplausos</option><option>pesar</option><option>repúdio</option><option>apoio</option></select></div>'; }
+    if(cp.key==='tipo_emenda'){ return '<div class="field" style="margin-bottom:10px"><label>Tipo de emenda</label><select id="cm-tipo_emenda" oninput="camPreview()"><option>aditiva</option><option>supressiva</option><option>modificativa</option><option>substitutiva</option></select></div>'; }
+    if(cp.key==='autor'||cp.key==='relator'){ var opts='<option value="">selecione ou digite</option>'+CAM.vereadores.map(function(v){ return '<option>'+esc(v.parlamentar||v.nome)+'</option>'; }).join(''); return '<div class="field" style="margin-bottom:10px"><label>'+esc(camRot(cp.raw))+'</label><input id="cm-'+cp.key+'" list="cm-verlist" oninput="camPreview()" placeholder="vereador"><datalist id="cm-verlist">'+CAM.vereadores.map(function(v){return '<option value="'+esc(v.parlamentar||v.nome)+'">';}).join('')+'</datalist></div>'; }
+    if(cp.key==='comissao'){ var oc='<option value="">selecione</option>'+CAM.comissoes.map(function(co){ return '<option>'+esc(co.nome)+'</option>'; }).join(''); return '<div class="field" style="margin-bottom:10px"><label>Comissão</label><input id="cm-comissao" list="cm-comlist" oninput="camPreview()"><datalist id="cm-comlist">'+CAM.comissoes.map(function(co){return '<option value="'+esc(co.nome)+'">';}).join('')+'</datalist></div>'; }
+    if(CAM_LONG[cp.key]){ return '<div class="field" style="margin-bottom:10px"><label>'+esc(camRot(cp.raw))+'</label><textarea id="cm-'+cp.key+'" rows="4" oninput="camPreview()"></textarea></div>'; }
+    return '<div class="field" style="margin-bottom:10px"><label>'+esc(camRot(cp.raw))+'</label><input id="cm-'+cp.key+'" oninput="camPreview()"></div>';
+  }).join('');
+  var h='<button class="btn-ghost" onclick="camTab(\'documentos\')" style="margin-bottom:14px"><svg class="ic" style="width:15px;height:15px"><use href="#i-arrow"/></svg> Voltar aos documentos</button>'+
+    '<div style="display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:20px;align-items:start">'+
+    '<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px">'+
+      '<h3 style="color:var(--navy);margin:0 0 4px">'+esc(meta.t)+'</h3><div class="hint" style="font-size:12px;color:var(--slate);margin-bottom:12px">'+(CAM_WORK.nome?('Seu modelo: '+esc(CAM_WORK.nome)):esc(meta.d))+'</div>'+
+      '<div class="field" style="margin-bottom:10px"><label>Número (editável)</label><input id="cm-numero" value="'+camPeekNum(tp)+'" oninput="camPreview()"></div>'+
+      fields+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn-gold" style="flex:1;justify-content:center" onclick="camGerarDoc()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Gerar e salvar</button><button class="btn-ghost" onclick="camExportarAtual()"><svg class="ic" style="width:15px;height:15px"><use href="#i-doc"/></svg> Baixar Word</button></div>'+
+      '<div class="cam-hint" style="margin-top:12px">O miolo jurídico é fixo; você preenche só o que muda. Quer o texto exato da sua Câmara? Clique em <b>Modelo próprio</b> na tela anterior e envie o .docx.</div>'+
+    '</div>'+
+    '<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 26px"><div style="font-size:12px;color:var(--slate);margin-bottom:10px">Pré-visualização</div><div id="cm-preview" class="docpaper" style="min-height:400px"></div></div>'+
+    '</div>';
+  b.innerHTML=h; camPreview();
+}
+function camPreview(){ var p=document.getElementById('cm-preview'); if(!p||!CAM_WORK) return; var v=camValores(); v.numero=esc((document.getElementById('cm-numero')||{}).value||camPeekNum(CAM_WORK.tipo)); p.innerHTML=camHeader()+tplPreencher(CAM_WORK.tpl, v)+camFooter(); }
+function camDocFullHtml(){ var v=camValores(); v.numero=esc((document.getElementById('cm-numero')||{}).value||camPeekNum(CAM_WORK.tipo)); return camHeader()+tplPreencher(CAM_WORK.tpl, v)+camFooter(); }
+function camGerarDoc(){
+  if(!CAM_WORK) return;
+  var numero=(document.getElementById('cm-numero')||{}).value||camPeekNum(CAM_WORK.tipo);
+  var objeto=''; ['ementa','assunto','tema','proposicao','texto'].some(function(k){ var e=document.getElementById('cm-'+k); if(e&&e.value.trim()){ objeto=e.value.trim().slice(0,120); return true; } return false; });
+  var d={ id:'cd'+Date.now(), tipo:CAM_WORK.tipo, numero:numero, objeto:objeto||camMeta(CAM_WORK.tipo).t, data:dataHoje(), html:camDocFullHtml(), meta:{}, cloud:false };
+  CAM.docs.unshift(d); camBumpNum(CAM_WORK.tipo, numero); camSaveLocal(); camPersistConfig(); camPersistDoc(d);
+  try{ registrarAud('Câmara: gerou '+camMeta(CAM_WORK.tipo).t, numero, camOrg()); }catch(e){}
+  toast(camMeta(CAM_WORK.tipo).t+' '+numero+' gerado e salvo. Já pode baixar em Word.');
+  camExportarHtml(d.html, camMeta(CAM_WORK.tipo).t+'_'+numero);
+}
+function camExportarAtual(){ if(!CAM_WORK) return; camExportarHtml(camDocFullHtml(), camMeta(CAM_WORK.tipo).t+'_'+((document.getElementById('cm-numero')||{}).value||'')); }
+function camExportarHtml(inner, titulo){
+  var css='body{font-family:Calibri,sans-serif;font-size:12pt;line-height:1.5;color:#000}h1{font-size:14pt;text-align:center;color:#0A2342}h2{font-size:12pt;color:#0A2342}table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:4pt;font-size:10pt}';
+  var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+inner+'</body></html>';
+  var blob=new Blob(['﻿'+html],{type:'application/msword'}); var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download=(titulo||'documento').replace(/[^a-zA-Z0-9]+/g,'_')+'.doc'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url)},1500);
+}
+function camBaixarDoc(id){ var d=null; for(var i=0;i<CAM.docs.length;i++){ if(CAM.docs[i].id===id){ d=CAM.docs[i]; break; } } if(!d) return; camExportarHtml(d.html, camMeta(d.tipo).t+'_'+(d.numero||'')); }
+function camExcluirDoc(id){ if(!confirm('Excluir este documento gerado?')) return; var d=null; for(var i=0;i<CAM.docs.length;i++){ if(CAM.docs[i].id===id){ d=CAM.docs[i]; break; } } CAM.docs=CAM.docs.filter(function(x){return x.id!==id;}); camSaveLocal(); if(d&&d.cloud&&SB){ try{ SB.from('camara_documentos').delete().eq('id',id); }catch(e){} } camRender(); }
+// ============ MODELOS PROPRIOS (.docx via mammoth) ============
+function camImportarModelo(tp){
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.docx';
+  inp.onchange=async function(){ var f=inp.files&&inp.files[0]; if(!f) return; if(!window.mammoth){ toast('Leitor de Word indisponível. Recarregue a página.'); return; } toast('Importando "'+f.name+'"...');
+    var html=''; try{ var ab=await f.arrayBuffer(); var res=await window.mammoth.convertToHtml({arrayBuffer:ab}); html=res.value||''; }catch(e){ html=''; }
+    if(!html){ toast('Não consegui ler este arquivo. Envie em Word (.docx).'); return; }
+    html=autoDetectarCampos(html);
+    var mod={ id:'cm'+Date.now(), tipo:'modelo', subtipo:tp, objeto:(camMeta(tp).t+': '+f.name), data:dataHoje(), html:html, meta:{subtipo:tp}, cloud:false };
+    CAM.docs.unshift(mod); camSaveLocal(); camPersistDoc(mod); try{ registrarAud('Câmara: importou modelo', f.name, camOrg()); }catch(e){}
+    CAM_TAB='modelos'; camRender(); toast('Modelo "'+f.name+'" importado. Clique em "Preparar campos" para marcar o que muda, ou em "Usar" para gerar já.');
+  };
+  inp.click();
+}
+function camRenderModelos(){
+  var b=document.getElementById('cam-body'); if(!b) return;
+  var mods=CAM.docs.filter(function(d){ return d.tipo==='modelo'; });
+  var h='<div class="cam-hint" style="margin-bottom:16px">Aqui ficam os modelos <b>.docx da sua Câmara</b>. O sistema detecta sozinho os campos que mudam (número, data, nomes). Use <b>Preparar campos</b> para ajustar, marcando {{campo}} no texto. Depois é só <b>Usar</b>: o documento sai no seu texto e no seu timbre.</div>';
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px">';
+  h+= mods.length ? ('<table class="cam-t"><thead><tr><th>Modelo</th><th>Tipo</th><th>Campos</th><th style="width:220px">Ação</th></tr></thead><tbody>'+mods.map(function(d){ var n=tplCampos(d.html).length; return '<tr><td>'+esc(d.objeto||'')+'</td><td>'+esc(camMeta(d.meta&&d.meta.subtipo||d.subtipo).t)+'</td><td>'+n+' campo(s)</td><td><span style="cursor:pointer;color:var(--royal);font-weight:700;font-size:12px" onclick="camUsarModelo(\''+d.id+'\')">usar</span> <span style="cursor:pointer;color:var(--navy);font-weight:700;font-size:12px" onclick="camPrepararModelo(\''+d.id+'\')">preparar campos</span> <span style="cursor:pointer;color:#C62D45;font-weight:700;font-size:12px" onclick="camExcluirDoc(\''+d.id+'\')">excluir</span></td></tr>'; }).join('')+'</tbody></table>') : '<div class="hint" style="color:var(--slate);font-size:13px">Nenhum modelo importado ainda. Vá em <b>Documentos</b> e clique em <b>Modelo próprio</b> no tipo desejado.</div>';
+  h+='</div>'; b.innerHTML=h;
+}
+function camUsarModelo(id){ var d=null; for(var i=0;i<CAM.docs.length;i++){ if(CAM.docs[i].id===id){ d=CAM.docs[i]; break; } } if(!d) return; var tp=(d.meta&&d.meta.subtipo)||d.subtipo||'oficio'; CAM_TAB='documentos'; camRender(); camNovoDoc(tp, d.html, d.objeto); }
+function camPrepararModelo(id){ var d=null; for(var i=0;i<CAM.docs.length;i++){ if(CAM.docs[i].id===id){ d=CAM.docs[i]; break; } } if(!d) return;
+  var btns=[['numero','Número'],['data','Data'],['ementa','Ementa'],['autor','Autor'],['texto','Texto'],['justificativa','Justificativa'],['__custom','Outro campo']];
+  var bar=btns.map(function(bb){ return '<button type="button" class="chip c-ok" style="cursor:pointer;margin:0 5px 6px 0;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:#fff" onclick="camMarcarCampo(\''+bb[0]+'\')">'+esc(bb[1])+'</button>'; }).join('');
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 8px">Selecione no texto a parte que <b>muda a cada documento</b> e clique no campo. O resto fica fixo. Faça uma vez.</p><div style="margin-bottom:8px">'+bar+'</div><div id="cam-mark" contenteditable="true" style="border:1px solid var(--line);border-radius:10px;padding:14px;max-height:48vh;overflow:auto;font-size:13px;line-height:1.7">'+d.html+'</div><button class="btn-gold" style="width:100%;justify-content:center;margin-top:12px" onclick="camSalvarModeloPrep(\''+id+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-save"/></svg> Salvar modelo preparado</button>';
+  abrirModal('Preparar campos: '+esc(d.objeto), h);
+}
+function camMarcarCampo(nome){ if(nome==='__custom'){ nome=prompt('Nome do campo que muda (ex.: destinatario):'); if(!nome) return; nome=tplKey(nome); } var area=document.getElementById('cam-mark'); var sel=window.getSelection(); if(!area||!sel||!sel.rangeCount||sel.isCollapsed){ toast('Selecione no texto a parte que muda, depois clique no campo.'); return; } var range=sel.getRangeAt(0); if(!area.contains(range.commonAncestorContainer)){ toast('Selecione dentro do texto do modelo.'); return; } range.deleteContents(); range.insertNode(document.createTextNode('{{'+nome+'}}')); sel.removeAllRanges(); toast('Campo "'+nome+'" marcado.'); }
+function camSalvarModeloPrep(id){ var area=document.getElementById('cam-mark'); if(!area) return; var html=area.innerHTML; var d=null; for(var i=0;i<CAM.docs.length;i++){ if(CAM.docs[i].id===id){ d=CAM.docs[i]; break; } } if(!d) return; d.html=html; camSaveLocal(); camPersistDoc(d); fecharModal(); var n=tplCampos(html).length; toast(n?('Modelo preparado: '+n+' campo(s).'):'Modelo salvo.'); camRender(); }
+// ============ SESSAO PLENARIA E ATA ============
+function camRenderSessoes(){
+  var b=document.getElementById('cam-body'); if(!b) return;
+  if(!CAM.config){ b.innerHTML='<div class="cam-hint">Preencha o <b>Cadastro da Câmara</b> antes de abrir uma sessão.</div>'; return; }
+  if(CAM_SESS){ camRenderSessaoDetalhe(); return; }
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 style="color:var(--navy);margin:0">Sessões plenárias</h3><button class="btn-gold" onclick="camNovaSessao()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Nova sessão</button></div>';
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px">';
+  h+= CAM.sessoes.length ? ('<table class="cam-t"><thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Hora</th><th>Situação</th><th style="width:120px">Ação</th></tr></thead><tbody>'+CAM.sessoes.map(function(s){ return '<tr><td>'+esc(s.numero||'')+'</td><td>'+esc(s.tipo||'')+'</td><td>'+esc(s.data||'')+'</td><td>'+esc(s.hora||'')+'</td><td>'+(s.aberta?'<svg class="ic" style="width:12px;height:12px;stroke:#0A2342;vertical-align:-1px"><use href="#i-clock"/></svg> Em aberto':'<svg class="ic" style="width:12px;height:12px;stroke:#0A2342;vertical-align:-1px"><use href="#i-check"/></svg> Encerrada')+'</td><td><span style="cursor:pointer;color:var(--royal);font-weight:700;font-size:12px" onclick="camAbrirSessao(\''+s.id+'\')">abrir</span></td></tr>'; }).join('')+'</tbody></table>') : '<div class="hint" style="color:var(--slate);font-size:13px">Nenhuma sessão criada. Clique em <b>Nova sessão</b> para montar a pauta, registrar presença e votação, e gerar a ata.</div>';
+  h+='</div>'; b.innerHTML=h;
+}
+function camNovaSessao(){
+  var h='<div class="field"><label>Número da sessão</label><input id="cs-num" placeholder="ex.: 012/2026" value="'+camPeekNum('sessao')+'"></div>'+
+    '<div class="field" style="margin-top:8px"><label>Tipo</label><select id="cs-tipo"><option>Ordinária</option><option>Extraordinária</option><option>Solene</option></select></div>'+
+    '<div style="display:flex;gap:8px;margin-top:8px"><div class="field" style="flex:1"><label>Data</label><input id="cs-data" type="date"></div><div class="field" style="flex:1"><label>Hora</label><input id="cs-hora" type="time" value="19:00"></div></div>'+
+    '<button class="btn-gold" style="width:100%;justify-content:center;margin-top:14px" onclick="camSalvarNovaSessao()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Criar sessão</button>';
+  abrirModal('Nova sessão plenária', h);
+}
+function camFmtData(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso; }
+function camSalvarNovaSessao(){ function gv(id){ var e=document.getElementById(id); return e?e.value:''; } var num=(gv('cs-num')||'').trim(); if(!num){ toast('Informe o número da sessão.'); return; } var s={ id:'cs'+Date.now(), numero:num, tipo:gv('cs-tipo'), data:camFmtData(gv('cs-data')), hora:gv('cs-hora'), expediente:[], ordemDia:[], presencas:{}, aberta:true, cloud:false }; CAM.sessoes.unshift(s); camBumpNum('sessao', num); camSaveLocal(); camPersistConfig(); camPersistSessao(s); fecharModal(); CAM_SESS=s.id; camRender(); }
+function camSessaoAtual(){ for(var i=0;i<CAM.sessoes.length;i++){ if(CAM.sessoes[i].id===CAM_SESS){ return CAM.sessoes[i]; } } return null; }
+function camAbrirSessao(id){ CAM_SESS=id; CAM_TAB='sessao'; camRender(); }
+function camRenderSessaoDetalhe(){
+  var b=document.getElementById('cam-body'); var s=camSessaoAtual(); if(!s){ CAM_SESS=null; camRenderSessoes(); return; }
+  var props=CAM.docs.filter(function(d){ return d.tipo!=='modelo'; });
+  var h='<button class="btn-ghost" onclick="camVoltarSessoes()" style="margin-bottom:14px"><svg class="ic" style="width:15px;height:15px"><use href="#i-arrow"/></svg> Voltar às sessões</button>';
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px"><h3 style="color:var(--navy);margin:0 0 4px">Sessão '+esc(s.tipo)+' nº '+esc(s.numero)+'</h3><div style="font-size:13px;color:var(--slate)">'+esc(s.data||'sem data')+' às '+esc(s.hora||'')+'</div></div>';
+  // presenca
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px"><h3 style="color:var(--navy);margin:0 0 10px">Presença ('+CAM.vereadores.length+' vereadores)</h3>';
+  h+= CAM.vereadores.length ? CAM.vereadores.map(function(v,i){ var pres=s.presencas[i]!==false; return '<label style="display:inline-flex;align-items:center;gap:6px;margin:0 14px 8px 0;font-size:13px;cursor:pointer"><input type="checkbox" '+(pres?'checked':'')+' onchange="camTogglePresenca('+i+',this.checked)"> '+esc(v.parlamentar||v.nome)+' <span style="font-size:11px;font-weight:700;color:'+(pres?'#0A2342':'#7a5b00')+'">('+(pres?'presente':'ausente')+')</span></label>'; }).join('') : '<div class="hint" style="color:var(--slate);font-size:13px">Cadastre os vereadores na aba Cadastro para marcar presença.</div>';
+  h+='</div>';
+  // expediente
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="color:var(--navy);margin:0">Expediente</h3><button class="btn-ghost" onclick="camAddPautaItem(\'exp\')"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button></div>';
+  h+= s.expediente.length ? s.expediente.map(function(it,i){ return '<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;display:flex;justify-content:space-between"><span>'+esc(it.titulo)+'</span><span style="cursor:pointer;color:#C62D45;font-size:12px;font-weight:700" onclick="camDelPautaItem(\'exp\','+i+')">excluir</span></div>'; }).join('') : '<div class="hint" style="color:var(--slate);font-size:13px">Leituras, comunicações e correspondências lidas no início da sessão.</div>';
+  h+='</div>';
+  // ordem do dia
+  h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="color:var(--navy);margin:0">Ordem do Dia</h3><button class="btn-ghost" onclick="camAddPautaItem(\'od\')"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar matéria</button></div>';
+  h+= s.ordemDia.length ? s.ordemDia.map(function(it,i){ return '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between"><b style="font-size:13px">'+esc(it.titulo)+'</b><span style="cursor:pointer;color:#C62D45;font-size:12px;font-weight:700" onclick="camDelPautaItem(\'od\','+i+')">excluir</span></div><div style="font-size:12.5px;color:var(--slate);margin-top:4px">Resultado: <b style="color:#0A2342">'+esc(it.resultado||'a deliberar')+'</b> · Votação: '+esc(it.votacao||'simbólica')+(it.votacao==='nominal'?(' ('+camContaVotos(it)+')'):'')+' <span style="cursor:pointer;color:var(--royal);font-weight:700" onclick="camEditResultado('+i+')">registrar resultado</span></div></div>'; }).join('') : '<div class="hint" style="color:var(--slate);font-size:13px">As proposições em pauta. Puxe do que já foi gerado ou digite. Registre o resultado (aprovado, rejeitado, retirado, adiado, vista) e a votação.</div>';
+  h+='</div>';
+  // acoes
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-gold" onclick="camGerarAta()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-doc"/></svg> Gerar Ata (Word)</button><button class="btn-ghost" onclick="camGerarPauta()"><svg class="ic" style="width:15px;height:15px"><use href="#i-doc"/></svg> Gerar Pauta</button><button class="btn-ghost" onclick="camGerarConvocacao()"><svg class="ic" style="width:15px;height:15px"><use href="#i-doc"/></svg> Edital de Convocação</button>'+(s.aberta?'<button class="btn-ghost" onclick="camEncerrarSessao()"><svg class="ic" style="width:15px;height:15px"><use href="#i-check"/></svg> Encerrar sessão</button>':'')+'</div>';
+  b.innerHTML=h;
+}
+function camVoltarSessoes(){ CAM_SESS=null; camRender(); }
+function camTogglePresenca(i,pres){ var s=camSessaoAtual(); if(!s) return; s.presencas[i]=pres; camSaveLocal(); camPersistSessao(s); camRenderSessaoDetalhe(); }
+function camAddPautaItem(bloco){ var s=camSessaoAtual(); if(!s) return; var props=CAM.docs.filter(function(d){ return d.tipo!=='modelo'; });
+  var opts='<option value="">(digitar manualmente)</option>'+props.map(function(d,i){ return '<option value="'+i+'">'+esc(camMeta(d.tipo).t)+' '+esc(d.numero||'')+' - '+esc(d.objeto||'')+'</option>'; }).join('');
+  var h='<div class="field"><label>Puxar de um documento já gerado</label><select id="cp-doc" onchange="camPreencheTituloItem()">'+opts+'</select></div><div class="field" style="margin-top:8px"><label>Título / descrição do item</label><input id="cp-tit" placeholder="ex.: Projeto de Lei 003/2026 - denominação de via"></div><button class="btn-gold" style="width:100%;justify-content:center;margin-top:14px" onclick="camSalvaPautaItem(\''+bloco+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Adicionar</button>';
+  window._camPautaProps=props; abrirModal(bloco==='exp'?'Item do expediente':'Matéria da ordem do dia', h);
+}
+function camPreencheTituloItem(){ var sel=document.getElementById('cp-doc'); var props=window._camPautaProps||[]; var t=document.getElementById('cp-tit'); if(sel&&sel.value!==''&&props[sel.value]){ var d=props[sel.value]; t.value=camMeta(d.tipo).t+' '+(d.numero||'')+' - '+(d.objeto||''); } }
+function camSalvaPautaItem(bloco){ var s=camSessaoAtual(); if(!s) return; var t=(document.getElementById('cp-tit')||{}).value; t=(t||'').trim(); if(!t){ toast('Informe o título do item.'); return; } if(bloco==='exp') s.expediente.push({titulo:t}); else s.ordemDia.push({titulo:t, resultado:'', votacao:'simbólica', votos:{}}); camSaveLocal(); camPersistSessao(s); fecharModal(); camRenderSessaoDetalhe(); }
+function camDelPautaItem(bloco,i){ var s=camSessaoAtual(); if(!s) return; if(bloco==='exp') s.expediente.splice(i,1); else s.ordemDia.splice(i,1); camSaveLocal(); camPersistSessao(s); camRenderSessaoDetalhe(); }
+function camContaVotos(it){ var sim=0,nao=0,abs=0; var vt=it.votos||{}; Object.keys(vt).forEach(function(k){ if(vt[k]==='Sim')sim++; else if(vt[k]==='Não')nao++; else if(vt[k]==='Abstenção')abs++; }); return sim+' sim, '+nao+' não, '+abs+' abst.'; }
+function camEditResultado(idx){ var s=camSessaoAtual(); if(!s) return; var it=s.ordemDia[idx]; if(!it) return;
+  var res=['Aprovado','Rejeitado','Retirado','Adiado','Vista'];
+  var h='<div class="field"><label>Resultado</label><select id="cr-res">'+res.map(function(r){ return '<option '+(it.resultado===r?'selected':'')+'>'+r+'</option>'; }).join('')+'</select></div>'+
+    '<div class="field" style="margin-top:8px"><label>Tipo de votação</label><select id="cr-vot" onchange="camToggleNominal()"><option value="simbólica" '+(it.votacao==='simbólica'?'selected':'')+'>Simbólica</option><option value="nominal" '+(it.votacao==='nominal'?'selected':'')+'>Nominal</option></select></div>'+
+    '<div id="cr-nominal" style="margin-top:10px;'+(it.votacao==='nominal'?'':'display:none')+'"><div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">Voto de cada vereador presente</div>'+CAM.vereadores.map(function(v,i){ if(s.presencas[i]===false) return ''; var vv=(it.votos&&it.votos[i])||''; return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:13px"><span style="flex:1">'+esc(v.parlamentar||v.nome)+'</span><select id="cr-voto-'+i+'"><option value="">-</option><option '+(vv==='Sim'?'selected':'')+'>Sim</option><option '+(vv==='Não'?'selected':'')+'>Não</option><option '+(vv==='Abstenção'?'selected':'')+'>Abstenção</option></select></div>'; }).join('')+'</div>'+
+    '<button class="btn-gold" style="width:100%;justify-content:center;margin-top:14px" onclick="camSalvaResultado('+idx+')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Salvar resultado</button>';
+  abrirModal('Resultado: '+esc(it.titulo), h);
+}
+function camToggleNominal(){ var sel=document.getElementById('cr-vot'); var box=document.getElementById('cr-nominal'); if(sel&&box) box.style.display=(sel.value==='nominal')?'':'none'; }
+function camSalvaResultado(idx){ var s=camSessaoAtual(); if(!s) return; var it=s.ordemDia[idx]; if(!it) return; it.resultado=(document.getElementById('cr-res')||{}).value||''; it.votacao=(document.getElementById('cr-vot')||{}).value||'simbólica'; it.votos={}; if(it.votacao==='nominal'){ CAM.vereadores.forEach(function(v,i){ var e=document.getElementById('cr-voto-'+i); if(e&&e.value) it.votos[i]=e.value; }); } camSaveLocal(); camPersistSessao(s); fecharModal(); camRenderSessaoDetalhe(); }
+function camEncerrarSessao(){ var s=camSessaoAtual(); if(!s) return; s.aberta=false; camSaveLocal(); camPersistSessao(s); toast('Sessão encerrada.'); camRenderSessaoDetalhe(); }
+// ATA: montagem programatica por blocos fixos + dados registrados
+function camGerarAta(){
+  var s=camSessaoAtual(); if(!s) return; var c=CAM.config||{};
+  var presentes=[], ausentes=[]; CAM.vereadores.forEach(function(v,i){ (s.presencas[i]===false?ausentes:presentes).push(v.parlamentar||v.nome); });
+  var b=camHeader();
+  b+='<h1>ATA DA SESSÃO '+esc((s.tipo||'').toUpperCase())+' Nº '+esc(s.numero)+'</h1>';
+  b+='<p>Aos '+esc(s.data||'____')+', às '+esc(s.hora||'____')+', na sede da '+esc(c.nome||'Câmara Municipal')+', reuniram-se os Senhores Vereadores para a Sessão '+esc(s.tipo||'')+', da '+esc(c.legislatura?('Legislatura '+c.legislatura):'presente Legislatura')+(c.sessaoLeg?(', '+esc(c.sessaoLeg)):'')+', sob a presidência do(a) Vereador(a) '+esc(camMesaNome('presidente')||'Presidente')+'.</p>';
+  b+='<h2>PRESENÇA</h2><p><strong>Presentes ('+presentes.length+'):</strong> '+(presentes.length?esc(presentes.join('; ')):'nenhum registrado')+'.</p><p><strong>Ausentes ('+ausentes.length+'):</strong> '+(ausentes.length?esc(ausentes.join('; ')):'nenhum')+'.</p>';
+  b+='<p>Havendo número regimental, o(a) Presidente declarou aberta a sessão.</p>';
+  b+='<h2>EXPEDIENTE</h2>'+(s.expediente.length? ('<p>Foram lidos os seguintes itens do expediente:</p><ul>'+s.expediente.map(function(it){return '<li>'+esc(it.titulo)+'</li>';}).join('')+'</ul>') : '<p>Não houve matéria em expediente.</p>');
+  b+='<h2>ORDEM DO DIA</h2>';
+  if(s.ordemDia.length){ b+= s.ordemDia.map(function(it,i){ var txt='<p><strong>'+(i+1)+'. '+esc(it.titulo)+'</strong><br>Submetida à deliberação, a matéria foi <strong>'+esc((it.resultado||'a deliberar').toUpperCase())+'</strong>, em votação '+esc(it.votacao||'simbólica')+'.'; if(it.votacao==='nominal'){ txt+=' Votação nominal: '+esc(camContaVotos(it))+'.'; var det=[]; CAM.vereadores.forEach(function(v,vi){ if(it.votos&&it.votos[vi]) det.push((v.parlamentar||v.nome)+': '+it.votos[vi]); }); if(det.length) txt+=' ('+esc(det.join('; '))+')'; } txt+='</p>'; return txt; }).join(''); }
+  else { b+='<p>Não houve matéria na ordem do dia.</p>'; }
+  b+='<p style="margin-top:12pt">Nada mais havendo a tratar, o(a) Presidente declarou encerrada a sessão, da qual se lavrou a presente ata que, após lida e aprovada, vai assinada na forma regimental.</p>';
+  b+='<p style="margin-top:20pt">'+esc(c.municipio||'')+', '+esc(s.data||dataHoje())+'.</p>';
+  b+='<p style="text-align:center;margin-top:26pt">_____________________________________<br><strong>'+esc(camMesaNome('presidente')||'')+'</strong><br>Presidente</p>';
+  b+='<p style="text-align:center;margin-top:14pt">_____________________________________<br><strong>'+esc(camMesaNome('sec1')||'')+'</strong><br>1º Secretário</p>';
+  b+=camFooter();
+  var d={ id:'cd'+Date.now(), tipo:'ata', numero:s.numero, objeto:'Ata da sessão '+s.tipo+' nº '+s.numero, data:s.data||dataHoje(), html:b, meta:{sessao:s.id}, cloud:false };
+  CAM.docs.unshift(d); camSaveLocal(); camPersistDoc(d);
+  try{ registrarAud('Câmara: gerou ata', s.numero, camOrg()); }catch(e){}
+  camExportarHtml(b, 'Ata_'+s.tipo+'_'+s.numero); toast('Ata da sessão '+s.numero+' gerada em Word e salva nos documentos.');
+}
+function camGerarPauta(){ var s=camSessaoAtual(); if(!s) return; var c=CAM.config||{}; var b=camHeader()+'<h1>PAUTA DA SESSÃO '+esc((s.tipo||'').toUpperCase())+' Nº '+esc(s.numero)+'</h1><p>'+esc(s.data||'')+' às '+esc(s.hora||'')+'</p>'; b+='<h2>EXPEDIENTE</h2>'+(s.expediente.length?('<ol>'+s.expediente.map(function(it){return '<li>'+esc(it.titulo)+'</li>';}).join('')+'</ol>'):'<p>Sem itens.</p>'); b+='<h2>ORDEM DO DIA</h2>'+(s.ordemDia.length?('<ol>'+s.ordemDia.map(function(it){return '<li>'+esc(it.titulo)+'</li>';}).join('')+'</ol>'):'<p>Sem matérias.</p>'); b+='<p style="text-align:center;margin-top:26pt">_____________________________________<br><strong>'+esc(camMesaNome('presidente')||'')+'</strong><br>Presidente da Câmara Municipal</p>'+camFooter(); camExportarHtml(b,'Pauta_'+s.tipo+'_'+s.numero); toast('Pauta gerada em Word.'); }
+function camGerarConvocacao(){ var s=camSessaoAtual(); if(!s) return; var pautaTxt=''; if(s.expediente.length) pautaTxt+='Expediente: '+s.expediente.map(function(it){return it.titulo;}).join('; ')+'. '; if(s.ordemDia.length) pautaTxt+='Ordem do Dia: '+s.ordemDia.map(function(it){return it.titulo;}).join('; ')+'.'; var tpl=CAM_SEED.edital_convocacao; var v=camValores(); v.numero=camPeekNum('edital_convocacao'); v.tipo_sessao=esc(s.tipo||''); v.data_sessao=esc(s.data||''); v.hora_sessao=esc(s.hora||''); v.pauta=esc(pautaTxt||'a definir'); var b=camHeader()+tplPreencher(tpl,v)+camFooter(); camExportarHtml(b,'Convocacao_'+s.tipo+'_'+s.numero); toast('Edital de convocação gerado em Word.'); }
+// ==================== FIM MODULO CAMARA ====================
+
+dbLoad(); renderContratos(); renderDashboard(); renderAdmin(); camLoad();
 </script>
 </body>
 </html>
