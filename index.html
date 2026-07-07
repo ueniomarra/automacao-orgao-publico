@@ -2015,7 +2015,7 @@ async function gerarDoc(){
 var PROX_FLUXO={solicitacao:'dfd',dfd:'etp',etp:'tr',tr:'edital'};
 function atualizarChain(){
   var b=document.getElementById('ws-chain'); if(!b) return;
-  if(!DOC.consulta && PROX_FLUXO[DOC.tipo]){ b.style.display='flex'; b.innerHTML='<svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-arrow"/></svg> Gerar '+nomeTipo(PROX_FLUXO[DOC.tipo])+' deste '+nomeTipo(DOC.tipo)+' (puxa tudo)';
+  if(!DOC.consulta && PROX_FLUXO[DOC.tipo]){ b.style.display='flex'; var _art=(DOC.tipo==='solicitacao')?'desta':'deste'; b.innerHTML='<svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-arrow"/></svg> Gerar '+nomeTipo(PROX_FLUXO[DOC.tipo])+' '+_art+' '+nomeTipo(DOC.tipo)+' (puxa tudo)';
     b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse');
     toast('Documento gerado. Clique no botão azul para seguir para o '+nomeTipo(PROX_FLUXO[DOC.tipo])+', já preenchido.');
   }
@@ -2025,12 +2025,12 @@ function atualizarChain(){
 }
 function proximoDoFluxo(){
   var p=PROX_FLUXO[DOC.tipo]; if(!p) return;
-  var origem=nomeTipo(DOC.tipo); var num=DOC.numeroGerado||'';
+  var origem=nomeTipo(DOC.tipo); var num=DOC.numeroGerado||''; var _fem=(DOC.tipo==='solicitacao');
   abrirDoc(p,false);
   // deixa CLARO que o documento anterior foi salvo (o usuário costuma perguntar "para onde foi o TR?")
   var ff=document.getElementById('ws-fields');
   if(ff){ var d=document.createElement('div'); d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px';
-    d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> '+esc(origem)+(num?(' nº '+esc(num)):'')+' gerado e <b>salvo na Central de Documentos</b>. Este '+esc(nomeTipo(p))+' nasce dele (objeto, itens e valor já vieram): confira e complete.';
+    d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> '+esc(origem)+(num?(' nº '+esc(num)):'')+(_fem?' gerada e <b>salva':' gerado e <b>salvo')+' na Central de Documentos</b>. Este '+esc(nomeTipo(p))+' nasce d'+(_fem?'ela':'ele')+' (objeto, itens e valor já vieram): confira e complete.';
     ff.insertBefore(d, ff.firstChild); }
 }
 function gerarTR(){
@@ -2411,6 +2411,7 @@ renderContratos();
 var BASELEGAL=[
   {cat:'Licitações e Contratos',t:'Lei nº 14.133/2021',s:'Lei de Licitações e Contratos Administrativos. Norma principal de todo o sistema.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
   {cat:'Licitações e Contratos',t:'Decreto nº 12.807/2025',s:'Atualiza os valores da Lei 14.133 para 2026 (vigor 01/01/2026). Dispensa: inciso I R$ 130.984,20; inciso II R$ 65.492,11.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/decreto/D12807.htm'},
+  {cat:'Licitações e Contratos',t:'Art. 12, VII e art. 72, I',s:'Fase de demanda. O processo é instruído com o Documento de Formalização da Demanda (DFD), o documento inicial. A solicitação da secretaria é o ato interno que origina o DFD; no planejamento, os DFDs alimentam o plano de contratações anual (PCA), que é facultativo.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
   {cat:'Licitações e Contratos',t:'Art. 6º, inciso XXIII',s:'Define o Termo de Referência e seus elementos.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
   {cat:'Licitações e Contratos',t:'Art. 18 + IN SEGES 58/2022',s:'Estudo Técnico Preliminar (ETP). Treze elementos; obrigatórios os incisos I, IV, VI, VIII e XIII.',st:'vigente',l:'https://www.gov.br/compras/pt-br/acesso-a-informacao/legislacao/instrucoes-normativas/instrucao-normativa-seges-no-58-de-8-de-agosto-de-2022'},
   {cat:'Licitações e Contratos',t:'Art. 23 + IN SEGES 65/2021',s:'Pesquisa de preços e valor estimado. Define as fontes e a ordem de prioridade.',st:'vigente',l:'https://www.gov.br/compras/pt-br/acesso-a-informacao/legislacao/instrucoes-normativas'},
@@ -2429,7 +2430,7 @@ var BASELEGAL=[
   {cat:'Meio Ambiente',t:'LC nº 140/2011',s:'Competência municipal de licenciamento e fiscalização (art. 9). Poder de polícia ambiental é dever do município.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp140.htm'},
   {cat:'Meio Ambiente',t:'Decreto nº 6.514/2008',s:'Infrações e sanções administrativas ambientais (auto de infração). Usar versão compilada, com alteração do Decreto 12.877/2026.',st:'vigente',l:'http://www.planalto.gov.br/ccivil_03/_ato2007-2010/2008/decreto/d6514compilado.htm'},
   {cat:'Meio Ambiente',t:'Lei nº 9.605/1998',s:'Lei de Crimes Ambientais. Alterada pela Lei 15.190/2025.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/l9605.htm'},
-  {cat:'Meio Ambiente',t:'Lei nº 15.190/2025',s:'Lei Geral do Licenciamento Ambiental. Em vigor desde 04/02/2026, com 3 ADIs no STF (sem suspensão). Citar com cautela.',st:'atencao',l:'https://www2.camara.leg.br/legin/fed/lei/2025/lei-15190-8-agosto-2025-797833-publicacaooriginal-176089-pl.html'},
+  {cat:'Meio Ambiente',t:'Lei nº 15.190/2025',s:'Lei Geral do Licenciamento Ambiental. Em vigor desde 04/02/2026, com 3 ADIs no STF (7913, 7916 e 7919, relator Min. Alexandre de Moraes), sem cautelar de suspensão até o momento. Citar com cautela.',st:'atencao',l:'https://www2.camara.leg.br/legin/fed/lei/2025/lei-15190-8-agosto-2025-797833-publicacaooriginal-176089-pl.html'},
   {cat:'Meio Ambiente',t:'Lei nº 12.305/2010',s:'Política Nacional de Resíduos Sólidos (PNRS).',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2007-2010/2010/lei/l12305.htm'},
   {cat:'Meio Ambiente',t:'LC GO nº 177/2022 + Decreto 10.190/2022',s:'ICMS Ecológico em Goiás. Critérios ambientais para repasse aos municípios.',st:'vigente',l:'https://legisla.casacivil.go.gov.br/api/v2/pesquisa/legislacoes/106018/pdf'}
 ];
