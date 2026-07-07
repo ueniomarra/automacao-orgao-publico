@@ -4750,7 +4750,7 @@ function camNovoDoc(tp, tplHtml, tplNome){
       '<div class="field" style="margin-bottom:10px"><label>Número (editável)</label><input id="cm-numero" value="'+camPeekNum(tp)+'" oninput="camPreview()"></div>'+
       fields+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn-gold" style="flex:1;justify-content:center" onclick="camGerarDoc()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Gerar e salvar</button><button class="btn-ghost" onclick="camExportarAtual()"><svg class="ic" style="width:15px;height:15px"><use href="#i-doc"/></svg> Baixar Word</button></div>'+
-      '<div class="cam-hint" style="margin-top:12px">O miolo jurídico é fixo; você preenche só o que muda. Quer o texto exato da sua Câmara? Clique em <b>Modelo próprio</b> na tela anterior e envie o .docx.</div>'+
+      '<div class="cam-hint" style="margin-top:12px">O miolo jurídico é fixo; você preenche só o que muda. Quer o texto exato da sua Câmara? Clique em <b>Modelo próprio</b> na tela anterior e envie o <b>Word (.docx), PDF ou um documento escaneado</b> (foto ou scan); o sistema lê por OCR quando for escaneado.</div>'+
     '</div>'+
     '<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 26px"><div style="font-size:12px;color:var(--slate);margin-bottom:10px">Pré-visualização</div><div id="cm-preview" class="docpaper" style="min-height:400px"></div></div>'+
     '</div>';
@@ -4780,21 +4780,53 @@ function camBaixarDoc(id){ var d=null; for(var i=0;i<CAM.docs.length;i++){ if(CA
 function camExcluirDoc(id){ if(!confirm('Excluir este documento gerado?')) return; var d=null; for(var i=0;i<CAM.docs.length;i++){ if(CAM.docs[i].id===id){ d=CAM.docs[i]; break; } } CAM.docs=CAM.docs.filter(function(x){return x.id!==id;}); camSaveLocal(); if(d&&d.cloud&&SB){ try{ SB.from('camara_documentos').delete().eq('id',id); }catch(e){} } camRender(); }
 // ============ MODELOS PROPRIOS (.docx via mammoth) ============
 function camImportarModelo(tp){
-  var inp=document.createElement('input'); inp.type='file'; inp.accept='.docx';
-  inp.onchange=async function(){ var f=inp.files&&inp.files[0]; if(!f) return; if(!window.mammoth){ toast('Leitor de Word indisponível. Recarregue a página.'); return; } toast('Importando "'+f.name+'"...');
-    var html=''; try{ var ab=await f.arrayBuffer(); var res=await window.mammoth.convertToHtml({arrayBuffer:ab}); html=res.value||''; }catch(e){ html=''; }
-    if(!html){ toast('Não consegui ler este arquivo. Envie em Word (.docx).'); return; }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.docx,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,image/*';
+  inp.onchange=async function(){
+    var f=inp.files&&inp.files[0]; if(!f) return;
+    var ext=(f.name.split('.').pop()||'').toLowerCase();
+    var prog=function(m){ toast(m); };
+    var html='', ocr=false;
+    try{
+      if(ext==='docx'){ if(!window.mammoth){ toast('Leitor de Word indisponível. Recarregue a página.'); return; } prog('Importando "'+f.name+'"...'); var ab=await f.arrayBuffer(); var res=await window.mammoth.convertToHtml({arrayBuffer:ab}); html=res.value||''; }
+      else if(ext==='pdf'){ prog('Lendo o PDF "'+f.name+'"...'); var ab2=await f.arrayBuffer(); var r=await anLerPdf(ab2, prog); html=camTextoParaHtml(r.texto); ocr=r.ocr; }
+      else { prog('Lendo o documento escaneado "'+f.name+'" por OCR...'); var txt=await camOcrImagem(f, prog); html=camTextoParaHtml(txt); ocr=true; }
+    }catch(e){ html=''; }
+    if(!html || !html.replace(/<[^>]+>/g,'').replace(/\s/g,'')){ toast('Não consegui extrair texto deste arquivo. Se for escaneado, use uma imagem nítida, reta e bem iluminada, ou envie em Word (.docx).'); return; }
     html=autoDetectarCampos(html);
-    var mod={ id:'cm'+Date.now(), tipo:'modelo', subtipo:tp, objeto:(camMeta(tp).t+': '+f.name), data:dataHoje(), html:html, meta:{subtipo:tp}, cloud:false };
-    CAM.docs.unshift(mod); camSaveLocal(); camPersistDoc(mod); try{ registrarAud('Câmara: importou modelo', f.name, camOrg()); }catch(e){}
-    CAM_TAB='modelos'; camRender(); toast('Modelo "'+f.name+'" importado. Clique em "Preparar campos" para marcar o que muda, ou em "Usar" para gerar já.');
+    var mod={ id:'cm'+Date.now(), tipo:'modelo', subtipo:tp, objeto:(camMeta(tp).t+': '+f.name), data:dataHoje(), html:html, meta:{subtipo:tp, ocr:ocr}, cloud:false };
+    CAM.docs.unshift(mod); camSaveLocal(); camPersistDoc(mod); try{ registrarAud('Câmara: importou modelo'+(ocr?' (OCR)':''), f.name, camOrg()); }catch(e){}
+    CAM_TAB='modelos'; camRender();
+    toast(ocr ? ('Documento escaneado "'+f.name+'" lido por OCR e importado. Confira o texto em "Preparar campos" (a leitura de escaneado pode ter pequenos erros).') : ('Modelo "'+f.name+'" importado. Clique em "Preparar campos" para marcar o que muda, ou em "Usar" para gerar já.'));
   };
   inp.click();
+}
+// texto puro (de PDF ou OCR) vira paragrafos HTML para o motor de placeholders
+function camTextoParaHtml(txt){
+  txt=String(txt||'').replace(/\r/g,'');
+  var blocks=txt.split(/\n\s*\n/); if(blocks.length<=1){ blocks=txt.split(/\n/); }
+  return blocks.map(function(b){ b=b.replace(/[ \t]+/g,' ').trim(); if(!b) return ''; return '<p>'+esc(b)+'</p>'; }).filter(Boolean).join('');
+}
+// OCR de imagem escaneada (foto/scan), 100% local (Tesseract), sem internet de IA e sem custo de token
+async function camOcrImagem(file, prog){
+  var Tess=await anEnsureTess();
+  if(prog) prog('Preparando OCR do documento escaneado...');
+  var cv=await camImagemParaCanvas(file);
+  var worker=await Tess.createWorker('por');
+  try{ if(prog) prog('Lendo o documento escaneado por OCR...'); var r=await worker.recognize(cv); return (r&&r.data&&r.data.text)||''; }
+  finally{ try{ await worker.terminate(); }catch(e){} }
+}
+function camImagemParaCanvas(file){
+  return new Promise(function(resolve,reject){
+    var url=URL.createObjectURL(file); var img=new Image();
+    img.onload=function(){ var mx=Math.max(img.width,1); var scale=Math.min(2, Math.max(1, 1600/mx)); var cv=document.createElement('canvas'); cv.width=Math.round(img.width*scale); cv.height=Math.round(img.height*scale); cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height); URL.revokeObjectURL(url); resolve(cv); };
+    img.onerror=function(){ URL.revokeObjectURL(url); reject(new Error('imagem inválida')); };
+    img.src=url;
+  });
 }
 function camRenderModelos(){
   var b=document.getElementById('cam-body'); if(!b) return;
   var mods=CAM.docs.filter(function(d){ return d.tipo==='modelo'; });
-  var h='<div class="cam-hint" style="margin-bottom:16px">Aqui ficam os modelos <b>.docx da sua Câmara</b>. O sistema detecta sozinho os campos que mudam (número, data, nomes). Use <b>Preparar campos</b> para ajustar, marcando {{campo}} no texto. Depois é só <b>Usar</b>: o documento sai no seu texto e no seu timbre.</div>';
+  var h='<div class="cam-hint" style="margin-bottom:16px">Aqui ficam os modelos <b>da sua Câmara</b>, enviados em <b>Word (.docx), PDF ou documento escaneado</b> (foto ou scan, lido por OCR local). O sistema detecta sozinho os campos que mudam (número, data, nomes). Use <b>Preparar campos</b> para ajustar, marcando {{campo}} no texto. Depois é só <b>Usar</b>: o documento sai no seu texto e no seu timbre. Em documento escaneado, confira o texto (o OCR pode ter pequenos erros).</div>';
   h+='<div class="panel" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px">';
   h+= mods.length ? ('<table class="cam-t"><thead><tr><th>Modelo</th><th>Tipo</th><th>Campos</th><th style="width:220px">Ação</th></tr></thead><tbody>'+mods.map(function(d){ var n=tplCampos(d.html).length; return '<tr><td>'+esc(d.objeto||'')+'</td><td>'+esc(camMeta(d.meta&&d.meta.subtipo||d.subtipo).t)+'</td><td>'+n+' campo(s)</td><td><span style="cursor:pointer;color:var(--royal);font-weight:700;font-size:12px" onclick="camUsarModelo(\''+d.id+'\')">usar</span> <span style="cursor:pointer;color:var(--navy);font-weight:700;font-size:12px" onclick="camPrepararModelo(\''+d.id+'\')">preparar campos</span> <span style="cursor:pointer;color:#C62D45;font-weight:700;font-size:12px" onclick="camExcluirDoc(\''+d.id+'\')">excluir</span></td></tr>'; }).join('')+'</tbody></table>') : '<div class="hint" style="color:var(--slate);font-size:13px">Nenhum modelo importado ainda. Vá em <b>Documentos</b> e clique em <b>Modelo próprio</b> no tipo desejado.</div>';
   h+='</div>'; b.innerHTML=h;
