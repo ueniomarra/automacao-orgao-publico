@@ -4151,19 +4151,27 @@ function gerarContratoDoEdital(id){
 }
 // Importa um modelo do órgão de verdade: lê o conteúdo do Word (.docx) e guarda usável
 function importarModelo(prefixo){
-  var inp=document.createElement('input'); inp.type='file'; inp.accept='.docx,.doc,.pdf';
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.docx,.doc,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,image/*';
   inp.onchange=async function(){
     var f=inp.files&&inp.files[0]; if(!f) return;
     var nome=(prefixo?prefixo+': ':'')+f.name;
     var ext=(f.name.split('.').pop()||'').toLowerCase();
-    toast('Importando "'+f.name+'"...');
-    var html='';
-    if(ext==='docx' && window.mammoth){
-      try{ var ab=await f.arrayBuffer(); var res=await window.mammoth.convertToHtml({arrayBuffer:ab}); html=res.value||''; }catch(e){ html=''; }
+    var prog=function(m){ toast(m); };
+    var html='', ocr=false;
+    try{
+      if(ext==='docx' && window.mammoth){ prog('Importando "'+f.name+'"...'); var ab=await f.arrayBuffer(); var res=await window.mammoth.convertToHtml({arrayBuffer:ab}); html=res.value||''; }
+      else if(ext==='pdf'){ prog('Lendo o PDF "'+f.name+'"...'); var ab2=await f.arrayBuffer(); var r=await anLerPdf(ab2, prog); html=camTextoParaHtml(r.texto); ocr=r.ocr; }
+      else if(/^(png|jpg|jpeg|webp|bmp|tif|tiff)$/.test(ext) || (f.type||'').indexOf('image/')===0){ prog('Lendo o documento escaneado "'+f.name+'" por OCR...'); var txt=await camOcrImagem(f, prog); html=camTextoParaHtml(txt); ocr=true; }
+    }catch(e){ html=''; }
+    if(html && html.replace(/<[^>]+>/g,'').replace(/\s/g,'')){
+      html='<div class="dsub">Modelo do órgão: '+esc(f.name)+(ocr?' (lido por OCR)':'')+'</div>'+autoDetectarCampos(html);
+    } else if(ext==='doc'){
+      html='<h1>'+esc(f.name)+'</h1><p>Modelo do órgão importado como referência. Para <b>editar e reutilizar</b>, envie em <b>Word (.docx)</b>, PDF ou documento escaneado (foto ou scan).</p>';
+    } else {
+      toast('Não consegui extrair texto deste arquivo. Se for escaneado, use uma imagem nítida, reta e bem iluminada, ou envie em Word (.docx).'); return;
     }
-    if(html){ html='<div class="dsub">Modelo do órgão: '+esc(f.name)+'</div>'+autoDetectarCampos(html); }
-    else { html='<h1>'+esc(f.name)+'</h1><p>Modelo do órgão importado como referência. Para <b>editar e reutilizar</b> dentro do sistema, envie em <b>Word (.docx)</b>; PDF e .doc antigos entram só para consulta.</p>'; }
     await salvarModeloBanco(nome, html);
+    if(ocr) toast('Documento escaneado lido por OCR e importado. Confira o texto ao usar o modelo (a leitura de escaneado pode ter pequenos erros).');
   };
   inp.click();
 }
@@ -4516,8 +4524,8 @@ function openModelos(tipo){
   var ms=(DB.docs||[]).filter(function(d){return d.tipo==='modelo';});
   var acao = dentroDoGerador ? 'aplicarModeloAqui' : 'usarModelo';
   var lista = ms.length ? ms.map(function(m){ return '<div class="modal-row" style="cursor:pointer" onclick="fecharModal();'+acao+'(\''+m.id+'\')"><b>'+esc(m.objeto)+'</b><span>Clique para usar este modelo</span></div>'; }).join('') : '<p style="color:var(--slate);font-size:13px;margin:0">Nenhum modelo do órgão salvo ainda. Envie o primeiro abaixo.</p>';
-  var dica = dentroDoGerador ? 'Escolha um modelo do órgão para carregar aqui neste documento (você edita e exporta), ou envie um novo em Word (.docx):' : 'Use um modelo do órgão já salvo (clique nele), ou envie um novo em Word (.docx):';
-  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">'+dica+'</p>'+lista+'<div style="margin-top:16px"><button class="btn-gold" type="button" onclick="fecharModal();importarModelo(\''+(tipo?esc(nomeTipo(tipo)):'')+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Enviar novo modelo (Word)</button></div>';
+  var dica = dentroDoGerador ? 'Escolha um modelo do órgão para carregar aqui neste documento (você edita e exporta), ou envie um novo em Word (.docx), PDF ou documento escaneado (foto ou scan):' : 'Use um modelo do órgão já salvo (clique nele), ou envie um novo em Word (.docx), PDF ou documento escaneado (foto ou scan):';
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">'+dica+'</p>'+lista+'<div style="margin-top:16px"><button class="btn-gold" type="button" onclick="fecharModal();importarModelo(\''+(tipo?esc(nomeTipo(tipo)):'')+'\')"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-plus"/></svg> Enviar novo modelo (Word, PDF ou escaneado)</button></div>';
   abrirModal('Modelos do órgão', h);
 }
 // Carrega o modelo escolhido NO documento atual, sem sair da tela nem zerar o formulário.
