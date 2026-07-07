@@ -1129,7 +1129,7 @@ function abrirDoc(tipo, consulta){
 // Guia de preenchimento no topo de TODO formulário (linguagem simples, à prova de erro)
 var GUIAS = {
   solicitacao:'<b>Comece por aqui.</b> A Solicitação é o pedido inicial da secretaria, o ato que abre o processo. Diga qual é a <b>unidade que pede</b>, <b>o que precisa</b> (objeto), <b>por que precisa</b> (o motivo, o problema a resolver) e <b>quanto</b> (os itens com quantidade). No fim, clique em <b>Gerar</b> e depois no botão que leva para o <b>DFD</b>, que já nasce preenchido com o que você colocou aqui.',
-  dfd:'<b>Comece por aqui.</b> O DFD é o pedido da secretaria, o documento nº 1 do processo. Diga <b>o que precisa</b> (objeto), <b>por que precisa</b> (a necessidade, o problema a resolver) e <b>quanto</b> (os itens com quantidade). No fim, clique em <b>Gerar</b> e depois no botão que leva para o <b>ETP</b>, que já nasce preenchido com o que você colocou aqui.',
+  dfd:'O DFD formaliza a demanda e é o documento nº 1 do processo. Se você fez a <b>Solicitação</b> antes, o objeto, a necessidade e os itens já vieram: confira e complete. Se está começando por aqui, diga <b>o que precisa</b> (objeto), <b>por que precisa</b> (a necessidade, o problema a resolver) e <b>quanto</b> (os itens com quantidade). No fim, clique em <b>Gerar</b> e depois no botão que leva para o <b>ETP</b>, que já nasce preenchido com o que você colocou aqui.',
   declaracao:'A declaração de adequação orçamentária confirma que existe dinheiro previsto no orçamento para a despesa. O <b>objeto</b> e o <b>valor</b> já vêm do processo. Preencha a <b>dotação</b> e confira o <b>ordenador</b> que assina. Base: art. 16 da LC nº 101/2000 e art. 18 da Lei nº 14.133/2021.',
   despacho:'O despacho é o ato da autoridade que faz o processo andar. Escolha o <b>tipo</b> (autorizar a instrução, encaminhar ao jurídico ou autorizar a abertura). No encaminhamento ao jurídico, marque as <b>peças</b> que já estão no processo. O sistema monta o texto; a assinatura é da autoridade.',
   riscos:'O mapa de riscos aponta o que pode dar errado na contratação (dar deserto, preço acima do mercado, atraso na entrega). Clique em <b>Carregar riscos comuns</b> para começar com os riscos típicos e ajuste. Probabilidade e impacto saem com <b>rótulo de texto</b>. Base: art. 18, X da Lei nº 14.133/2021.',
@@ -2204,7 +2204,7 @@ function renderFormProcesso(){
   (DB.docs||[]).forEach(function(d){ if(d.tipo==='modelo' || !validos[d.tipo]) return; var o=(d.objeto||'').trim()||'(sem objeto)'; (grupos[o]=grupos[o]||[]).push(d); });
   var chaves=Object.keys(grupos);
   var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Esteira do processo</div><div class="hint">Cada contratação segue as fases da Lei nº 14.133/2021, da demanda ao contrato. O cartão mostra o que já foi gerado (Concluído) e o que falta (Pendente). Baixe o processo inteiro num Word só.</div></div>';
-  if(!chaves.length){ h+='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-folder"/></svg><div>Nenhum processo ainda. Comece pelo <b>DFD</b> ou pelo <b>ETP</b> e o processo aparece aqui, com a esteira das fases.</div></div>'; }
+  if(!chaves.length){ h+='<div class="emptybox" style="margin:0"><svg class="ic"><use href="#i-folder"/></svg><div>Nenhum processo ainda. Comece pela <b>Solicitação da Secretaria</b> ou pelo <b>DFD</b> e o processo aparece aqui, com a esteira das fases.</div></div>'; }
   else { h+=chaves.map(function(o){
     var docs=grupos[o];
     var byTipo={}; docs.forEach(function(d){ (byTipo[d.tipo]=byTipo[d.tipo]||[]).push(d); });
@@ -4204,7 +4204,7 @@ function renderCentral(){
         + (d.tipo==='edital' ? ' <span class="chip c-ok" style="cursor:pointer;margin-left:6px" onclick="gerarContratoDoEdital(\''+d.id+'\')"><svg class="ic"><use href="#i-arrow"/></svg> Gerar contrato</span>' : '')
         + ' <span style="cursor:pointer;color:#C62D45;font-size:11.5px;font-weight:700;margin-left:8px" onclick="excluirDoc(\''+d.id+'\')">excluir</span>';
     return '<tr><td><div class="obj">'+esc(nomeTipo(d.tipo))+(d.numero?' '+esc(d.numero):'')+'</div></td><td>'+esc(d.objeto)+'</td><td>'+esc(d.data)+'</td><td>'+acao+'</td></tr>';
-  }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:22px">Nenhum '+esc(nomeTipo(docTabAtual).toLowerCase())+' ainda. Os que você gerar ou importar aparecem aqui.</td></tr>';
+  }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:22px">Nenhum documento deste tipo ainda. Os que você gerar ou importar aparecem aqui.</td></tr>';
 }
 function abrirDocSalvo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
