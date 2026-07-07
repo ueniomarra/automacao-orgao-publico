@@ -624,7 +624,7 @@ td .modd{font-size:12px;color:var(--slate)}
       <!-- GESTAO DE CONTRATOS -->
       <div class="page" id="pg-contratos">
         <div class="pagehead"><div><div class="hello">Documentos</div><h1>Gestão de Contratos</h1><p>Todos os contratos vivos, com alerta antes de vencer. Status, vigência, valor e secretaria num painel só. Os contratos gerados no sistema entram aqui sozinhos; os antigos você lança no botão ao lado.</p></div>
-          <button class="btn-gold" onclick="novoContratoManual()"><svg class="ic" style="width:18px;height:18px;stroke:#3a2c06"><use href="#i-plus"/></svg> Novo contrato (manual)</button></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-primary" onclick="importarContratosModal()"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#i-search"/></svg> Importar contratos (PNCP / Portal)</button><button class="btn-gold" onclick="novoContratoManual()"><svg class="ic" style="width:18px;height:18px;stroke:#3a2c06"><use href="#i-plus"/></svg> Novo contrato (manual)</button></div></div>
         <div class="bigstat" id="ct-stats"></div>
         <div class="grid2">
           <div class="panel">
@@ -1286,7 +1286,7 @@ function abrirPrecos(){
   h+='<div class="prec-auto"><div class="gl" style="color:var(--royal);margin-bottom:8px"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Busca automática de preço (PNCP, contratações reais)</div>';
   h+='<div class="field" style="margin-bottom:8px"><label>Item do TR (escolha qual item pesquisar)</label><select id="prec-item" onchange="precItemChange()">'+(itens.length? itens.map(function(it){return '<option value="'+it.ix+'">'+esc(it.d)+'</option>';}).join('') : '<option value="-1">Adicione itens na tabela do TR primeiro</option>')+'</select></div>';
   h+='<div class="frow c2" style="margin-bottom:8px"><div class="field"><label>Descrição a procurar (quanto mais específica, melhor)</label><input id="prec-pncp-q" value="'+esc(itens[0]?itens[0].d:'')+'"></div><div class="field"><label>Estado (vazio = Brasil)</label><input id="prec-pncp-uf" value="" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
-  h+='<button class="btn-primary" type="button" style="height:44px;font-size:14px" onclick="buscarPrecosPNCP()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-search"/></svg> Buscar preços reais no PNCP</button>';
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-primary" type="button" style="height:44px;font-size:14px" onclick="buscarPrecosPNCP()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-search"/></svg> Buscar preços reais no PNCP</button><button class="btn-ghost" type="button" style="height:44px;font-size:14px" onclick="buscarPrecosPainel()"><svg class="ic" style="width:16px;height:16px"><use href="#i-money"/></svg> Buscar no Painel de Preços (Compras.gov)</button></div>';
   h+='<div id="prec-auto-res" class="hint" style="margin-top:7px"></div></div>';
   h+='<div id="prec-list"></div>';
   h+='<button class="addline" onclick="addPreco()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar fonte manual (mídia, cotação, nota fiscal)</button>';
@@ -1326,6 +1326,27 @@ function keywordsItem(term){
   return kws;
 }
 // BUSCA AUTOMÁTICA de preço POR ITEM no PNCP (contratações reais, art. 23 II), com casamento rigoroso
+// Fonte adicional: Painel de Precos (Compras.gov.br), via funcao no servidor /api/precos (sem CORS).
+// So entra quando o item casa com um codigo CATMAT do catalogo federal; senao orienta usar o PNCP.
+async function buscarPrecosPainel(){
+  var res=document.getElementById('prec-auto-res'); if(!res) return;
+  var q=(document.getElementById('prec-pncp-q').value||'').trim();
+  var uf=((document.getElementById('prec-pncp-uf').value||'').trim()).toUpperCase().slice(0,2);
+  if(!q){ res.textContent='Escolha o item do TR e a descrição a procurar.'; return; }
+  res.innerHTML='Consultando o Painel de Preços (Compras.gov.br)... pode levar alguns segundos.';
+  var j=null;
+  try{ var r=await fetch('/api/precos?fonte=painel&desc='+encodeURIComponent(q)+'&uf='+encodeURIComponent(uf)); j=await r.json(); }
+  catch(e){ j={erro:'Falha de conexão com o servidor de busca.'}; }
+  if(!j||j.erro){ res.textContent='Painel de Preços indisponível agora. Use o botão do PNCP.'; return; }
+  if(j.semCodigo){ res.textContent='Este item não casou com um código do catálogo federal (CATMAT). Para itens assim, use o botão do PNCP, que busca por descrição.'; return; }
+  if(!j.fontes||!j.fontes.length){ res.textContent='Nenhum preço encontrado no Painel para este item. Use o botão do PNCP.'; return; }
+  var h='<div style="margin-top:6px"><b>Painel de Preços (Compras.gov.br)'+(j.catmat?(', CATMAT '+esc(String(j.catmat))):'')+':</b> '
+    + j.n+' preço(s) considerado(s). Menor '+money(j.menor)+', mediana '+money(j.mediana)+', média '+money(j.media)+'.</div>';
+  h+='<table class="itab" style="margin-top:8px"><thead><tr><th>Fonte</th><th>Onde</th><th>Data</th><th>Valor unitário</th></tr></thead><tbody>';
+  j.fontes.forEach(function(f){ h+='<tr><td>'+esc(f.fonte)+'</td><td>'+esc(f.onde)+'</td><td>'+esc(f.data||'-')+'</td><td>'+money(Number(f.valor))+'</td></tr>'; });
+  h+='</tbody></table><div class="hint" style="margin-top:6px">Referência: paineldeprecos.planejamento.gov.br (compras federais homologadas). Use junto com o PNCP para compor o mapa do art. 23.</div>';
+  res.innerHTML=h;
+}
 async function buscarPrecosPNCP(){
   var res=document.getElementById('prec-auto-res'); if(!res) return;
   var q=(document.getElementById('prec-pncp-q').value||'').trim();
@@ -2264,6 +2285,65 @@ async function salvarContratoManual(){
   if(SB && CURRENT_USER){ try{ var ins=await SB.from('contratos').insert({orgao_id:orgao,numero:num,objeto:obj,secretaria:sec,vencimento:venc,valor:valor,status:st}).select('id').single(); if(ins.data) c.id=ins.data.id; registrarAud('Cadastrou contrato', num+', '+obj, orgao); }catch(e){} }
   CONTRATOS.unshift(c);
   fecharModal(); renderContratos(); if(typeof renderDashboard==='function') renderDashboard(); toast('Contrato '+num+' cadastrado na gestão de contratos.');
+}
+// ---------- Importacao de contratos de fontes publicas (PNCP / portal Megasoft) ----------
+var IMP_LISTA=[];
+function importarContratosModal(){
+  var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">O sistema busca contratos já publicados e preenche a gestão sozinho. Duas fontes: o <b>PNCP</b> (nacional, funciona para qualquer órgão que publica) e o <b>portal de transparência</b> do município (Megasoft; a API do portal exige um token que o gestor do órgão emite na tela "Acesso automatizado").</p>'
+   +'<div class="fgroup"><div class="gl">Fonte 1: PNCP (pncp.gov.br)</div>'
+   +'<div class="frow c2"><div class="field"><label>CNPJ do órgão</label><input id="imp-cnpj" placeholder="00.000.000/0001-00"></div><div class="field"><label>Período (meses para trás)</label><select id="imp-meses"><option value="12">12 meses</option><option value="24">24 meses</option><option value="36">36 meses</option></select></div></div>'
+   +'<button class="btn-primary" type="button" style="margin-top:10px;justify-content:center" onclick="importarBuscar(&#39;pncp&#39;)">Buscar no PNCP</button></div>'
+   +'<div class="fgroup" style="margin-top:12px"><div class="gl">Fonte 2: Portal de transparência do município (Megasoft)</div>'
+   +'<div class="frow c2"><div class="field"><label>Endereço do portal (só o nome)</label><input id="imp-host" value="turvelandia" placeholder="ex.: turvelandia"></div><div class="field"><label>Token de acesso (pedir ao gestor do portal)</label><input id="imp-token" placeholder="cole o token aqui"></div></div>'
+   +'<div class="hint" style="margin-top:6px">Sem o token o portal recusa a consulta (é regra do portal, não do sistema). Na implantação, peça ao gestor o token da tela Acesso Automatizado; ele é usado só nesta busca e não fica salvo.</div>'
+   +'<button class="btn-primary" type="button" style="margin-top:10px;justify-content:center" onclick="importarBuscar(&#39;megasoft&#39;)">Buscar no portal</button></div>'
+   +'<div id="imp-res" class="hint" style="margin-top:10px"></div><div id="imp-lista"></div>';
+  abrirModal('Importar contratos publicados', h);
+}
+async function importarBuscar(fonte){
+  var res=document.getElementById('imp-res'), lst=document.getElementById('imp-lista'); if(!res) return;
+  res.textContent='Buscando... (fonte '+(fonte==='megasoft'?'portal do município':'PNCP')+')'; if(lst) lst.innerHTML='';
+  var url;
+  if(fonte==='megasoft'){
+    var host=(document.getElementById('imp-host').value||'').trim(), tk=(document.getElementById('imp-token').value||'').trim();
+    url='/api/portal?fonte=megasoft&host='+encodeURIComponent(host)+'&token='+encodeURIComponent(tk);
+  } else {
+    var cnpj=(document.getElementById('imp-cnpj').value||'').replace(/\D/g,'');
+    var meses=Number(document.getElementById('imp-meses').value)||12;
+    var fim=new Date(), ini=new Date(); ini.setMonth(ini.getMonth()-meses);
+    var ymd=function(d){ return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); };
+    url='/api/portal?fonte=pncp&cnpj='+cnpj+'&dataInicial='+ymd(ini)+'&dataFinal='+ymd(fim);
+  }
+  var j=null;
+  try{ var r=await fetch(url); j=await r.json(); }catch(e){ j={erro:'Falha de conexão com o servidor de busca.'}; }
+  if(!j || j.erro){ res.textContent=(j&&j.erro)||'Sem resposta.'; return; }
+  IMP_LISTA=(j.contratos||[]);
+  if(!IMP_LISTA.length){ res.textContent='Nenhum contrato publicado encontrado nessa fonte para esse período. Se o órgão não publica no PNCP, use a fonte do portal (com token) ou lance manualmente.'; return; }
+  res.textContent=IMP_LISTA.length+' contrato(s) encontrado(s) ('+(j.total||IMP_LISTA.length)+' no total na fonte). Confira e marque os que entram na gestão:';
+  var h='<table class="itab" style="margin-top:8px"><thead><tr><th></th><th>Número</th><th>Objeto</th><th>Fornecedor</th><th>Vigência fim</th><th>Valor</th></tr></thead><tbody>';
+  IMP_LISTA.forEach(function(c,i){
+    var dup=CONTRATOS.some(function(x){return x.n===c.numero;});
+    h+='<tr><td><input type="checkbox" id="imp-ck-'+i+'"'+(dup?' disabled title="já existe na gestão"':' checked')+'></td><td>'+esc(c.numero)+(dup?' <span style="font-size:11px;color:#6b7280">(já na gestão)</span>':'')+'</td><td style="max-width:280px">'+esc((c.objeto||'').slice(0,120))+'</td><td>'+esc(c.fornecedor||'')+'</td><td>'+esc(c.vigenciaFim||'a definir')+'</td><td>'+(c.valor?money(c.valor):'-')+'</td></tr>';
+  });
+  h+='</tbody></table><button class="btn-gold" type="button" style="width:100%;justify-content:center;margin-top:12px" onclick="importarConfirmar()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Adicionar os marcados à gestão</button>'
+   +'<div class="hint" style="margin-top:6px">Cada contrato entra com a FONTE registrada no objeto, para auditoria. Secretaria fica em branco para você classificar depois.</div>';
+  if(lst) lst.innerHTML=h;
+}
+async function importarConfirmar(){
+  var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
+  var add=0;
+  for(var i=0;i<IMP_LISTA.length;i++){
+    var ck=document.getElementById('imp-ck-'+i); if(!ck||!ck.checked||ck.disabled) continue;
+    var c=IMP_LISTA[i]; if(CONTRATOS.some(function(x){return x.n===c.numero;})) continue;
+    var venc=c.vigenciaFim||'a definir';
+    var obj=(c.objeto||'(sem objeto)')+(c.fornecedor?(' - '+c.fornecedor):'')+' [importado: '+c.fonte+(c.controle?(' '+c.controle):'')+']';
+    var novo={n:c.numero||('importado-'+(i+1)), obj:obj, sec:'', venc:venc, valor:c.valor||0, status:'ativo'};
+    if(SB && CURRENT_USER){ try{ var ins=await SB.from('contratos').insert({orgao_id:orgao,numero:novo.n,objeto:obj,secretaria:'',vencimento:venc,valor:novo.valor,status:'ativo'}).select('id').single(); if(ins.data) novo.id=ins.data.id; }catch(e){} }
+    CONTRATOS.unshift(novo); add++;
+  }
+  try{ if(typeof registrarAud==='function'&&SB&&CURRENT_USER&&add) registrarAud('Importou '+add+' contrato(s) de fonte pública', '', orgao); }catch(e){}
+  fecharModal(); renderContratos(); if(typeof renderDashboard==='function') renderDashboard();
+  toast(add?(add+' contrato(s) importado(s) para a gestão, com fonte registrada.'):'Nenhum contrato novo marcado.');
 }
 function stTag(s){
   if(s==='vencido') return '<span class="st st-v"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Vencido</span>';
