@@ -3919,7 +3919,10 @@ async function anLerPdf(buf, prog){
   return {texto:pags.join('\n'), ocr:ocr, paginas:n, pags:pags};
 }
 function anCNPJs(t){ var s=String(t||'').replace(/[ .\-\/ ]/g,''); var re=/\d{14}/g,m,o=[]; while(m=re.exec(s)) o.push(m[0]); return o; }
-function anTemCNPJ(t,cnpj){ var d=String(cnpj||'').replace(/\D/g,''); if(d.length!==14) return null; return anCNPJs(t).indexOf(d)>=0; }
+function anFmtCNPJ(c){ var d=String(c||'').replace(/\D/g,''); return d.length===14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5') : String(c||''); }
+// Casamento TOLERANTE a OCR: o CNPJ do licitante pode vir com espaços/quebras/pontuação no meio.
+// Só afirma presença quando os 14 dígitos aparecem em sequência; NUNCA usar a ausência para afirmar "não confere" (pode ser leitura imperfeita).
+function anTemCNPJ(t,cnpj){ var d=String(cnpj||'').replace(/\D/g,''); if(d.length!==14) return null; if(anCNPJs(t).indexOf(d)>=0) return true; return String(t||'').replace(/\D/g,'').indexOf(d)>=0; }
 function anParseDt(s){ var m=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/.exec(s||''); return m?new Date(+m[3],+m[2]-1,+m[1]):null; }
 function anValidade(t){ t=String(t||'');
   var mr=/(validade|v[aá]lid[ao])[^0-9]{0,20}(\d{2}[\/.\-]\d{2}[\/.\-]\d{4})\s*a\s*(\d{2}[\/.\-]\d{2}[\/.\-]\d{4})/i.exec(t); if(mr) return mr[3];
@@ -4133,8 +4136,9 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
   var d=ds[0];
   // Arquivo grande com várias seções (dossiê único): usar o trecho do documento certo, não o arquivo inteiro
   if(d.pags && d.pags.length>6 && secoes && secoes[req.cat]) d={texto:secoes[req.cat], categoria:req.cat};
-  // Certidão: avaliar a PÁGINA que é de fato esta certidão (evita a herança de seção colar página vizinha e ler data/negativa erradas)
-  if((req.regra==='certidao'||req.regra==='pres_cnpj') && secPags && secPags[req.cat] && secPags[req.cat].length>1){ var pg=anPaginaCertidao(secPags[req.cat], req.cat, l.cnpj); if(pg) d={texto:pg, categoria:req.cat}; }
+  // Certidão: avaliar a PÁGINA que é de fato esta certidão (evita a herança de seção colar página vizinha e ler data/negativa erradas).
+  // NÃO se aplica ao contrato/estatuto (pres_cnpj): ali o CNPJ pode estar em qualquer página, então usa-se o texto inteiro.
+  if(req.regra==='certidao' && secPags && secPags[req.cat] && secPags[req.cat].length>1){ var pg=anPaginaCertidao(secPags[req.cat], req.cat, l.cnpj); if(pg) d={texto:pg, categoria:req.cat}; }
   if(req.modo==='humano') return anCompatAtestado(d.texto,p);
   if(req.regra==='certidao'){
     var neg=anEhNegativa(d.texto), val=anValidade(d.texto), cnpjok=anTemCNPJ(d.texto,l.cnpj), notas=[], probl=[];
@@ -4143,7 +4147,7 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
     if(!val && _sec){ val=anValidade(_sec); }
     if(neg===null && _sec){ var n2=anEhNegativa(_sec); if(n2!==null) neg=n2; }
     if(neg===false) probl.push('a certidão consta POSITIVA');
-    if(cnpjok===false) probl.push('o CNPJ do documento não confere com o do licitante');
+    if(cnpjok===false) notas.push('o CNPJ do licitante não foi localizado automaticamente no texto, conferir (pode ser leitura de documento escaneado)');
     if(val){ var dv=anParseDt(val), db=anParseDt(p.dataBase); if(dv&&db&&dv<db) probl.push('validade vencida em '+val+', anterior à data-base '+p.dataBase); else if(dv) notas.push('validade até '+val); }
     else notas.push('validade não localizada no texto');
     if(neg===null) notas.push('não confirmado automaticamente se é negativa');
@@ -4152,7 +4156,11 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
     if(neg===true && val && cnpjok!==false) return {status:'conforme', nota:'Certidão negativa, dentro da validade e com CNPJ conferido'+(notas.length?' ('+notas.join('; ')+')':'')+'.'};
     return {status:'conferir', nota:'Documento presente, mas '+(notas.join('; ')||'requer conferência')+'.'};
   }
-  if(req.regra==='pres_cnpj'){ var ok=anTemCNPJ(d.texto,l.cnpj); if(ok===false) return {status:'atencao', nota:'CNPJ do documento não confere com o do licitante.'}; return {status: ok?'conforme':'conferir', nota: ok?'Documento presente e CNPJ conferido.':'Documento presente; CNPJ não confirmado automaticamente, conferir.'}; }
+  if(req.regra==='pres_cnpj'){ var ok=anTemCNPJ(d.texto,l.cnpj);
+    if(ok===true) return {status:'conforme', nota:'Documento presente e CNPJ conferido.'};
+    var outros=anCNPJs(d.texto).filter(function(x){return x!==String(l.cnpj||'').replace(/\D/g,'');});
+    if(outros.length) return {status:'conferir', nota:'Documento presente. O sistema não localizou automaticamente o CNPJ do licitante ('+anFmtCNPJ(l.cnpj)+') no texto; o documento traz outro(s) CNPJ ('+outros.slice(0,2).map(anFmtCNPJ).join(', ')+'). Isso costuma ser leitura imperfeita de documento escaneado; a comissão confere se é a mesma empresa. Não é uma reprovação automática.'};
+    return {status:'conferir', nota:'Documento presente. Não foi possível localizar o CNPJ no texto (documento pode estar escaneado ou com leitura parcial); conferir manualmente. Não é uma reprovação automática.'}; }
   if(req.regra==='balanco'){
     var bt=d.texto||'', bn=anNormTxt(bt), bNotas=[], bProbl=[], bst='conforme';
     var pior=function(s){ var r={conforme:0,conferir:1,atencao:2}; if(r[s]>r[bst]) bst=s; };
