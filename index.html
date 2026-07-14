@@ -3697,7 +3697,7 @@ function anRenderProc(root){
   h+='<div class="hint" style="margin-top:12px;display:flex;gap:8px;align-items:flex-start"><svg class="ic" style="width:14px;height:14px;flex:none;margin-top:2px"><use href="#i-shield"/></svg><span>'+esc(anModoTxt(modo))+'</span></div>';
   h+='<div class="fgroup" style="margin-top:14px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos da licitação (a régua da comparação)</div>';
   h+='<div class="hint" style="margin-bottom:8px">Suba o edital, o termo de referência e a planilha de referência. O sistema lê e usa como base para comparar contra os documentos de cada licitante.</div>';
-  h+='<input id="an-file-cert" type="file" accept="application/pdf" multiple onchange="anOnUploadCertame(this)">';
+  h+='<input id="an-file-cert" type="file" accept=".pdf,.zip,image/*,application/pdf,application/zip" multiple onchange="anOnUploadCertame(this)">';
   h+='<div id="an-prog-cert" class="hint" style="margin-top:6px"></div>';
   if((p.docsCertame||[]).length){ h+='<table class="itab" style="margin-top:10px"><tbody>'; p.docsCertame.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td style="width:110px">'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td style="width:90px"><button class="btn-ghost" type="button" onclick="anDelDocCert('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
   h+='</div>';
@@ -3811,19 +3811,41 @@ function anEnsurePdf(){ if(window.pdfjsLib) return Promise.resolve(window.pdfjsL
 var _anXlsx=null;
 function anEnsureXlsx(){ if(window.XLSX) return Promise.resolve(window.XLSX); if(!_anXlsx){ _anXlsx=anLoadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js').then(function(){ return window.XLSX; }); } return _anXlsx; }
 function anEnsureTess(){ if(window.Tesseract) return Promise.resolve(window.Tesseract); if(!_anTess){ _anTess=anLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js').then(function(){ return window.Tesseract; }); } return _anTess; }
+var _anWk=null,_anZip=null;
+function anWorker(){ if(_anWk) return _anWk; _anWk=anEnsureTess().then(function(Tess){ return Tess.createWorker('por'); }); return _anWk; }
+function anEnsureZip(){ if(window.JSZip) return Promise.resolve(window.JSZip); if(!_anZip){ _anZip=anLoadScript('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js').then(function(){ return window.JSZip; }); } return _anZip; }
+async function anLerImagem(file, prog){ var worker=await anWorker(); if(prog) prog('Lendo por OCR a imagem "'+(file.name||'imagem')+'"...'); var cv=await camImagemParaCanvas(file); var r=await worker.recognize(cv); var t=(r&&r.data&&r.data.text)||''; return {texto:t, ocr:true, paginas:1, pags:[t]}; }
+async function anLerEntrada(file, prog){
+  var name=file.name||'arquivo', ext=(name.split('.').pop()||'').toLowerCase(), tp=(file.type||'');
+  if(ext==='zip' || tp.indexOf('zip')>=0){
+    var JSZip=await anEnsureZip(); var zip=await JSZip.loadAsync(await file.arrayBuffer()); var entries=[];
+    zip.forEach(function(path,entry){ if(!entry.dir && !/(^|\/)__macosx\//i.test(entry.name) && !/\.ds_store$/i.test(entry.name)) entries.push(entry); });
+    entries.sort(function(a,b){ return a.name<b.name?-1:(a.name>b.name?1:0); });
+    var out=[], pulados=[];
+    for(var i=0;i<entries.length;i++){ var e=entries[i], en=e.name.split('/').pop(), ee=(e.name.split('.').pop()||'').toLowerCase();
+      if(ee==='pdf'){ if(prog) prog('Abrindo do compactado: '+en+' ('+(i+1)+' de '+entries.length+')...'); var buf=await e.async('arraybuffer'); var r=await anLerPdf(buf, prog); out.push({nome:en, texto:r.texto, ocr:r.ocr, paginas:r.paginas, pags:r.pags}); }
+      else if(/^(png|jpg|jpeg|webp|bmp|tif|tiff|gif)$/.test(ee)){ if(prog) prog('Abrindo do compactado: '+en+' ('+(i+1)+' de '+entries.length+')...'); var blob=await e.async('blob'); var fo=new File([blob], en, {type:'image/'+(ee==='jpg'?'jpeg':ee)}); var ri=await anLerImagem(fo, prog); out.push({nome:en, texto:ri.texto, ocr:ri.ocr, paginas:ri.paginas, pags:ri.pags}); }
+      else pulados.push(en);
+    }
+    if(pulados.length && typeof toast==='function') toast('Do compactado, '+pulados.length+' arquivo(s) não são PDF nem imagem e não foram lidos: '+pulados.slice(0,5).join(', ')+(pulados.length>5?'...':'')+'. Converta para PDF se precisar analisá-los.');
+    return out;
+  }
+  if(/^(png|jpg|jpeg|webp|bmp|tif|tiff|gif)$/.test(ext) || tp.indexOf('image/')===0){ var ri=await anLerImagem(file, prog); return [{nome:name, texto:ri.texto, ocr:ri.ocr, paginas:ri.paginas, pags:ri.pags}]; }
+  var buf=await file.arrayBuffer(); var r=await anLerPdf(buf, prog); return [{nome:name, texto:r.texto, ocr:r.ocr, paginas:r.paginas, pags:r.pags}];
+}
 async function anLerPdf(buf, prog){
   var pdfjs=await anEnsurePdf();
   var doc=await pdfjs.getDocument({data:buf}).promise;
-  var n=doc.numPages, full='';
-  for(var i=1;i<=n;i++){ var pg=await doc.getPage(i); var tc=await pg.getTextContent(); full+=tc.items.map(function(it){return it.str;}).join(' ')+'\n'; }
-  if(full.replace(/\s/g,'').length>=200){ return {texto:full, ocr:false, paginas:n}; }
-  var Tess=await anEnsureTess();
-  if(prog) prog('Preparando leitura por OCR...');
-  var worker=await Tess.createWorker('por');
-  var out='';
-  try{ for(var j=1;j<=n;j++){ if(prog) prog('Lendo página '+j+' de '+n+' por OCR...'); var page=await doc.getPage(j); var vp=page.getViewport({scale:2}); var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height; await page.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise; var r=await worker.recognize(cv); out+=r.data.text+'\n'; } }
-  finally{ try{ await worker.terminate(); }catch(e){} }
-  return {texto:out, ocr:true, paginas:n};
+  var n=doc.numPages, pags=[], faltam=[];
+  for(var i=1;i<=n;i++){ var pg=await doc.getPage(i); var tc=await pg.getTextContent(); var pt=tc.items.map(function(it){return it.str;}).join(' '); pags.push(pt); if(pt.replace(/\s/g,'').length<40) faltam.push(i); }
+  var ocr=false;
+  if(faltam.length){
+    ocr=true;
+    if(prog) prog('Preparando leitura por OCR de '+faltam.length+' página(s) escaneada(s)...');
+    var worker=await anWorker();
+    for(var k=0;k<faltam.length;k++){ var j=faltam[k]; if(prog) prog('Lendo por OCR a página '+j+' de '+n+' ('+(k+1)+' de '+faltam.length+' escaneadas)...'); var page=await doc.getPage(j); var b=page.getViewport({scale:1}); var sc=Math.min(2, 2000/Math.max(b.width,b.height,1)); if(!(sc>0)) sc=1.5; var vp=page.getViewport({scale:sc}); var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height; await page.render({canvasContext:cv.getContext('2d'), viewport:vp, intent:'print'}).promise; var r=await worker.recognize(cv); pags[j-1]=r.data.text; }
+  }
+  return {texto:pags.join('\n'), ocr:ocr, paginas:n, pags:pags};
 }
 function anCNPJs(t){ var s=String(t||'').replace(/[ .\-\/ ]/g,''); var re=/\d{14}/g,m,o=[]; while(m=re.exec(s)) o.push(m[0]); return o; }
 function anTemCNPJ(t,cnpj){ var d=String(cnpj||'').replace(/\D/g,''); if(d.length!==14) return null; return anCNPJs(t).indexOf(d)>=0; }
@@ -3839,10 +3861,29 @@ function anEhNegativa(t){ var n=String(t||'').toLowerCase(); if(/positiva\s+com\
 function anValores(t){ var re=/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/ig,m,v=[]; while(m=re.exec(String(t||''))) v.push(anNum(m[1])); return v; }
 function anValorGlobal(t){ var m=/(valor\s+global|valor\s+total\s+geral|total\s+geral|pre[çc]o\s+total\s+global|valor\s+total\s+da\s+proposta)[^0-9]{0,40}(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/i.exec(String(t||'')); return m?anNum(m[2]):null; }
 function anOnUpload(input){ var files=input.files; if(!files||!files.length) return; var l=anLic(); if(!l) return; l.docs=l.docs||[]; var arr=[].slice.call(files); var prog=function(msg){ var el=document.getElementById('an-prog'); if(el) el.textContent=msg; };
-  (function next(k){ if(k>=arr.length){ input.value=''; anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); f.arrayBuffer().then(function(buf){ return anLerPdf(buf, prog); }).then(function(res){ l.docs.push({nome:f.name, categoria:anSugereCat(f.name), texto:res.texto, ocr:res.ocr, paginas:res.paginas}); anSave(); toast('Lido'+(res.ocr?' por OCR':'')+': '+f.name); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
+  (function next(k){ if(k>=arr.length){ input.value=''; prog('Leitura concluída. Confira os documentos identificados abaixo e clique em Conferir.'); anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); anLerEntrada(f, prog).then(function(list){ (list||[]).forEach(function(d){ l.docs.push({nome:d.nome, categoria:anSugereCat(d.nome), texto:d.texto, ocr:d.ocr, paginas:d.paginas, pags:d.pags||null}); }); anSave(); toast('Lido: '+f.name+((list&&list.length>1)?(' ('+list.length+' documentos)'):'')); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
 }
 function anSetDocCat(i,cat){ var l=anLic(); if(!l||!l.docs[i]) return; l.docs[i].categoria=cat; anSave(); }
 function anDelDoc(i){ var l=anLic(); if(!l) return; var nm=(l.docs[i]&&l.docs[i].nome)||'este arquivo'; if(!confirm('Remover o documento "'+nm+'"?')) return; l.docs.splice(i,1); anSave(); renderAnalise(); }
+var AN_SINAIS=[
+  ['CNDT (trabalhista)', /debitos? trabalhistas|certidao negativa de debitos trabalhistas|\bcndt\b|tribunal superior do trabalho/],
+  ['FGTS (CRF)', /\bfgts\b|certificado de regularidade do fgts|\bcrf\b|fundo de garantia do tempo/],
+  ['CND Federal/PGFN', /receita federal do brasil|divida ativa da uniao|procuradoria.?geral da fazenda nacional|tributos federais/],
+  ['CND Municipal', /prefeitura municipal|fazenda publica municipal|tributos municipais|secretaria municipal[^.]{0,25}fazenda/],
+  ['CND Estadual', /fazenda publica estadual|receita estadual|secretaria de estado da economia|debito inscrito em divida ativa|debitos[^.]{0,15}estadua|secretaria[^.]{0,25}fazenda[^.]{0,20}estado|\bsefaz\b/],
+  ['Certidão de falência', /falencia|recuperacao judicial|concordata|certidao para licitacao/],
+  ['Balanço patrimonial', /balanco patrimonial|demonstracao do resultado|termo de (abertura|encerramento)|ativo circulante|lucros ou prejuizos acumulados/],
+  ['Atestado de capacidade técnica', /atestado de capacidade tecnica|acervo tecnico|atestamos que|comprovar a realizacao/],
+  ['Proposta / planilha', /carta[- ]?proposta|proposta de precos?|planilha orcamentaria|composicao do bdi|cronograma fisico/],
+  ['Contrato/estatuto social', /contrato social|estatuto social|ato constitutivo|alteracao[^.]{0,15}contrat|requerimento de empresario|ato de alteracao do contrato/],
+  ['Declarações', /declaracao|declaramos|declaro para/]
+];
+function anNormP(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function anClassPagina(t){ var n=anNormP(t); for(var i=0;i<AN_SINAIS.length;i++){ if(AN_SINAIS[i][1].test(n)) return AN_SINAIS[i][0]; } return null; }
+function anSecoesDossie(docs){ var texto={}, contagem={};
+  (docs||[]).forEach(function(d){ var ps=(d.pags&&d.pags.length)?d.pags:[d.texto||'']; var last=null;
+    ps.forEach(function(pt){ var c=anClassPagina(pt); if(c) last=c; if(last){ texto[last]=(texto[last]?texto[last]+'\n':'')+pt; contagem[last]=(contagem[last]||0)+1; } }); });
+  return {texto:texto, contagem:contagem}; }
 function anRequeridos(){ return [
   {cat:'Contrato/estatuto social', regra:'pres_cnpj', modo:'auto'},
   {cat:'CND Federal/PGFN', regra:'certidao', modo:'auto', fisc:1},
@@ -3857,13 +3898,16 @@ function anRequeridos(){ return [
   {cat:'Declaração de enquadramento ME/EPP', regra:'meepp_decl', modo:'auto', so_meepp:1},
   {cat:'Consulta CEIS/CNEP (impedimentos)', regra:'ceis', modo:'humano'}
 ]; }
-function anAvaliaReq(req, docs, p, l){
+function anAvaliaReq(req, docs, p, l, secoes){
   // Checagens que não dependem de arquivo enviado
   if(req.regra==='ceis') return {status:'conferir', nota:'Consulta obrigatória a sanções vigentes (CEIS e CNEP, no Portal da Transparência, e cadastros do TCU/TCE) antes da habilitação. A comissão consulta pelo CNPJ e anexa o comprovante ao processo (art. 14 da Lei 14.133/2021).'};
   if(req.regra==='meepp_decl'){ var achouD=(docs||[]).some(function(d){ return /microempresa|empresa de pequeno porte|\bme\b|\bepp\b|simples nacional/i.test(String(d.texto||'')); }); return achouD?{status:'conforme', nota:'Localizada menção ao enquadramento ME/EPP nos documentos enviados; a comissão confirma a declaração formal.'}:{status:'conferir', nota:'Licitante marcado como ME/EPP, mas a declaração de enquadramento não foi localizada nos documentos. Solicitar ou conferir manualmente.'}; }
   var ds=docs.filter(function(d){return d.categoria===req.cat;});
+  if(!ds.length && secoes && secoes[req.cat]) ds=[{texto:secoes[req.cat], categoria:req.cat}];
   if(!ds.length) return {status:'ausente', nota:'Documento não localizado entre os enviados.'+((req.fisc&&l&&l.meepp==='Sim')?' Mesmo sendo ME/EPP, o documento fiscal deve ser apresentado ainda que com restrição (art. 43, caput, da LC 123/2006).':'')};
   var d=ds[0];
+  // Arquivo grande com várias seções (dossiê único): usar o trecho do documento certo, não o arquivo inteiro
+  if(d.pags && d.pags.length>6 && secoes && secoes[req.cat]) d={texto:secoes[req.cat], categoria:req.cat};
   if(req.modo==='humano') return anCompatAtestado(d.texto,p);
   if(req.regra==='certidao'){
     var neg=anEhNegativa(d.texto), val=anValidade(d.texto), cnpjok=anTemCNPJ(d.texto,l.cnpj), notas=[], probl=[];
@@ -3880,7 +3924,7 @@ function anAvaliaReq(req, docs, p, l){
   if(req.regra==='pres_cnpj'){ var ok=anTemCNPJ(d.texto,l.cnpj); if(ok===false) return {status:'atencao', nota:'CNPJ do documento não confere com o do licitante.'}; return {status: ok?'conforme':'conferir', nota: ok?'Documento presente e CNPJ conferido.':'Documento presente; CNPJ não confirmado automaticamente, conferir.'}; }
   return {status:'conforme', nota:'Documento presente.'};
 }
-function anAvaliaProposta(docs,p,l){ var ds=docs.filter(function(d){return d.categoria==='Proposta / planilha';}); var manual=(l&&l.valorProposta>0)?l.valorProposta:null; if(!ds.length && manual==null) return null; var t=ds.length?ds[0].texto:''; var todos=anValores(t); var g=(manual!=null)?manual:anValorGlobal(t); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
+function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){return d.categoria==='Proposta / planilha';}); if(!ds.length && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; if(ds.length && ds[0].pags && ds[0].pags.length>6 && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; var manual=(l&&l.valorProposta>0)?l.valorProposta:null; if(!ds.length && manual==null) return null; var t=ds.length?ds[0].texto:''; var todos=anValores(t); var g=(manual!=null)?manual:anValorGlobal(t); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
   var obra=(p.obra==='Sim');
   if(g!=null){
     if(!p.valorEstimado){ pior('conferir'); notas.push('valor global '+money(g)+fonte+'; informe o valor estimado do certame para comparar'); }
@@ -3903,11 +3947,11 @@ function anCompatAtestado(txt,p){ var kws=anObjKeywords(p.objeto||''); if(!kws.l
   return {status:'atencao', nota:'Não foram encontrados no atestado os termos do objeto do certame ('+faltou.join(', ')+'). Verifique a compatibilidade (art. 67).'};
 }
 function anOnUploadCertame(input){ var files=input.files; if(!files||!files.length) return; var p=anCur(); if(!p) return; p.docsCertame=p.docsCertame||[]; var arr=[].slice.call(files); var prog=function(m){ var el=document.getElementById('an-prog-cert'); if(el) el.textContent=m; };
-  (function next(k){ if(k>=arr.length){ input.value=''; p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); f.arrayBuffer().then(function(buf){ return anLerPdf(buf,prog); }).then(function(res){ p.docsCertame.push({nome:f.name,texto:res.texto,ocr:res.ocr,paginas:res.paginas}); anSave(); toast('Documento da licitação lido'+(res.ocr?' (OCR)':'')+': '+f.name); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
+  (function next(k){ if(k>=arr.length){ input.value=''; p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); anLerEntrada(f, prog).then(function(list){ (list||[]).forEach(function(d){ p.docsCertame.push({nome:d.nome,texto:d.texto,ocr:d.ocr,paginas:d.paginas}); }); anSave(); toast('Documento da licitação lido: '+f.name); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
 }
 function anDelDocCert(i){ var p=anCur(); if(!p||!p.docsCertame) return; var nm=(p.docsCertame[i]&&p.docsCertame[i].nome)||'este arquivo'; if(!confirm('Remover o documento da licitação "'+nm+'"? Ele é a régua da comparação.')) return; p.docsCertame.splice(i,1); p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); }
 function anStatusGeral(itens,prop){ if(prop&&prop.status==='atencao'&&/ACIMA do estimado|INEXEQU/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})) return 'ressalvas'; return 'habilitado'; }
-function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l); l.resultado={itens:itens, proposta:prop, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
+function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var secoes=anSecoesDossie(docs).texto; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); l.resultado={itens:itens, proposta:prop, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
 function anTag(st){ var map={conforme:['Conforme','#0A2342','#fff'],atencao:['Atenção','#E8A020','#0A2342'],ausente:['Ausente','#6b7280','#fff'],conferir:['Conferir','#ffffff','#0A2342']}; var m=map[st]||['-','#e5e7eb','#111']; var extra=st==='conferir'?';border:1px solid #0A2342':''; return '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:700;background:'+m[1]+';color:'+m[2]+extra+'">'+m[0]+'</span>'; }
 function anRenderConferencia(root){
   var p=anCur(), l=anLic(); if(!l){ anRenderProc(root); return; }
@@ -3916,10 +3960,11 @@ function anRenderConferencia(root){
   h+=anLeg('<b>O que fazer nesta tela:</b> suba os documentos que esta empresa enviou (certidões, balanço, atestado, proposta e planilha). O sistema lê cada arquivo, até os escaneados, e você confere a categoria de cada um. Depois clique em <b>Conferir</b>: ele compara tudo com as exigências e com o edital e mostra o resultado embaixo.');
   h+='<div class="hint"><b>'+esc(l.razao||'(licitante sem nome)')+'</b> | CNPJ: '+esc(l.cnpj||'não informado')+' | Classificação: '+esc(l.ordem||'-')+'</div>';
   h+='<div class="fgroup" style="margin-top:12px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos do licitante</div>';
-  h+='<div class="hint" style="margin-bottom:8px">Suba os documentos que o licitante enviou no portal do pregão (PDF). O sistema lê o texto e, se for escaneado, faz OCR no próprio navegador, sem chave de API. Depois confira a categoria de cada arquivo.</div>';
-  h+='<input id="an-file" type="file" accept="application/pdf" multiple onchange="anOnUpload(this)">';
+  h+='<div class="hint" style="margin-bottom:8px">Suba tudo que o licitante enviou, do jeito que veio: um PDF único com todos os documentos, vários arquivos soltos (PDF ou imagem), ou um arquivo compactado (.zip). Não há limite de quantidade. O sistema lê página por página, faz OCR sozinho das páginas escaneadas, identifica cada documento e confere com o edital. Você não precisa separar nada.</div>';
+  h+='<input id="an-file" type="file" accept=".pdf,.zip,image/*,application/pdf,application/zip" multiple onchange="anOnUpload(this)">';
   h+='<div id="an-prog" class="hint" style="margin-top:6px"></div>';
   if(docs.length){ h+='<table class="itab" style="margin-top:10px"><thead><tr><th style="width:42%">Arquivo</th><th>Categoria</th><th>Leitura</th><th></th></tr></thead><tbody>'; docs.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td><select onchange="anSetDocCat('+i+',this.value)">'+AN_CATS.map(function(c){return '<option'+(c===d.categoria?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td>'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td><button class="btn-ghost" type="button" onclick="anDelDoc('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
+  if(docs.length){ var _dos=anSecoesDossie(docs).contagem, _dk=Object.keys(_dos); if(_dk.length){ h+='<div style="display:flex;gap:8px;align-items:flex-start;background:#f1f5fb;border-left:4px solid #C9A961;border-radius:8px;padding:9px 12px;margin-top:10px"><svg class="ic" style="width:15px;height:15px;flex:none;margin-top:1px"><use href="#i-folder"/></svg><span style="font-size:13px;color:#0A2342;line-height:1.55"><b>Documentos identificados dentro dos arquivos enviados:</b> '+_dk.map(function(k){return esc(k)+' ('+_dos[k]+' pg)';}).join(', ')+'. Quando o licitante envia tudo num arquivo só, o sistema lê página por página, separa por tipo e confere cada um com o edital. Confira a lista; se faltar algum tipo, o documento não foi localizado.</span></div>'; } }
   h+='<div class="frow c2" style="margin-top:10px"><div class="field"><label>Valor global da proposta, conforme a planilha (R$)</label><input id="an-valprop" value="'+(l.valorProposta?money(l.valorProposta).replace("R$ ",""):"")+'" placeholder="ex.: 1.132.989,99"></div></div>';
   h+='<div class="hint" style="margin-top:4px">Em planilha escaneada o sistema nem sempre isola o total com segurança. Confirme aqui o valor global e o sistema compara automaticamente com o valor estimado do certame.</div>';
   h+='<button class="btn-primary" type="button" style="margin-top:12px;justify-content:center" onclick="anConferir()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-shield"/></svg> Conferir habilitação e proposta</button>';
