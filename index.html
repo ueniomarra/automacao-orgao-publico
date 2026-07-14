@@ -3823,10 +3823,11 @@ function anEnsurePdf(){ if(window.pdfjsLib) return Promise.resolve(window.pdfjsL
 var _anXlsx=null;
 function anEnsureXlsx(){ if(window.XLSX) return Promise.resolve(window.XLSX); if(!_anXlsx){ _anXlsx=anLoadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js').then(function(){ return window.XLSX; }); } return _anXlsx; }
 function anEnsureTess(){ if(window.Tesseract) return Promise.resolve(window.Tesseract); if(!_anTess){ _anTess=anLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js').then(function(){ return window.Tesseract; }); } return _anTess; }
-var _anWk=null,_anZip=null;
+var _anWk=null,_anZip=null,_anSch=null;
 function anWorker(){ if(_anWk) return _anWk; _anWk=anEnsureTess().then(function(Tess){ return Tess.createWorker('por'); }); return _anWk; }
+function anScheduler(){ if(_anSch) return _anSch; _anSch=anEnsureTess().then(async function(Tess){ var n=Math.max(2, Math.min(4, (navigator.hardwareConcurrency||4)-1)); var s=Tess.createScheduler(); for(var i=0;i<n;i++){ s.addWorker(await Tess.createWorker('por')); } s._n=n; return s; }); return _anSch; }
 function anEnsureZip(){ if(window.JSZip) return Promise.resolve(window.JSZip); if(!_anZip){ _anZip=anLoadScript('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js').then(function(){ return window.JSZip; }); } return _anZip; }
-async function anLerImagem(file, prog){ var worker=await anWorker(); if(prog) prog('Lendo por OCR a imagem "'+(file.name||'imagem')+'"...'); var cv=await camImagemParaCanvas(file); var r=await worker.recognize(cv); var t=(r&&r.data&&r.data.text)||''; return {texto:t, ocr:true, paginas:1, pags:[t]}; }
+async function anLerImagem(file, prog){ var sch=await anScheduler(); if(prog) prog('Lendo por OCR a imagem "'+(file.name||'imagem')+'"...'); var cv=await camImagemParaCanvas(file); var r=await sch.addJob('recognize', cv); var t=(r&&r.data&&r.data.text)||''; return {texto:t, ocr:true, paginas:1, pags:[t]}; }
 async function anLerEntrada(file, prog){
   var name=file.name||'arquivo', ext=(name.split('.').pop()||'').toLowerCase(), tp=(file.type||'');
   if(ext==='zip' || tp.indexOf('zip')>=0){
@@ -3856,13 +3857,22 @@ async function anLerPdf(buf, prog){
   var ocr=false;
   if(faltam.length){
     ocr=true;
-    if(prog) prog('Preparando leitura por OCR de '+faltam.length+' página(s) escaneada(s)...');
-    var worker=await anWorker();
-    var ocrPg=async function(page, sc){ var vp=page.getViewport({scale:sc}); var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height; await page.render({canvasContext:cv.getContext('2d'), viewport:vp, intent:'print'}).promise; var r=await worker.recognize(cv); return (r&&r.data&&r.data.text)||''; };
-    for(var k=0;k<faltam.length;k++){ var j=faltam[k]; if(prog) prog('Lendo por OCR a página '+j+' de '+n+' ('+(k+1)+' de '+faltam.length+' escaneadas)...'); var page=await doc.getPage(j); var b=page.getViewport({scale:1}); var sc=Math.min(2, 2000/Math.max(b.width,b.height,1)); if(!(sc>0)) sc=1.5;
-      var t1=await ocrPg(page, sc);
-      if(t1.replace(/\s/g,'').length<80){ if(prog) prog('Página '+j+' saiu ilegível, relendo em resolução maior...'); var t2=await ocrPg(page, Math.min(sc*1.7, 3.2)); if(t2.replace(/\s/g,'').length>t1.replace(/\s/g,'').length) t1=t2; }
-      pags[j-1]=t1; }
+    if(prog) prog('Preparando leitura por OCR de '+faltam.length+' página(s) escaneada(s), em paralelo...');
+    var sch=await anScheduler(), par=sch._n||3, feitas=0;
+    var renderCv=async function(j, alvo){ var page=await doc.getPage(j); var b=page.getViewport({scale:1}); var sc=Math.min(2, alvo/Math.max(b.width,b.height,1)); if(!(sc>0)) sc=1.5; var vp=page.getViewport({scale:sc}); var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height; await page.render({canvasContext:cv.getContext('2d'), viewport:vp, intent:'print'}).promise; return cv; };
+    var _ix=0;
+    var faixa=async function(){ for(;;){ var my=_ix++; if(my>=faltam.length) return; var j=faltam[my];
+      try{ var cv=await renderCv(j, 2000); var r=await sch.addJob('recognize', cv); pags[j-1]=(r&&r.data&&r.data.text)||''; }catch(e){}
+      feitas++; if(prog) prog('Lendo por OCR: '+feitas+' de '+faltam.length+' páginas escaneadas ('+par+' ao mesmo tempo)...'); } };
+    var faixas=[]; for(var f=0;f<par;f++) faixas.push(faixa());
+    await Promise.all(faixas);
+    // segunda passada, também em paralelo, só nas páginas que saíram ilegíveis
+    var ruins=faltam.filter(function(j){ return String(pags[j-1]||'').replace(/\s/g,'').length<80; });
+    if(ruins.length){ if(prog) prog('Relendo '+ruins.length+' página(s) ilegível(is) em resolução maior...');
+      for(var k1=0;k1<ruins.length;k1+=par){ var l2=ruins.slice(k1,k1+par), c2=[];
+        for(var q2=0;q2<l2.length;q2++){ c2.push({j:l2[q2], cv:await renderCv(l2[q2], 2600)}); }
+        await Promise.all(c2.map(function(o){ return sch.addJob('recognize', o.cv).then(function(r){ var t=(r&&r.data&&r.data.text)||''; if(t.replace(/\s/g,'').length>String(pags[o.j-1]||'').replace(/\s/g,'').length) pags[o.j-1]=t; }, function(){}); })); }
+    }
   }
   return {texto:pags.join('\n'), ocr:ocr, paginas:n, pags:pags};
 }
@@ -3878,7 +3888,7 @@ function anValidade(t){ t=String(t||'');
     var nd=parseInt(dias[1],10), d=null;
     var em=/(?:publicad[oa][^0-9]{0,60}|emitid[ao][^0-9]{0,40}|expedid[ao][^0-9]{0,40}|data\s+da\s+receita[^0-9]{0,15}|data\s+de\s+emiss[aã]o[^0-9]{0,15})(\d{1,2})[\/.\-](\d{2})[\/.\-](\d{4})/i.exec(t);
     if(em) d=new Date(+em[3],+em[2]-1,+em[1]);
-    if(!d){ var ex=/em\s+(\d{1,2})\s+de\s+(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/i.exec(t);
+    if(!d){ var ex=/(?:local\s+e\s+data|dada\s+e\s+passada|goi[âa]nia|emitid[ao]|expedid[ao]|\bem\b)[^0-9]{0,60}(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/i.exec(t);
       if(ex){ var M={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12}; var mk=ex[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); if(M[mk]) d=new Date(+ex[3],M[mk]-1,+ex[1]); } }
     if(!d){ var any=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/.exec(t); if(any) d=new Date(+any[3],+any[2]-1,+any[1]); }
     if(d && !isNaN(d)){ d.setDate(d.getDate()+nd); var pad=function(x){return String(x).padStart(2,'0');}; return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(); }
