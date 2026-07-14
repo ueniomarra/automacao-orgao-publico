@@ -3853,9 +3853,17 @@ function anParseDt(s){ var m=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/.exec(s||''); 
 function anValidade(t){ t=String(t||'');
   var mr=/(validade|v[aá]lid[ao])[^0-9]{0,20}(\d{2}[\/.\-]\d{2}[\/.\-]\d{4})\s*a\s*(\d{2}[\/.\-]\d{2}[\/.\-]\d{4})/i.exec(t); if(mr) return mr[3];
   var m=/(v[aá]lid[ao]\s+at[eé]|vencimento|expira[çc][aã]o|validade|v[aá]lid[ao])[^0-9]{0,40}(\d{2}[\/.\-]\d{2}[\/.\-]\d{4})/i.exec(t); if(m) return m[2];
-  var dias=/v[aá]lid[ao]\s+por\s+(\d{1,4})\s*dias/i.exec(t);
-  var mp=/(?:data|goi[âa]nia)[^0-9]{0,30}(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/i.exec(t);
-  if(dias && mp){ var M={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12}; var mk=mp[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); var mm=M[mk]; if(mm){ var d=new Date(+mp[3], mm-1, +mp[1]); d.setDate(d.getDate()+parseInt(dias[1],10)); var pad=function(x){return String(x).padStart(2,'0');}; return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(); } }
+  // Certidão com prazo em dias (ex.: "PRAZO DE VALIDADE: 30 DIAS"): validade = data de emissão + N dias
+  var dias=/(?:prazo\s+de\s+validade|validade|v[aá]lid[ao]\s+por)[^0-9]{0,20}(\d{1,4})\s*(?:\([a-z]+\)\s*)?dias/i.exec(t);
+  if(dias){
+    var nd=parseInt(dias[1],10), d=null;
+    var em=/(?:publicad[oa][^0-9]{0,60}|emitid[ao][^0-9]{0,40}|expedid[ao][^0-9]{0,40}|data\s+da\s+receita[^0-9]{0,15}|data\s+de\s+emiss[aã]o[^0-9]{0,15})(\d{1,2})[\/.\-](\d{2})[\/.\-](\d{4})/i.exec(t);
+    if(em) d=new Date(+em[3],+em[2]-1,+em[1]);
+    if(!d){ var ex=/em\s+(\d{1,2})\s+de\s+(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/i.exec(t);
+      if(ex){ var M={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12}; var mk=ex[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); if(M[mk]) d=new Date(+ex[3],M[mk]-1,+ex[1]); } }
+    if(!d){ var any=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/.exec(t); if(any) d=new Date(+any[3],+any[2]-1,+any[1]); }
+    if(d && !isNaN(d)){ d.setDate(d.getDate()+nd); var pad=function(x){return String(x).padStart(2,'0');}; return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(); }
+  }
   return null; }
 function anEhNegativa(t){ var n=String(t||'').toLowerCase(); if(/positiva\s+com\s+efeito/.test(n)) return true; if(/certificado de regularidade|situa[çc][aã]o regular|regularidade do fgts/.test(n)) return true; if(/n[aã]o consta d[eé]bito|nada consta|inexist[eê]ncia de d[eé]bito/.test(n)) return true; if(/negativa/.test(n)) return true; if(/\bpositiva\b/.test(n)) return false; return null; }
 function anValores(t){ var re=/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/ig,m,v=[]; while(m=re.exec(String(t||''))) v.push(anNum(m[1])); return v; }
@@ -3891,7 +3899,7 @@ function anRequeridos(){ return [
   {cat:'CND Estadual', regra:'certidao', modo:'auto', fisc:1},
   {cat:'CND Municipal', regra:'certidao', modo:'auto', fisc:1},
   {cat:'CNDT (trabalhista)', regra:'certidao', modo:'auto', fisc:1},
-  {cat:'Balanço patrimonial', regra:'presenca', modo:'auto'},
+  {cat:'Balanço patrimonial', regra:'balanco', modo:'auto'},
   {cat:'Certidão de falência', regra:'certidao', modo:'auto'},
   {cat:'Atestado de capacidade técnica', regra:'compat', modo:'humano'},
   {cat:'Declarações', regra:'presenca', modo:'auto'},
@@ -3922,6 +3930,18 @@ function anAvaliaReq(req, docs, p, l, secoes){
     return {status:'conferir', nota:'Documento presente, mas '+(notas.join('; ')||'requer conferência')+'.'};
   }
   if(req.regra==='pres_cnpj'){ var ok=anTemCNPJ(d.texto,l.cnpj); if(ok===false) return {status:'atencao', nota:'CNPJ do documento não confere com o do licitante.'}; return {status: ok?'conforme':'conferir', nota: ok?'Documento presente e CNPJ conferido.':'Documento presente; CNPJ não confirmado automaticamente, conferir.'}; }
+  if(req.regra==='balanco'){
+    var bt=d.texto||'', bn=anNormTxt(bt), bNotas=[], bProbl=[], bst='conforme';
+    var bcnpj=anTemCNPJ(bt,l.cnpj); if(bcnpj===false) bProbl.push('o CNPJ do balanço não confere com o do licitante'); else if(bcnpj===true) bNotas.push('CNPJ conferido');
+    var anos=[]; var reAno=/(?:exerc[ií]cio[^0-9]{0,30}|31\/12\/|31\.12\.|encerrad[oa][^0-9]{0,20})(20\d{2})/g, ma; while(ma=reAno.exec(bn)) anos.push(+ma[1]);
+    if(anos.length){ var anoBal=Math.max.apply(null,anos); var anoBase=(anParseDt(p.dataBase)||new Date()).getFullYear(); bNotas.push('exercício de '+anoBal);
+      if(anoBal<anoBase-1){ bst='atencao'; bProbl.push('balanço do exercício de '+anoBal+' pode não ser o do último exercício social exigível (art. 69, I); conferir o prazo legal de apresentação'); } }
+    else { if(bst==='conforme') bst='conferir'; bNotas.push('ano do exercício não localizado no texto, conferir se é o último exigível (art. 69, I)'); }
+    if(/termo de abertura|termo de encerramento|junta comercial|livro di[aá]rio|sped|escritura[çc][aã]o cont[aá]bil/.test(bn)) bNotas.push('há menção a registro/escrituração (termo de abertura/encerramento, Junta ou SPED)'); else { if(bst==='conforme') bst='conferir'; bNotas.push('não localizada menção a termo de abertura/encerramento ou registro; conferir a regularidade da escrituração'); }
+    if(/patrim[oô]nio l[ií]quido[^0-9a-z]{0,20}(negativ|\(|-)/.test(bn)){ bst='atencao'; bProbl.push('há indício de patrimônio líquido negativo; conferir os índices exigidos no edital (art. 69)'); }
+    if(bProbl.length) return {status:bst==='conforme'?'atencao':bst, nota:'Pendência: '+bProbl.join('; ')+'.'+(bNotas.length?' ('+bNotas.join('; ')+')':'')};
+    return {status:bst, nota:'Balanço presente ('+bNotas.join('; ')+'). Índices contábeis exigidos no edital são conferidos pela comissão.'};
+  }
   return {status:'conforme', nota:'Documento presente.'};
 }
 function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){return d.categoria==='Proposta / planilha';}); if(!ds.length && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; if(ds.length && ds[0].pags && ds[0].pags.length>6 && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; var manual=(l&&l.valorProposta>0)?l.valorProposta:null; if(!ds.length && manual==null) return null; var t=ds.length?ds[0].texto:''; var todos=anValores(t); var g=(manual!=null)?manual:anValorGlobal(t); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
