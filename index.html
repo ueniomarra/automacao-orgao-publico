@@ -3885,18 +3885,74 @@ function anValidade(t){ t=String(t||'');
   // Certidão com prazo em dias (ex.: "PRAZO DE VALIDADE: 30 DIAS"): validade = data de emissão + N dias
   var dias=/(?:prazo\s+de\s+validade|validade|v[aá]lid[ao]\s+por)[^0-9]{0,20}(\d{1,4})\s*(?:\([a-z]+\)\s*)?dias/i.exec(t);
   if(dias){
-    var nd=parseInt(dias[1],10), d=null;
-    var em=/(?:publicad[oa][^0-9]{0,60}|emitid[ao][^0-9]{0,40}|expedid[ao][^0-9]{0,40}|data\s+da\s+receita[^0-9]{0,15}|data\s+de\s+emiss[aã]o[^0-9]{0,15})(\d{1,2})[\/.\-](\d{2})[\/.\-](\d{4})/i.exec(t);
-    if(em) d=new Date(+em[3],+em[2]-1,+em[1]);
-    if(!d){ var ex=/(?:local\s+e\s+data|dada\s+e\s+passada|goi[âa]nia|emitid[ao]|expedid[ao]|\bem\b)[^0-9]{0,60}(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/i.exec(t);
-      if(ex){ var M={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12}; var mk=ex[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); if(M[mk]) d=new Date(+ex[3],M[mk]-1,+ex[1]); } }
-    if(!d){ var any=/(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/.exec(t); if(any) d=new Date(+any[3],+any[2]-1,+any[1]); }
+    var nd=parseInt(dias[1],10), d=null, MIN=2018;
+    var okY=function(dt){ return dt && !isNaN(dt) && dt.getFullYear()>=MIN; };
+    // 1) marcador explícito de emissão + data numérica
+    var em=/(?:publicad[oa][^0-9]{0,60}|emitid[ao][^0-9]{0,40}|expedid[ao][^0-9]{0,40}|data\s+da\s+receita[^0-9]{0,15}|data\s+de\s+emiss[aã]o[^0-9]{0,15}|local\s+e\s+data[^0-9]{0,30})(\d{1,2})[\/.\-](\d{2})[\/.\-](\d{4})/i.exec(t);
+    if(em){ var de=new Date(+em[3],+em[2]-1,+em[1]); if(okY(de)) d=de; }
+    // 2) marcador de emissão + data por extenso (LOCAL E DATA: GOIANIA, 3 MAIO DE 2026). Ignora datas de lei (ano < 2018)
+    if(!d){ var M={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
+      var reEx=/(?:local\s+e\s+data|dada\s+e\s+passada|goi[âa]nia|emitid[ao]|expedid[ao])[^0-9]{0,60}(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/ig, mex;
+      while(mex=reEx.exec(t)){ var mk=mex[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); if(!M[mk]) continue; var de2=new Date(+mex[3],M[mk]-1,+mex[1]); if(okY(de2)){ d=de2; break; } } }
+    // 3) qualquer data (numérica ou extenso) com ano válido, a mais recente
+    if(!d){ var cands=[], rn=/(\d{1,2})[\/.\-](\d{2})[\/.\-](\d{4})/g, mn; while(mn=rn.exec(t)){ var dn=new Date(+mn[3],+mn[2]-1,+mn[1]); if(okY(dn)) cands.push(dn); }
+      var M2={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12}, re2=/(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/ig, me2;
+      while(me2=re2.exec(t)){ var k2=me2[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); if(!M2[k2]) continue; var dd=new Date(+me2[3],M2[k2]-1,+me2[1]); if(okY(dd)) cands.push(dd); }
+      if(cands.length) d=cands.sort(function(a,b){return b-a;})[0]; }
     if(d && !isNaN(d)){ d.setDate(d.getDate()+nd); var pad=function(x){return String(x).padStart(2,'0');}; return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(); }
   }
   return null; }
 function anEhNegativa(t){ var n=String(t||'').toLowerCase(); if(/positiva\s+com\s+efeito/.test(n)) return true; if(/certificado de regularidade|situa[çc][aã]o regular|regularidade do fgts/.test(n)) return true; if(/n[aã]o consta d[eé]bito|nada consta|inexist[eê]ncia de d[eé]bito/.test(n)) return true; if(/negativa/.test(n)) return true; if(/\bpositiva\b/.test(n)) return false; return null; }
 function anValores(t){ var re=/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/ig,m,v=[]; while(m=re.exec(String(t||''))) v.push(anNum(m[1])); return v; }
 function anValorGlobal(t){ var m=/(valor\s+global|valor\s+total\s+geral|total\s+geral|pre[çc]o\s+total\s+global|valor\s+total\s+da\s+proposta)[^0-9]{0,40}(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/i.exec(String(t||'')); return m?anNum(m[2]):null; }
+// ---------- Leitura das exigências do edital/TR e dos índices do balanço ----------
+function anNumIdx(s){ s=String(s==null?'':s).replace(/[^0-9,.]/g,''); if(s.indexOf(',')>=0){ s=s.replace(/\.(?=\d{3}\b)/g,'').replace(',','.'); } return parseFloat(s); }
+// Quantos exercícios de balanço o edital exige
+function anExigExercicios(txt){ var t=anNormTxt(txt);
+  if(/(dois|2)\s*\(?\s*(dois)?\s*\)?\s*[uú]ltimos\s+exerc[ií]cios/.test(t)||/dois\s+[uú]ltimos\s+exerc/.test(t)||/2\s+[uú]ltimos\s+exerc/.test(t)) return 2;
+  if(/(tr[eê]s|3)\s*\(?\s*\)?\s*[uú]ltimos\s+exerc[ií]cios/.test(t)) return 3;
+  if(/[uú]ltimo\s+exerc[ií]cio\s+social/.test(t)) return 1;
+  return null; }
+// Anos de exercício presentes no balanço do licitante
+function anAnosBalanco(txt){ var t=anNormTxt(txt); var anos={}, re=/(?:exerc[ií]cio[^0-9]{0,25}|encerrad[oa][^0-9]{0,20}|balan[çc]o\s+patrimonial[^0-9]{0,30}|31[\/.]12[\/.]|em\s+31\s+de\s+dezembro\s+de\s+)(20\d{2})/g, m; while(m=re.exec(t)) anos[+m[1]]=1; return Object.keys(anos).map(Number).sort(); }
+// Índice declarado no documento do licitante (valor)
+function anIndiceDecl(txt, nomeRe){ var t=anNormTxt(txt); var re=new RegExp('(?:'+nomeRe+')[^0-9]{0,22}(\\d{1,3}(?:[.,]\\d{1,3}))','i'); var m=re.exec(t); return m?anNumIdx(m[1]):null; }
+// Piso de índice exigido pelo edital (o menor limiar citado perto do nome, ou o geral "maiores que 1")
+function anIndicePiso(txt, nomeRe){ var t=anNormTxt(txt);
+  var re=new RegExp('(?:'+nomeRe+')[^0-9]{0,45}?(?:maior|igual|superior|iguais|maiores|superiores|>=|≥|de|a|,)+[^0-9]{0,12}(\\d{1,2}(?:[.,]\\d{1,3})?)','i'); var m=re.exec(t); if(m) return anNumIdx(m[1]);
+  if(new RegExp(nomeRe,'i').test(t) && /(maior|igual|superior|iguais|maiores|superiores)[^.]{0,40}?\b1(?:[.,]0+)?\b\s*\(?(um)?/.test(t)) return 1;
+  return null; }
+// Exigências gerais do edital que devem constar dos documentos do licitante
+function anExigCapitalPL(txt){ var t=anNormTxt(txt);
+  if(!/(capital\s+social|patrim[oô]nio\s+l[ií]quido)[^.]{0,50}(m[ií]nimo|n[aã]o\s+inferior|igual\s+ou\s+superior|no\s+m[ií]nimo)/.test(t)) return null;
+  var m=/(capital\s+social|patrim[oô]nio\s+l[ií]quido)[^%0-9]{0,60}?(?:m[ií]nimo\s+de\s+|n[aã]o\s+inferior\s+a\s+|igual\s+ou\s+superior\s+a\s+)?(?:r\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)/i.exec(t); if(m && anNum(m[2])>=1000) return {tipo:/patrim/i.test(m[1])?'Patrimônio líquido mínimo':'Capital social mínimo', v:anNum(m[2])};
+  var pc=/(capital\s+social|patrim[oô]nio\s+l[ií]quido)[^%]{0,60}?(\d{1,2})\s*%/i.exec(t); if(pc) return {tipo:/patrim/i.test(pc[1])?'Patrimônio líquido mínimo':'Capital social mínimo', pct:+pc[2]};
+  return null; }
+function anTemGarantiaProposta(txt){ var t=anNormTxt(txt); return /garantia\s+(?:de|da)\s+proposta|garantia\s+de\s+participa[çc][aã]o|presta[çc][aã]o\s+de\s+garantia[^.]{0,40}proposta/.test(t); }
+function anExtraiCapitalDeclarado(txt){ var m=/(capital\s+social[^0-9]{0,40}?)(?:r\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)/i.exec(anNormTxt(txt)); return m?anNum(m[2]):null; }
+function anExigenciasEdital(p,l){
+  var refTxt=(p.docsCertame||[]).map(function(d){return d.texto||'';}).join('\n'); var rt=anNormTxt(refTxt);
+  var licTxt=(l.docs||[]).map(function(d){return d.texto||'';}).join('\n'); var lt=anNormTxt(licTxt);
+  var checks=[]; if(!rt || rt.replace(/\s/g,'').length<200) return checks; // sem edital, nada a confrontar
+  var push=function(t,st,n){ checks.push({t:t,status:st,nota:n}); };
+  // Registro no conselho (CREA/CAU) quando o edital exige
+  if(/registro\s+ou\s+inscri[çc][aã]o[^.]{0,60}(crea|cau|conselho\s+regional)|certid[aã]o\s+de\s+registro[^.]{0,30}(crea|cau)|quita[çc][aã]o[^.]{0,20}(crea|cau)/.test(rt)){
+    var temReg=/crea|cau|conselho\s+regional\s+de\s+engenharia|conselho\s+de\s+arquitetura|registro\s+e\s+quita[çc][aã]o|acervo\s+tecnico/.test(lt);
+    push('Registro no conselho (CREA/CAU)', temReg?'conferir':'atencao', temReg?'O edital exige registro/inscrição no conselho (CREA/CAU); há menção nos documentos do licitante, a comissão confere a vigência e a quitação.':'O edital exige registro/inscrição no conselho (CREA/CAU) e não foi localizado nos documentos do licitante. Solicitar ou inabilitar.');
+  }
+  // Capital social / patrimônio líquido mínimo
+  var cap=anExigCapitalPL(refTxt);
+  if(cap){ var alvo=cap.v!=null?cap.v:(cap.pct!=null&&p.valorEstimado?p.valorEstimado*cap.pct/100:null); var decl=anExtraiCapitalDeclarado(licTxt);
+    if(alvo!=null && decl!=null) push(cap.tipo, decl>=alvo*0.999?'conforme':'atencao', cap.tipo+': edital exige '+money(alvo)+(cap.pct!=null?(' ('+cap.pct+'% do estimado)'):'')+'; documento do licitante indica '+money(decl)+'.'+(decl<alvo*0.999?' Abaixo do exigido.':''));
+    else push(cap.tipo, 'conferir', 'O edital exige '+cap.tipo.toLowerCase()+(cap.v!=null?(' de '+money(cap.v)):(cap.pct!=null?(' de '+cap.pct+'% do valor estimado'):''))+'. Conferir o valor no balanço/contrato social do licitante.'); }
+  // Garantia de proposta (art. 58)
+  if(/garantia\s+(?:de|da)\s+proposta|garantia\s+de\s+participa[çc][aã]o/.test(rt)){ var temG=anTemGarantiaProposta(licTxt)||/ap[oó]lice|carta\s+fian[çc]a|seguro[- ]garantia|dep[oó]sito|comprovante\s+de\s+garantia/.test(lt);
+    push('Garantia de proposta (art. 58)', temG?'conferir':'atencao', temG?'O edital exige garantia de proposta; há comprovante nos documentos do licitante, a comissão confere o valor e a validade.':'O edital exige garantia de proposta (art. 58) e o comprovante não foi localizado nos documentos do licitante.'); }
+  // Visita técnica / declaração de conhecimento
+  if(/visita\s+t[eé]cnica|atestado\s+de\s+visita|vistoria\s+t[eé]cnica/.test(rt)){ var temV=/visita\s+t[eé]cnica|atestado\s+de\s+visita|vistoria|declara[çc][aã]o\s+de\s+(?:pleno\s+)?conhecimento/.test(lt);
+    push('Visita técnica', temV?'conferir':'atencao', temV?'O edital prevê visita técnica; há atestado/declaração nos documentos do licitante.':'O edital prevê visita técnica ou declaração de conhecimento e o comprovante não foi localizado nos documentos do licitante.'); }
+  return checks;
+}
 // ---------- Confronto de obra: planilha orçamentária, BDI, cronograma (item a item) ----------
 var AN_UNIDS='UN|UND|UNID|UNIDADE|M2|M3|M²|M³|M|KM|KG|TON|T|VB|SERV|H|HORA|MES|M[EÊ]S|CJ|PC|P[ÇC]|GL|L|HA|PONTO|PT|PAR|JG|SC|LATA|ROLO|BR|FL|CX|GLB|CENTO|MIL';
 function anParseItens(txt){
@@ -3990,10 +4046,18 @@ var AN_SINAIS=[
 ];
 function anNormP(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function anClassPagina(t){ var n=anNormP(t); for(var i=0;i<AN_SINAIS.length;i++){ if(AN_SINAIS[i][1].test(n)) return AN_SINAIS[i][0]; } return null; }
-function anSecoesDossie(docs){ var texto={}, contagem={};
+function anSecoesDossie(docs){ var texto={}, contagem={}, paginas={};
   (docs||[]).forEach(function(d){ var ps=(d.pags&&d.pags.length)?d.pags:[d.texto||'']; var last=null;
-    ps.forEach(function(pt){ var c=anClassPagina(pt); if(c) last=c; if(last){ texto[last]=(texto[last]?texto[last]+'\n':'')+pt; contagem[last]=(contagem[last]||0)+1; } }); });
-  return {texto:texto, contagem:contagem}; }
+    ps.forEach(function(pt){ var c=anClassPagina(pt); if(c) last=c; if(last){ texto[last]=(texto[last]?texto[last]+'\n':'')+pt; contagem[last]=(contagem[last]||0)+1; (paginas[last]=paginas[last]||[]).push(pt); } }); });
+  return {texto:texto, contagem:contagem, paginas:paginas}; }
+// Escolhe a PÁGINA que é de fato a certidão pedida (evita a herança de seção colar páginas vizinhas e ler data errada)
+function anPaginaCertidao(pages, cat, cnpj){
+  if(!pages||!pages.length) return '';
+  var sig=null; for(var i=0;i<AN_SINAIS.length;i++){ if(AN_SINAIS[i][0]===cat){ sig=AN_SINAIS[i][1]; break; } }
+  var cand=sig?pages.filter(function(pt){return sig.test(anNormP(pt));}):pages.slice(); if(!cand.length) cand=pages.slice();
+  var comCnpj=cand.filter(function(pt){return anTemCNPJ(pt,cnpj)===true;}); var pool=comCnpj.length?comCnpj:cand;
+  var comData=pool.filter(function(pt){return anValidade(pt);}); if(comData.length) return comData[0];
+  return pool[0]||pages[0]||''; }
 function anRequeridos(){ return [
   {cat:'Contrato/estatuto social', regra:'pres_cnpj', modo:'auto'},
   {cat:'CND Federal/PGFN', regra:'certidao', modo:'auto', fisc:1},
@@ -4008,7 +4072,7 @@ function anRequeridos(){ return [
   {cat:'Declaração de enquadramento ME/EPP', regra:'meepp_decl', modo:'auto', so_meepp:1},
   {cat:'Consulta CEIS/CNEP (impedimentos)', regra:'ceis', modo:'humano'}
 ]; }
-function anAvaliaReq(req, docs, p, l, secoes){
+function anAvaliaReq(req, docs, p, l, secoes, secPags){
   // Checagens que não dependem de arquivo enviado
   if(req.regra==='ceis') return {status:'conferir', nota:'Consulta obrigatória a sanções vigentes (CEIS e CNEP, no Portal da Transparência, e cadastros do TCU/TCE) antes da habilitação. A comissão consulta pelo CNPJ e anexa o comprovante ao processo (art. 14 da Lei 14.133/2021).'};
   if(req.regra==='meepp_decl'){ var achouD=(docs||[]).some(function(d){ return /microempresa|empresa de pequeno porte|\bme\b|\bepp\b|simples nacional/i.test(String(d.texto||'')); }); return achouD?{status:'conforme', nota:'Localizada menção ao enquadramento ME/EPP nos documentos enviados; a comissão confirma a declaração formal.'}:{status:'conferir', nota:'Licitante marcado como ME/EPP, mas a declaração de enquadramento não foi localizada nos documentos. Solicitar ou conferir manualmente.'}; }
@@ -4018,9 +4082,15 @@ function anAvaliaReq(req, docs, p, l, secoes){
   var d=ds[0];
   // Arquivo grande com várias seções (dossiê único): usar o trecho do documento certo, não o arquivo inteiro
   if(d.pags && d.pags.length>6 && secoes && secoes[req.cat]) d={texto:secoes[req.cat], categoria:req.cat};
+  // Certidão: avaliar a PÁGINA que é de fato esta certidão (evita a herança de seção colar página vizinha e ler data/negativa erradas)
+  if((req.regra==='certidao'||req.regra==='pres_cnpj') && secPags && secPags[req.cat] && secPags[req.cat].length>1){ var pg=anPaginaCertidao(secPags[req.cat], req.cat, l.cnpj); if(pg) d={texto:pg, categoria:req.cat}; }
   if(req.modo==='humano') return anCompatAtestado(d.texto,p);
   if(req.regra==='certidao'){
     var neg=anEhNegativa(d.texto), val=anValidade(d.texto), cnpjok=anTemCNPJ(d.texto,l.cnpj), notas=[], probl=[];
+    // Certidão de 2 páginas (data numa, prazo na outra): se a página escolhida não tem validade/negativa, usar a seção inteira
+    var _sec=(secoes&&secoes[req.cat])?secoes[req.cat]:null;
+    if(!val && _sec){ val=anValidade(_sec); }
+    if(neg===null && _sec){ var n2=anEhNegativa(_sec); if(n2!==null) neg=n2; }
     if(neg===false) probl.push('a certidão consta POSITIVA');
     if(cnpjok===false) probl.push('o CNPJ do documento não confere com o do licitante');
     if(val){ var dv=anParseDt(val), db=anParseDt(p.dataBase); if(dv&&db&&dv<db) probl.push('validade vencida em '+val+', anterior à data-base '+p.dataBase); else if(dv) notas.push('validade até '+val); }
@@ -4034,15 +4104,27 @@ function anAvaliaReq(req, docs, p, l, secoes){
   if(req.regra==='pres_cnpj'){ var ok=anTemCNPJ(d.texto,l.cnpj); if(ok===false) return {status:'atencao', nota:'CNPJ do documento não confere com o do licitante.'}; return {status: ok?'conforme':'conferir', nota: ok?'Documento presente e CNPJ conferido.':'Documento presente; CNPJ não confirmado automaticamente, conferir.'}; }
   if(req.regra==='balanco'){
     var bt=d.texto||'', bn=anNormTxt(bt), bNotas=[], bProbl=[], bst='conforme';
+    var pior=function(s){ var r={conforme:0,conferir:1,atencao:2}; if(r[s]>r[bst]) bst=s; };
+    var refTxt=(p.docsCertame||[]).map(function(x){return x.texto||'';}).join('\n');
     var bcnpj=anTemCNPJ(bt,l.cnpj); if(bcnpj===false) bProbl.push('o CNPJ do balanço não confere com o do licitante'); else if(bcnpj===true) bNotas.push('CNPJ conferido');
-    var anos=[]; var reAno=/(?:exerc[ií]cio[^0-9]{0,30}|31\/12\/|31\.12\.|encerrad[oa][^0-9]{0,20})(20\d{2})/g, ma; while(ma=reAno.exec(bn)) anos.push(+ma[1]);
-    if(anos.length){ var anoBal=Math.max.apply(null,anos); var anoBase=(anParseDt(p.dataBase)||new Date()).getFullYear(); bNotas.push('exercício de '+anoBal);
-      if(anoBal<anoBase-1){ bst='atencao'; bProbl.push('balanço do exercício de '+anoBal+' pode não ser o do último exercício social exigível (art. 69, I); conferir o prazo legal de apresentação'); } }
-    else { if(bst==='conforme') bst='conferir'; bNotas.push('ano do exercício não localizado no texto, conferir se é o último exigível (art. 69, I)'); }
-    if(/termo de abertura|termo de encerramento|junta comercial|livro di[aá]rio|sped|escritura[çc][aã]o cont[aá]bil/.test(bn)) bNotas.push('há menção a registro/escrituração (termo de abertura/encerramento, Junta ou SPED)'); else { if(bst==='conforme') bst='conferir'; bNotas.push('não localizada menção a termo de abertura/encerramento ou registro; conferir a regularidade da escrituração'); }
-    if(/patrim[oô]nio l[ií]quido[^0-9a-z]{0,20}(negativ|\(|-)/.test(bn)){ bst='atencao'; bProbl.push('há indício de patrimônio líquido negativo; conferir os índices exigidos no edital (art. 69)'); }
+    // EXERCÍCIOS: quantos o edital exige x quantos o licitante apresentou
+    var anosPres=anAnosBalanco(bt), exig=anExigExercicios(refTxt);
+    if(anosPres.length) bNotas.push('exercício(s) apresentado(s): '+anosPres.join(', '));
+    else { pior('conferir'); bNotas.push('ano do exercício não localizado no texto, conferir se é o último exigível (art. 69, I)'); }
+    if(exig){ bNotas.push('edital exige '+exig+' exercício(s)'); if(anosPres.length && anosPres.length<exig){ pior('atencao'); bProbl.push('o edital exige o balanço dos '+exig+' últimos exercícios e o licitante apresentou '+anosPres.length+' ('+anosPres.join(', ')+'), faltando exercício(s)'); } }
+    else if(anosPres.length){ var anoBase=(anParseDt(p.dataBase)||new Date()).getFullYear(); var anoBal=Math.max.apply(null,anosPres); if(anoBal<anoBase-1){ pior('atencao'); bProbl.push('balanço mais recente é do exercício de '+anoBal+', pode não ser o último exigível (art. 69, I)'); } }
+    // ESCRITURAÇÃO
+    if(/termo de abertura|termo de encerramento|junta comercial|livro di[aá]rio|\bsped\b|escritura[çc][aã]o cont[aá]bil/.test(bn)) bNotas.push('há menção a registro/escrituração'); else { pior('conferir'); bNotas.push('não localizada menção a termo de abertura/encerramento ou registro; conferir a escrituração'); }
+    // ÍNDICES CONTÁBEIS: exigidos pelo edital x declarados pelo licitante
+    var idxDefs=[['Liquidez Corrente','liquidez\\s+corrente|\\bilc\\b|\\blc\\b'],['Liquidez Geral','liquidez\\s+geral|\\bilg\\b|\\blg\\b'],['Solvência Geral','solv[eê]ncia\\s+geral|\\bisg\\b|\\bsg\\b']];
+    var licAll=(l.docs||[]).map(function(x){return x.texto||'';}).join('\n');
+    idxDefs.forEach(function(ix){ var piso=anIndicePiso(refTxt, ix[1]); if(piso==null) return; var decl=anIndiceDecl(licAll, ix[1]);
+      if(decl==null){ pior('conferir'); bProbl.push('o edital exige '+ix[0]+' >= '+String(piso).replace('.',',')+' e o índice não foi localizado nos documentos do licitante; calcular/conferir'); }
+      else if(decl < piso*0.999){ pior('atencao'); bProbl.push(ix[0]+' declarado '+String(decl).replace('.',',')+' ABAIXO do mínimo exigido '+String(piso).replace('.',',')+' (art. 69, § 1º)'); }
+      else bNotas.push(ix[0]+' '+String(decl).replace('.',',')+' (>= '+String(piso).replace('.',',')+' exigido)'); });
+    if(/patrim[oô]nio l[ií]quido[^0-9a-z]{0,20}(negativ|\(|-)/.test(bn)){ pior('atencao'); bProbl.push('indício de patrimônio líquido negativo'); }
     if(bProbl.length) return {status:bst==='conforme'?'atencao':bst, nota:'Pendência: '+bProbl.join('; ')+'.'+(bNotas.length?' ('+bNotas.join('; ')+')':'')};
-    return {status:bst, nota:'Balanço presente ('+bNotas.join('; ')+'). Índices contábeis exigidos no edital são conferidos pela comissão.'};
+    return {status:bst, nota:'Balanço presente ('+bNotas.join('; ')+').'+(anExigExercicios(refTxt)||anIndicePiso(refTxt,'liquidez\\s+corrente')!=null?'':' Se o edital exigir número de exercícios ou índices contábeis, suba o edital na aba Certame para o confronto automático.')};
   }
   return {status:'conforme', nota:'Documento presente.'};
 }
@@ -4072,8 +4154,8 @@ function anOnUploadCertame(input){ var files=input.files; if(!files||!files.leng
   (function next(k){ if(k>=arr.length){ input.value=''; p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); anLerEntrada(f, prog).then(function(list){ (list||[]).forEach(function(d){ p.docsCertame.push({nome:d.nome,texto:d.texto,ocr:d.ocr,paginas:d.paginas}); }); anSave(); toast('Documento da licitação lido: '+f.name); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
 }
 function anDelDocCert(i){ var p=anCur(); if(!p||!p.docsCertame) return; var nm=(p.docsCertame[i]&&p.docsCertame[i].nome)||'este arquivo'; if(!confirm('Remover o documento da licitação "'+nm+'"? Ele é a régua da comparação.')) return; p.docsCertame.splice(i,1); p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); }
-function anStatusGeral(itens,prop,obra){ if(prop&&prop.status==='atencao'&&/ACIMA do estimado|INEXEQU/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); var oAt=obra&&(obra.checks||[]).some(function(c){return c.status==='atencao';}); var oCf=obra&&(obra.checks||[]).some(function(c){return c.status==='conferir';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')||oAt) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})||oCf) return 'ressalvas'; return 'habilitado'; }
-function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var secoes=anSecoesDossie(docs).texto; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; l.resultado={itens:itens, proposta:prop, obra:obra, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop,obra); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
+function anStatusGeral(itens,prop,obra,exig){ if(prop&&prop.status==='atencao'&&/ACIMA do estimado|INEXEQU/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); var extra=[].concat((obra&&obra.checks)||[],exig||[]); var xAt=extra.some(function(c){return c.status==='atencao';}); var xCf=extra.some(function(c){return c.status==='conferir';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')||xAt) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})||xCf) return 'ressalvas'; return 'habilitado'; }
+function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; var exig=anExigenciasEdital(p,l); l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop,obra,exig); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
 function anTag(st){ var map={conforme:['Conforme','#0A2342','#fff'],atencao:['Atenção','#E8A020','#0A2342'],ausente:['Ausente','#6b7280','#fff'],conferir:['Conferir','#ffffff','#0A2342']}; var m=map[st]||['-','#e5e7eb','#111']; var extra=st==='conferir'?';border:1px solid #0A2342':''; return '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:700;background:'+m[1]+';color:'+m[2]+extra+'">'+m[0]+'</span>'; }
 function anRenderConferencia(root){
   var p=anCur(), l=anLic(); if(!l){ anRenderProc(root); return; }
@@ -4104,6 +4186,11 @@ function anRenderResultado(l){
   auto.forEach(function(i){ h+='<tr><td style="width:32%">'+esc(i.cat)+'</td><td style="width:15%">'+anTag(i.status)+'</td><td>'+esc(i.nota)+'</td></tr>'; });
   h+='</tbody></table>';
   if(r.proposta){ h+='<div class="gl" style="margin:12px 0 6px"><svg class="ic" style="width:14px;height:14px"><use href="#i-money"/></svg> Proposta e planilha</div><table class="itab"><tbody><tr><td style="width:32%">Proposta / planilha</td><td style="width:15%">'+anTag(r.proposta.status)+'</td><td>'+esc(r.proposta.nota)+'</td></tr></tbody></table>'; }
+  if(r.exig && r.exig.length){
+    h+='<div class="gl" style="margin:12px 0 6px"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Exigências específicas do edital x documentos do licitante</div><table class="itab"><tbody>';
+    r.exig.forEach(function(c){ h+='<tr><td style="width:32%">'+esc(c.t)+'</td><td style="width:15%">'+anTag(c.status)+'</td><td>'+esc(c.nota)+'</td></tr>'; });
+    h+='</tbody></table>';
+  }
   if(r.obra && (r.obra.checks||[]).length){
     h+='<div class="gl" style="margin:12px 0 6px"><svg class="ic" style="width:14px;height:14px"><use href="#i-chart"/></svg> Confronto de obra: planilha do edital x planilha do licitante</div>';
     if((r.obra.det||[]).length) h+='<div class="hint" style="margin-bottom:6px">'+r.obra.det.map(function(d){return esc(d.k)+': <b>'+esc(d.v)+'</b>';}).join(' | ')+'</div>';
@@ -4160,6 +4247,8 @@ function anGerarParecer(){
   if(conf.length) h+='<p><b>Pontos que requerem conferência da Comissão:</b> '+esc(conf.join('; '))+'.</p>';
   if(pend.length) h+='<p><b>Pendências apontadas:</b> '+esc(pend.join('; '))+'.</p>';
   if(r.proposta) h+='<p><b>Proposta e planilha orçamentária:</b> '+esc(r.proposta.nota)+'</p>';
+  if(r.exig && r.exig.length){ var xPr=r.exig.filter(function(c){return c.status!=='conforme';});
+    h+='<p><b>Exigências específicas do edital:</b> '+(xPr.length?esc(xPr.map(function(c){return c.t+' ('+c.nota+')';}).join(' | ')):'atendidas nos pontos verificados.')+'</p>'; }
   if(r.obra && (r.obra.checks||[]).length){ var oOk=r.obra.checks.filter(function(c){return c.status==='conforme';}), oPr=r.obra.checks.filter(function(c){return c.status!=='conforme';});
     h+='<p><b>Confronto de obra (planilha do edital x proposta):</b> '+(oOk.length?('Regulares: '+esc(oOk.map(function(c){return c.t;}).join('; '))+'. '):'')+(oPr.length?('Apontamentos: '+esc(oPr.map(function(c){return c.t+' ('+c.nota+')';}).join(' | '))):'Sem apontamentos.')+'</p>'; }
   var decl={ 'Habilitado':'Diante do exposto, verificado o atendimento às exigências de habilitação, esta Comissão declara o licitante HABILITADO.', 'Habilitado com ressalvas':'Diante do exposto, esta Comissão declara o licitante HABILITADO COM RESSALVAS, condicionado à conferência final dos pontos indicados.', 'Pendente (diligência)':'Diante do exposto, esta Comissão converte o julgamento em diligência, concedendo prazo para a complementação e o saneamento da documentação, nos termos do art. 64 da Lei 14.133/2021.', 'Inabilitado':'Diante do exposto, ante o descumprimento de exigência de habilitação, esta Comissão declara o licitante INABILITADO.', 'Desclassificado (proposta)':'Diante do exposto, esta Comissão DESCLASSIFICA a proposta do licitante, nos termos do art. 59 da Lei 14.133/2021, prosseguindo-se com o exame da proposta subsequente na ordem de classificação.' };
