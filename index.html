@@ -3637,9 +3637,21 @@ function anLoad(){ try{ var s=localStorage.getItem('aop_analise_v1'); if(s){ ANA
 function anSave(){ try{ localStorage.setItem('aop_analise_v1', JSON.stringify({procs:ANALISE.procs})); }catch(e){} var c=anCur(); if(c) anPersist(c); }
 function anOrg(){ return (typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; }
 var _anPT=null,_anPP=null;
-function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _anPP=null; if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; try{ SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:p, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'}).then(function(){},function(){}); }catch(e){} }
+function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _anPP=null; if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; try{
+  var body=p, s=JSON.stringify(p);
+  if(s.length>900000){ body=JSON.parse(s); (body.licitantes||[]).forEach(function(li){ (li.docs||[]).forEach(function(dd){ delete dd.pags; }); });
+    if(JSON.stringify(body).length>900000){ (body.licitantes||[]).forEach(function(li){ (li.docs||[]).forEach(function(dd){ if(dd.texto&&dd.texto.length>120000){ dd.texto=dd.texto.slice(0,120000); dd.textoCortado=true; } }); }); } }
+  SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:body, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'}).then(function(){},function(){}); }catch(e){} }
 function anPersist(p){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; _anPP=p; if(_anPT) clearTimeout(_anPT); _anPT=setTimeout(anFlush,600); }
-function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER) return Promise.resolve(false); return SB.from('an_processos').select('dados').order('updated_at',{ascending:false}).then(function(r){ if(r&&r.data){ ANALISE.procs=r.data.map(function(x){return x.dados;}).filter(Boolean); ANALISE._loaded=true; return true; } return false; }).catch(function(){ return false; }); }
+function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER) return Promise.resolve(false); return SB.from('an_processos').select('dados').order('updated_at',{ascending:false}).then(function(r){ if(r&&r.data){
+  var srv=r.data.map(function(x){return x.dados;}).filter(Boolean);
+  var loc=[]; try{ loc=(JSON.parse(localStorage.getItem('aop_analise_v1')||'{}').procs)||[]; }catch(e){}
+  // Mescla: se a cópia local tem documentos mais completos que a da nuvem (dossiê enxugado), a local vence
+  srv.forEach(function(sp){ var lp=loc.filter(function(x){return x&&x.id===sp.id;})[0]; if(!lp) return; (sp.licitantes||[]).forEach(function(sl){ var ll=(lp.licitantes||[]).filter(function(x){return x&&x.id===sl.id;})[0]; if(!ll||!ll.docs||!ll.docs.length) return; var tl=0,ts=0; try{tl=JSON.stringify(ll.docs).length; ts=JSON.stringify(sl.docs||[]).length;}catch(e){} if(tl>ts) sl.docs=ll.docs; }); });
+  // Processo que só existe local (persist da nuvem falhou) não pode sumir
+  var ids={}; srv.forEach(function(x){ids[x.id]=1;});
+  loc.forEach(function(lp){ if(lp&&lp.id&&!ids[lp.id]) srv.push(lp); });
+  ANALISE.procs=srv; ANALISE._loaded=true; return true; } return false; }).catch(function(){ return false; }); }
 function anEntrar(){ anFlush(); ANALISE.curId=null; ANALISE.curLic=null; var r=document.getElementById('an-root'); if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&!ANALISE._loaded){ if(r) r.innerHTML='<div class="panel"><div style="padding:16px" class="hint">Carregando processos do órgão...</div></div>'; anCarregarSupabase().then(function(){ ANALISE._loaded=true; renderAnalise(); }); } else { renderAnalise(); } }
 function anGid(p){ return (p||'a')+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
 function anCur(){ for(var i=0;i<ANALISE.procs.length;i++){ if(ANALISE.procs[i].id===ANALISE.curId) return ANALISE.procs[i]; } return null; }
