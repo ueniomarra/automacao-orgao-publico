@@ -854,21 +854,28 @@ function goto(pg){
   document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===pg); });
   show(pg);
 }
+// Lista ÚNICA de módulos com permissão. Módulo novo entra AQUI e já cai automático para o admin/superadmin
+// (full) e aparece sozinho no painel de permissões, sem mexer em mais nada.
+var MODULOS=[
+  {k:'licitacao', l:'Licitações e Contratos', re:/contrato/},
+  {k:'compras', l:'Compras (Dispensa e Inexigibilidade)', re:/compras/},
+  {k:'ambiente', l:'Meio Ambiente', re:/ambient|meio/},
+  {k:'analise', l:'Análise de Licitação Online', re:/an[aá]lise/},
+  {k:'camara', l:'Câmara Municipal', re:/c[aâ]mara|vereador|legislat/}
+];
 function modulosPermitidos(){
   var papel=(CURRENT_USER&&CURRENT_USER.papel)||'staff';
   var perm=((CURRENT_USER&&CURRENT_USER.perm)||'').toLowerCase();
   var full = papel==='admin' || papel==='superadmin' || perm.indexOf('total')>=0;
-  return { licitacao: full||/contrato/.test(perm), compras: full||/compras/.test(perm), ambiente: full||/ambient|meio/.test(perm), analise: full||/an[aá]lise/.test(perm), camara: full||/c[aâ]mara|vereador|legislat/.test(perm) };
+  var o={}; MODULOS.forEach(function(m){ o[m.k]= full || m.re.test(perm); }); return o;
 }
 function aplicarPermissoes(){
   var pode=modulosPermitidos();
-  ['licitacao','compras','ambiente','analise','camara'].forEach(function(m){
-    var el=document.querySelector('.nav-i[data-pg="'+m+'"]'); if(el) el.style.display = pode[m]?'':'none';
-  });
+  MODULOS.forEach(function(m){ var el=document.querySelector('.nav-i[data-pg="'+m.k+'"]'); if(el) el.style.display = pode[m.k]?'':'none'; });
 }
 function show(pg){
   // trava de permissao: bloqueia modulo que o usuario nao tem
-  if(['licitacao','compras','ambiente','analise','camara'].indexOf(pg)>=0 && CURRENT_USER && !modulosPermitidos()[pg]){
+  if(MODULOS.some(function(m){return m.k===pg;}) && CURRENT_USER && !modulosPermitidos()[pg]){
     toast('Você não tem permissão para este módulo. Fale com o administrador do órgão.'); pg='dashboard';
   }
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
@@ -4845,7 +4852,7 @@ function renderAdmin(){
     var podeRenomear = euSuper || podeEditar;
     var lk='cursor:pointer;color:var(--royal);font-size:11px;font-weight:700;margin-left:9px';
     var nmJs=esc((u.nome||'').replace(/'/g,'&#39;'));
-    var acoes = (podeRenomear ? '<span style="'+lk+'" onclick="renomearUsuario(\''+esc(u.login)+'\',\''+nmJs+'\')">renomear</span>' : '') + (podeEditar ? '<span style="'+lk+'" onclick="liberarUsuario(\''+esc(u.login)+'\')">permissão</span><span style="'+lk+';color:'+(u.ativo?'#C62D45':'#1f7a33')+'" onclick="toggleAtivoUsuario(\''+esc(u.login)+'\','+(u.ativo?'false':'true')+')">'+(u.ativo?'desativar':'ativar')+'</span>' : '');
+    var acoes = (podeRenomear ? '<span style="'+lk+'" onclick="renomearUsuario(\''+esc(u.login)+'\',\''+nmJs+'\')">renomear</span><span style="'+lk+'" onclick="trocarLoginUsuario(\''+esc(u.login)+'\')">trocar login</span>' : '') + (podeEditar ? '<span style="'+lk+'" onclick="liberarUsuario(\''+esc(u.login)+'\')">permissão</span><span style="'+lk+';color:'+(u.ativo?'#C62D45':'#1f7a33')+'" onclick="toggleAtivoUsuario(\''+esc(u.login)+'\','+(u.ativo?'false':'true')+')">'+(u.ativo?'desativar':'ativar')+'</span>' : '');
     var stbadge = u.ativo?'<span class="st st-a"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Ativo</span>':'<span class="st st-b"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Inativo</span>';
     return '<tr><td><div class="obj">'+esc((u.login||'').replace(/@queirozmarra\.com$/i,''))+eu+'</div><div class="modd">'+esc(u.nome||'')+oculto+(euSuper?'':'<br><span style="font-size:11px;color:var(--slate)">'+esc(u.perm||'')+'</span>')+'</div></td>'+
       '<td><span class="st '+pcls+'">'+papelLabel(u.papel)+'</span></td><td>'+col4+'</td>'+
@@ -4901,13 +4908,7 @@ async function novoUsuario(){
 function liberarUsuario(email){
   var u=null; for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login===email){ u=DB.users[i]; break; } }
   var perm=((u&&u.perm)||'').toLowerCase(); var full=perm.indexOf('total')>=0;
-  var mods=[
-    {k:'licitacao',l:'Licitações e Contratos',on: full||/contrato/.test(perm)},
-    {k:'compras',l:'Compras (Dispensa e Inexigibilidade)',on: full||/compras/.test(perm)},
-    {k:'ambiente',l:'Meio Ambiente',on: full||/ambient|meio/.test(perm)},
-    {k:'analise',l:'Análise de Licitação Online',on: full||/an[aá]lise/.test(perm)},
-    {k:'camara',l:'Câmara Municipal',on: full||/c[aâ]mara|vereador|legislat/.test(perm)}
-  ];
+  var mods=MODULOS.map(function(m){ return {k:m.k, l:m.l, on: full||m.re.test(perm)}; });
   var rows=mods.map(function(m){
     return '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1.5px solid var(--line);border-radius:11px;margin-bottom:9px;cursor:pointer;background:#FAFBFE"><span style="font-weight:600;color:var(--ink);font-size:14px">'+esc(m.l)+'</span><input type="checkbox" class="permchk" data-l="'+esc(m.l)+'" '+(m.on?'checked':'')+' style="width:22px;height:22px;accent-color:var(--royal);cursor:pointer"></label>';
   }).join('');
@@ -4931,6 +4932,16 @@ async function renomearUsuario(email, nomeAtual){
   var r=await chamarAdmin({acao:'set_nome', email:email, nome:novo});
   if(r.error){ toast('Erro: '+r.error); return; }
   await carregarDoSupabase(); renderAdmin(); toast('Nome de '+email+' alterado para "'+novo+'".');
+}
+async function trocarLoginUsuario(email){
+  var novo=prompt('Novo login (e-mail de acesso) para '+email+':\n\nATENÇÃO: o usuário passará a entrar com o novo e-mail. A senha continua a mesma.', email); if(novo===null) return; novo=novo.trim().toLowerCase();
+  if(!novo || novo.indexOf('@')<0){ toast('Informe um e-mail válido para o novo login.'); return; }
+  if(novo===String(email||'').toLowerCase()) return;
+  if(!confirm('Confirmar a troca do login de "'+email+'" para "'+novo+'"?\nO usuário deverá usar o novo e-mail para entrar.')) return;
+  toast('Trocando o login...');
+  var r=await chamarAdmin({acao:'set_login', email:email, novo:novo});
+  if(r.error){ toast('Erro: '+r.error); return; }
+  await carregarDoSupabase(); renderAdmin(); toast('Login alterado para '+novo+'. O usuário entra com o novo e-mail e a mesma senha.');
 }
 async function toggleAtivoUsuario(email, ativar){
   var r=await chamarAdmin({acao:'set_ativo', email:email, ativo:ativar});
