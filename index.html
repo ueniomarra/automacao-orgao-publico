@@ -3762,11 +3762,39 @@ function anLoad(){ try{ var s=localStorage.getItem('aop_analise_v1'); if(s){ ANA
 function anSave(){ try{ localStorage.setItem('aop_analise_v1', JSON.stringify({procs:ANALISE.procs})); }catch(e){} var c=anCur(); if(c) anPersist(c); }
 function anOrg(){ return (typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; }
 var _anPT=null,_anPP=null;
-function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _anPP=null; if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; try{
-  var body=p, s=JSON.stringify(p);
-  if(s.length>900000){ body=JSON.parse(s); (body.licitantes||[]).forEach(function(li){ (li.docs||[]).forEach(function(dd){ delete dd.pags; }); });
-    if(JSON.stringify(body).length>900000){ (body.licitantes||[]).forEach(function(li){ (li.docs||[]).forEach(function(dd){ if(dd.texto&&dd.texto.length>120000){ dd.texto=dd.texto.slice(0,120000); dd.textoCortado=true; } }); }); } }
-  SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:body, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'}).then(function(){},function(){}); }catch(e){} }
+var AN_TETO=700000; // teto de segurança do corpo enviado à nuvem
+// Enxuga o que é acessório (mapa de páginas) e NADA MAIS.
+// O texto do documento não é cortado para caber: texto cortado significa item que some, e item que some vira
+// "a empresa não cotou" contra quem cotou. Entre gravar mutilado e avisar que não gravou, avisa.
+function anEnxuga(p){
+  var body=JSON.parse(JSON.stringify(p)), cortes=[];
+  var tam=function(){ try{ return JSON.stringify(body).length; }catch(e){ return AN_TETO+1; } };
+  if(tam()<=AN_TETO) return {body:body, cortes:cortes};
+  (body.licitantes||[]).forEach(function(li){ (li.docs||[]).forEach(function(dd){ delete dd.pags; }); });
+  (body.docsCertame||[]).forEach(function(dd){ delete dd.pags; });
+  if(tam()<=AN_TETO){ cortes.push('mapa de páginas dos documentos'); return {body:body, cortes:cortes}; }
+  return {body:body, cortes:cortes, estourou:true};
+}
+function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _anPP=null; if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return;
+  var r; try{ r=anEnxuga(p); }catch(e){ anSaveFalhou(p, 'não foi possível preparar os dados: '+e.message); return; }
+  if(r.estourou){ anSaveFalhou(p, 'o processo ficou grande demais para a nuvem mesmo depois de cortar o texto dos documentos'); return; }
+  try{
+    SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:r.body, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'})
+      .then(function(res){
+        if(res && res.error){ anSaveFalhou(p, (res.error.message||'a nuvem recusou a gravação')); return; }
+        if(p._naoSalvo){ p._naoSalvo=null; try{ renderAnalise(); }catch(e){} }
+        if(r.cortes.length) try{ console.warn('Processo salvo com redução: '+r.cortes.join('; ')); }catch(e){}
+      }, function(err){ anSaveFalhou(p, ((err&&err.message)||'falha de rede ao gravar na nuvem')); });
+  }catch(e){ anSaveFalhou(p, e.message); }
+}
+// Falha de gravação NUNCA é silenciosa: marca o processo, avisa na tela e tenta de novo.
+function anSaveFalhou(p, motivo){
+  p._naoSalvo={quando:dataHoje(), motivo:String(motivo||'motivo não informado'), tentativas:((p._naoSalvo&&p._naoSalvo.tentativas)||0)+1};
+  try{ console.error('FALHA ao salvar o processo na nuvem: '+motivo); }catch(e){}
+  try{ toast('Atenção: não foi possível salvar este processo na nuvem ('+motivo+'). Os dados estão só neste computador. Não feche o navegador antes de salvar de novo.'); }catch(e){}
+  try{ renderAnalise(); }catch(e){}
+  if(p._naoSalvo.tentativas<=3){ setTimeout(function(){ anPersist(p); }, 4000*p._naoSalvo.tentativas); }
+}
 function anPersist(p){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; _anPP=p; if(_anPT) clearTimeout(_anPT); _anPT=setTimeout(anFlush,600); }
 function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER) return Promise.resolve(false); return SB.from('an_processos').select('dados').order('updated_at',{ascending:false}).then(function(r){ if(r&&r.data){
   var srv=r.data.map(function(x){return x.dados;}).filter(Boolean);
@@ -3835,10 +3863,21 @@ function anNovo(){ var p={id:anGid('p'),modalidade:'Pregão Eletrônico',criteri
 function anAbrir(id){ anFlush(); ANALISE.curId=id; ANALISE.curLic=null; renderAnalise(); }
 function anExcluir(id){ if(!confirm('Excluir este processo de análise e todos os licitantes e documentos dele? Essa ação não pode ser desfeita.')) return; try{ if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER) SB.from('an_processos').delete().eq('orgao_id',anOrg()).eq('proc_id',id).then(function(){},function(){}); }catch(e){} ANALISE.procs=ANALISE.procs.filter(function(p){return p.id!==id;}); if(ANALISE.curId===id) ANALISE.curId=null; anSave(); renderAnalise(); }
 function anVoltar(){ anFlush(); ANALISE.curId=null; renderAnalise(); }
+// Faixa de alerta quando a gravação na nuvem falhou: o pregoeiro precisa VER, não descobrir depois que sumiu.
+function anAvisoNaoSalvo(p){
+  if(!p||!p._naoSalvo) return '';
+  return '<div style="display:flex;gap:12px;align-items:flex-start;background:#FFF8E6;border:2px solid #E8A020;border-left:7px solid #E8A020;border-radius:12px;padding:14px 16px;margin-bottom:14px">'
+    +'<svg class="ic" style="width:20px;height:20px;flex:none;stroke:#0A2342;margin-top:1px"><use href="#i-alert"/></svg>'
+    +'<div style="font-size:13.5px;color:#0A2342;line-height:1.55"><b>Atenção: este processo NÃO foi salvo na nuvem.</b><br>'
+    +'Motivo: '+esc(p._naoSalvo.motivo)+'. Última tentativa em '+esc(p._naoSalvo.quando)+'.<br>'
+    +'Os dados e os documentos estão somente neste computador e neste navegador. Não feche esta janela e não use outro computador antes de salvar, senão o que foi enviado se perde. '
+    +'<button class="btn-ghost" type="button" style="margin-top:8px" onclick="anTentarSalvar()">Tentar salvar de novo</button></div></div>';
+}
+function anTentarSalvar(){ var p=anCur(); if(!p) return; toast('Tentando salvar na nuvem...'); anPersist(p); }
 function anRenderProc(root){
   var p=anCur(); if(!p){ anRenderLista(root); return; }
   var modo=anModo(p.modalidade);
-  var h=''; h+=anGuiaProcesso();
+  var h=''; h+=anAvisoNaoSalvo(p); h+=anGuiaProcesso();
   h+='<div class="panel"><div class="ph"><h3>Certame</h3><button class="btn-ghost" type="button" onclick="anVoltar()">Voltar aos processos</button></div><div style="padding:16px 22px">';
   h+=anLeg('<b>O que é o Certame:</b> aqui você descreve a licitação (o objeto, a modalidade, o valor que a prefeitura estima gastar) e sobe o edital, o termo de referência e a planilha. Isso vira a régua: o sistema compara os documentos das empresas com o que está aqui.');
   h+='<div class="field" style="margin-bottom:12px"><label>Modalidade</label>'+pills('anmod',ANMODS,p.modalidade)+'</div>';
@@ -4285,14 +4324,18 @@ function anNormDesc(s){ return String(s||'').toLowerCase().normalize('NFD').repl
 // estraga a detecção do layout de colunas da planilha de verdade. Aqui cada documento é lido sozinho e vence o
 // que se comporta como planilha: layout de colunas identificado na maioria das linhas e mais itens.
 function anMelhorPlanilha(docs){
-  var best=null;
+  var best=null, cortado=null;
   (docs||[]).forEach(function(d){
     var its=anParseItens(d.texto||'');
     if(its.length<3) return;
     var auto=its.filter(function(i){ return i.layout==='auto'; }).length;
     if(auto < Math.max(2, Math.ceil(its.length*0.5))) return;
+    // Documento gravado com o texto cortado (versões antigas cortavam para caber na nuvem) não serve de régua:
+    // o que foi cortado vira "item que a empresa não cotou", acusando quem cotou.
+    if(d.textoCortado){ cortado=cortado||(d.nome||'documento sem nome'); return; }
     if(!best || auto>best.auto) best={itens:its, auto:auto, nome:(d.nome||'documento sem nome')};
   });
+  if(!best && cortado) return {truncado:cortado};
   return best;
 }
 function anAnaliseObra(p,l){
@@ -4300,9 +4343,15 @@ function anAnaliseObra(p,l){
   var licTxt=(l.docs||[]).map(function(d){return d.texto||'';}).join('\n');
   var checks=[], det=[];
   var refPl=anMelhorPlanilha(p.docsCertame||[]), licPl=anMelhorPlanilha(l.docs||[]);
+  var trunc=(refPl&&refPl.truncado)||(licPl&&licPl.truncado);
+  if(refPl&&refPl.truncado) refPl=null;
+  if(licPl&&licPl.truncado) licPl=null;
   var refIt=refPl?refPl.itens:[], licIt=licPl?licPl.itens:[];
   if(refPl) det.push({k:'Planilha do edital lida em', v:refPl.nome});
   if(licPl) det.push({k:'Planilha da proposta lida em', v:licPl.nome});
+  if(trunc) checks.push({t:'Planilha gravada com o texto cortado', status:'conferir',
+    nota:'O documento "'+trunc+'" está gravado com o texto cortado e não serve de régua para o confronto. Reenvie o arquivo para refazer a leitura.',
+    resumo:'Este documento foi gravado por uma versão antiga do sistema, que cortava o texto para caber na nuvem. O trecho cortado apareceria como item que a empresa não cotou, acusando quem cotou certo. Por isso o confronto item a item não foi feito com ele. Reenvie o arquivo na tela do licitante para o sistema ler de novo, por inteiro.', evid:null});
   // resumo = a frase que diz O QUE está divergente em relação ao que o edital pede; evid = as linhas de prova
   var push=function(t,st,n,resumo,evid){ checks.push({t:t,status:st,nota:n,resumo:resumo||'',evid:(evid&&evid.length)?evid:null}); };
   // Planilha item a item.
