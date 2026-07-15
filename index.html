@@ -1716,7 +1716,7 @@ async function impLerPDF(file){
     var vp=page.getViewport({scale:1});
     var tc=await page.getTextContent();
     var toks=[];
-    tc.items.forEach(function(it){ if(!it.str||!it.str.trim()) return; toks.push({x:it.transform[4], y:vp.height-it.transform[5], s:it.str.trim()}); });
+    tc.items.forEach(function(it){ if(!it.str||!it.str.trim()) return; toks.push({x:it.transform[4], y:vp.height-it.transform[5], w:it.width||0, s:it.str.trim()}); });
     var rules=[]; try{ rules=await _rulesY(page,vp,pdfjs); }catch(e){ rules=[]; }
     pages.push({toks:toks, rules:rules});
   }
@@ -1747,7 +1747,21 @@ async function _rulesY(page,vp,pdfjs){
 }
 function _linhasDe(toks){
   var b={}; toks.forEach(function(t){ var k=Math.round(t.y/3); (b[k]=b[k]||[]).push(t); });
-  return Object.keys(b).map(Number).sort(function(a,c){return a-c;}).map(function(k){ var row=b[k].slice().sort(function(a,c){return a.x-c.x;}); return {y:k*3, toks:row, text:row.map(function(t){return t.s;}).join(' ').replace(/\s+/g,' ').trim()}; });
+  return Object.keys(b).map(Number).sort(function(a,c){return a-c;}).map(function(k){
+    var row=b[k].slice().sort(function(a,c){return a.x-c.x;});
+    // Junta os pedaços da linha pela DISTÂNCIA entre eles, não com espaço fixo. O PDF quebra a palavra em vários
+    // itens ("SINA" + "PI", "1.1.0" + ".1."), e colar tudo com espaço produzia "SINA PI" e "1 1 .0.1 .": aí o
+    // código do item da proposta não casava com o do edital e o sistema acusava a empresa de não ter cotado nada.
+    var text='';
+    for(var i=0;i<row.length;i++){
+      var t=row[i];
+      if(i===0){ text=t.s; continue; }
+      var pv=row[i-1], pw=(pv.w>0)?pv.w:(pv.s.length*4.2);
+      var cw=pw/Math.max(1,pv.s.length);
+      text += ((t.x-(pv.x+pw)) > cw*0.32 ? ' ' : '') + t.s;
+    }
+    return {y:k*3, toks:row, text:text.replace(/\s+/g,' ').trim()};
+  });
 }
 function _colunas(pages){
   var col=null;
@@ -4024,7 +4038,7 @@ async function anLerPdf(buf, prog){
   var doc=await pdfjs.getDocument({data:buf}).promise;
   var n=doc.numPages, pags=[], faltam=[];
   for(var i=1;i<=n;i++){ var pg=await doc.getPage(i); var vpt=pg.getViewport({scale:1}); var tc=await pg.getTextContent();
-    var toks=[]; tc.items.forEach(function(it){ if(!it.str||!it.str.trim()) return; toks.push({x:it.transform[4], y:vpt.height-it.transform[5], s:it.str.trim()}); });
+    var toks=[]; tc.items.forEach(function(it){ if(!it.str||!it.str.trim()) return; toks.push({x:it.transform[4], y:vpt.height-it.transform[5], w:it.width||0, s:it.str.trim()}); });
     var pt=(typeof _linhasDe==='function') ? _linhasDe(toks).map(function(l){return l.text;}).join('\n') : toks.map(function(t){return t.s;}).join(' ');
     pags.push(pt); if(pt.replace(/\s/g,'').length<40) faltam.push(i); }
   var ocr=false;
@@ -4266,19 +4280,36 @@ function anNormUn(u){
   return syn[s]||s;
 }
 function anNormDesc(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().slice(0,40); }
+// A planilha é UM documento, não a pilha toda. Colar edital + memorial + certidões num texto só e mandar o
+// parser procurar item faz cláusula ("5.3.3.1 a sanção de impedimento"), CNPJ e endereço virarem item, e ainda
+// estraga a detecção do layout de colunas da planilha de verdade. Aqui cada documento é lido sozinho e vence o
+// que se comporta como planilha: layout de colunas identificado na maioria das linhas e mais itens.
+function anMelhorPlanilha(docs){
+  var best=null;
+  (docs||[]).forEach(function(d){
+    var its=anParseItens(d.texto||'');
+    if(its.length<3) return;
+    var auto=its.filter(function(i){ return i.layout==='auto'; }).length;
+    if(auto < Math.max(2, Math.ceil(its.length*0.5))) return;
+    if(!best || auto>best.auto) best={itens:its, auto:auto, nome:(d.nome||'documento sem nome')};
+  });
+  return best;
+}
 function anAnaliseObra(p,l){
   var refTxt=(p.docsCertame||[]).map(function(d){return d.texto||'';}).join('\n');
   var licTxt=(l.docs||[]).map(function(d){return d.texto||'';}).join('\n');
   var checks=[], det=[];
-  var refIt=anParseItens(refTxt), licIt=anParseItens(licTxt);
+  var refPl=anMelhorPlanilha(p.docsCertame||[]), licPl=anMelhorPlanilha(l.docs||[]);
+  var refIt=refPl?refPl.itens:[], licIt=licPl?licPl.itens:[];
+  if(refPl) det.push({k:'Planilha do edital lida em', v:refPl.nome});
+  if(licPl) det.push({k:'Planilha da proposta lida em', v:licPl.nome});
   // resumo = a frase que diz O QUE está divergente em relação ao que o edital pede; evid = as linhas de prova
   var push=function(t,st,n,resumo,evid){ checks.push({t:t,status:st,nota:n,resumo:resumo||'',evid:(evid&&evid.length)?evid:null}); };
   // Planilha item a item.
   // Só se confronta o que foi lido de uma PLANILHA de verdade, isto é, com o layout de colunas identificado.
   // Em texto corrido (edital, contrato) o parser chuta "itens" que na verdade são cláusula, CNPJ ou endereço:
   // acusar a empresa de não cotar isso seria apontamento falso, e aqui o sistema aponta, não inventa (E13).
-  var plOk=function(its){ var a=its.filter(function(i){ return i.layout==='auto'; }).length; return its.length>=3 && a>=Math.max(2, Math.ceil(its.length*0.5)); };
-  var refOk=plOk(refIt), licOk=plOk(licIt);
+  var refOk=!!refPl, licOk=!!licPl;
   if(!refOk && !licOk){ push('Planilha orçamentária','conferir','Não foi possível ler itens de planilha nem no edital nem na proposta. Se o certame envolve planilha, suba a planilha da licitação (aba Certame) e a do licitante em PDF legível.'); }
   else if(!refOk){ push('Planilha de referência do edital','conferir','A proposta tem '+licIt.length+' itens lidos, mas a planilha de referência do edital não foi localizada nos documentos da licitação. Suba a planilha orçamentária do edital para o confronto item a item.',
     'Sem planilha do edital não há confronto item a item: o sistema só encontrou texto corrido do edital (cláusulas, numeração de itens do texto), e daí não se extrai quantidade nem preço de referência. Suba a planilha orçamentária do edital na aba Certame. Até lá, o confronto da planilha desta proposta não foi feito, e nada aqui pesa contra a empresa.'); }
