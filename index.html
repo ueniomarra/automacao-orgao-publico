@@ -3845,6 +3845,8 @@ function anRenderProc(root){
   h+='<div class="hint" style="margin-bottom:10px">'+(modo==='todos'?'No credenciamento, informe os interessados. O sistema confere e habilita todos que cumprem os requisitos.':(modo==='direta'?'Na contratação direta, informe o contratado a ser verificado.':'Informe os licitantes na ordem de classificação após os lances. O sistema analisa a habilitação do 1º colocado; se inabilitado, você convoca o próximo.'))+'</div>';
   h+='<div id="an-lic-body" class="lic-list"></div>';
   h+='<button class="addline" type="button" onclick="anAddLic()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar licitante</button>';
+  h+='<div style="margin-top:10px"><button class="btn-primary" type="button" onclick="anConferirTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-shield"/></svg> Conferir todos os licitantes</button></div>';
+  h+='<div class="hint" style="margin-top:6px">Confere de uma vez todas as empresas que já têm documento enviado, contra o edital e a planilha do certame. Depois é só abrir cada uma para ver o resultado e gerar o parecer. Quem decide continua sendo a comissão.</div>';
   h+=anRenderFluxo(p,modo);
   h+='</div></div>';
   var exs=anExigencias(p.obra==='Sim');
@@ -4204,7 +4206,58 @@ function anParseItens(txt){
   out.forEach(function(it){ var k=it.cod+'|'+it.total; if(seen[k]) return; seen[k]=1; res.push(it); });
   return res;
 }
-function anExtraiBDI(txt){ var m=/\bB\.?\s?D\.?\s?I\.?\b[^0-9%]{0,60}?(\d{1,2}(?:[.,]\d{1,4})?)\s*%/i.exec(String(txt||'')); return m?anNum(m[1]):null; }
+// BDI total. Cuidado: com a tabela de composição na proposta, "COMPOSIÇÃO DO BDI / ADMINISTRAÇÃO CENTRAL 4,00%"
+// fazia o percentual da 1ª parcela passar por BDI. Aqui o casamento é descartado quando o que vem entre o rótulo
+// e o número é nome de parcela, senão o sistema compara BDI com administração central e não vê BDI acima do teto.
+function anExtraiBDI(txt){
+  var s=String(txt||''), re=/\bB\.?\s?D\.?\s?I\.?\b([^0-9%]{0,60}?)(\d{1,2}(?:[.,]\d{1,4})?)\s*%/gi, m;
+  while((m=re.exec(s))){ if(/administra|seguro|garantia|risco|despesa|financeir|lucro|tributo|imposto|composi[çc]|detalha|planilha|anexo/i.test(m[1])) continue; return anNum(m[2]); }
+  return null;
+}
+// Percentual que vem logo depois de um rótulo (composição de BDI, encargos). Só o 1º casamento, sem varrer o documento.
+function anPctRot(txt, rot){ var re=new RegExp('(?:'+rot+')[^0-9%\\n]{0,70}?(\\d{1,3}(?:[.,]\\d{1,4})?)\\s*%','i'); var m=re.exec(String(txt||'')); return m?anNum(m[1]):null; }
+// Parcelas da composição do BDI. Sem todas as parcelas não se recompõe a fórmula, e aí o sistema não opina.
+function anExtraiBDIComp(txt){
+  var s=String(txt||'').replace(/[ \t]+/g,' ');
+  var c={
+    ac: anPctRot(s,'administra[çc][ãa]o\\s+central|\\bA\\.?C\\.?\\b'),
+    sg: anPctRot(s,'seguros?\\s*(?:e|\\+)\\s*garantias?|\\bS\\s*\\+\\s*G\\b'),
+    r:  anPctRot(s,'\\briscos?\\b'),
+    df: anPctRot(s,'despesas?\\s+financeiras?|\\bD\\.?F\\.?\\b'),
+    l:  anPctRot(s,'\\blucros?\\b'),
+    i:  anPctRot(s,'tributos?|\\bimpostos?\\b')
+  };
+  if(c.sg==null){ var se=anPctRot(s,'\\bseguros?\\b'), ga=anPctRot(s,'\\bgarantias?\\b'); if(se!=null&&ga!=null) c.sg=se+ga; }
+  c.completa=['ac','sg','r','df','l','i'].every(function(k){ return c[k]!=null; });
+  return c;
+}
+// Fórmula do BDI do Acórdão 2622/2013 do TCU: BDI = ((1+AC+S+G+R) x (1+DF) x (1+L) / (1-I)) - 1.
+// Conferência puramente aritmética, sobre os números que a própria empresa declarou.
+function anBdiFormula(c){
+  if(!c||!c.completa) return null;
+  var i=c.i/100; if(i>=1) return null;
+  var v=((1+(c.ac+c.sg+c.r)/100)*(1+c.df/100)*(1+c.l/100)/(1-i))-1;
+  return Math.round(v*1000000)/10000; // em %, 4 casas
+}
+function anExtraiEncargos(txt){ return anPctRot(String(txt||''),'encargos\\s+sociais|leis\\s+sociais'); }
+// Cronograma físico-financeiro: pega a seção e soma as parcelas em dinheiro para confrontar com o global.
+function anSecaoCrono(txt){ var s=String(txt||''); var i=s.search(/cronograma\s+f[ií]sico[\s-]*financeiro|cronograma\s+f[ií]sico/i); return i<0?'':s.slice(i, i+6000); }
+function anCronoValores(sec){ var out=[], re=/(?:R\$\s*)(\d{1,3}(?:\.\d{3})*,\d{2})/g, m; while((m=re.exec(String(sec||'')))) out.push(anNum(m[1])); return out; }
+// Especificação do item: palavras do edital que sumiram na descrição da proposta.
+// É juízo (abreviação, sinônimo, ordem), então nunca acusa: manda a comissão conferir.
+function anPalavras(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){ return w.length>=4; }); }
+function anEspecDiff(descRef, descLic){
+  var A=String(descRef||'').trim(), B=String(descLic||'').trim();
+  if(A.length<12 || B.length<12) return null;
+  // Descrições de tamanho muito diferente = uma das leituras veio truncada (o PDF corta e a planilha traz inteira).
+  // Comparar as duas acusaria a empresa por falha de leitura do parser, e não por divergência real. Medido nas
+  // fixtures reais: PDF x Excel dos mesmos 638 medicamentos gerava apontamento falso sem esta trava.
+  if(Math.min(A.length,B.length)/Math.max(A.length,B.length) < 0.6) return null;
+  var a=anPalavras(A), b=anPalavras(B); if(a.length<4 || b.length<4) return null;
+  var falt=a.filter(function(w){ return b.indexOf(w)<0; });
+  if(falt.length < Math.max(3, Math.ceil(a.length*0.6))) return null; // divergência tem que ser gritante, não sinônimo
+  return falt.slice(0,5).join(', ');
+}
 // Unidade normalizada antes de comparar: UN, UND, UNID e UNIDADE são a mesma coisa, M² e M2 também.
 // Sem isso, sinônimo de unidade viraria apontamento falso contra a empresa (E13).
 function anNormUn(u){
@@ -4234,10 +4287,12 @@ function anAnaliseObra(p,l){
   else {
     var byCod={}, byDesc={};
     licIt.forEach(function(it){ byCod[it.cod]=byCod[it.cod]||it; byDesc[anNormDesc(it.desc)]=byDesc[anNormDesc(it.desc)]||it; });
-    var faltando=[], qtdDiv=[], sobre=[], baixo=[], conta=[], unDiv=[];
+    var faltando=[], qtdDiv=[], sobre=[], baixo=[], conta=[], unDiv=[], espec=[];
     refIt.forEach(function(r){
       var c=byCod[r.cod]||byDesc[anNormDesc(r.desc)];
       if(!c){ faltando.push(r.cod+' '+r.desc.slice(0,40)); return; }
+      // especificação: item casado pelo código, mas descrito de outro jeito na proposta
+      if(byCod[r.cod]){ var d=anEspecDiff(r.desc, c.desc); if(d) espec.push(r.cod+' (o edital especifica "'+r.desc.slice(0,45)+'" e a proposta não repete: '+d+')'); }
       if(r.qtd!=null && c.qtd!=null && Math.abs(r.qtd-c.qtd)>0.011) qtdDiv.push(r.cod+' ('+r.qtd+' no edital, '+c.qtd+' na proposta)');
       // coluna da unidade: preço por M2 não é preço por M3, e o parser já lia a unidade sem nunca compará-la
       if(r.un && c.un && anNormUn(r.un)!==anNormUn(c.un)) unDiv.push(r.cod+' '+r.desc.slice(0,30)+' ('+r.un+' no edital, '+c.un+' na proposta)');
@@ -4275,7 +4330,9 @@ function anAnaliseObra(p,l){
       'Em '+unDiv.length+' item(ns) a empresa cotou numa unidade de medida diferente da que o edital pediu. Preço por metro quadrado não se compara com preço por metro cúbico: muda o que está embutido no item, e o preço deixa de ser comparável com o das outras propostas.', unDiv);
     if(extra.length) push('Itens na proposta que o edital não pede','atencao', extra.length+' item(ns): '+extra.slice(0,8).join('; ')+(extra.length>8?' e mais '+(extra.length-8):'')+'. Item fora do objeto licitado não integra a proposta (art. 59, II).',
       'A empresa incluiu '+extra.length+' item(ns) que não estão na planilha do edital, somando '+money(extraSoma)+'. Serviço que a prefeitura não licitou não pode entrar na proposta: infla o valor e desiguala a disputa com quem cotou só o que foi pedido. Conferir se é item acrescentado mesmo ou linha de subtotal ou agrupamento que o sistema leu como item.', extra);
-    if(!qtdDiv.length && !sobre.length && !conta.length && !baixo.length && !unDiv.length && !extra.length) push('Planilha item a item','conforme','Quantitativos, unidades, unitários e totais conferem com a referência nos itens lidos.');
+    if(espec.length) push('Especificação do item diferente da do edital','conferir', espec.slice(0,8).join('; ')+(espec.length>8?' e mais '+(espec.length-8):'')+'. Conferir se a proposta atende à especificação técnica exigida (art. 59, II).',
+      'Em '+espec.length+' item(ns) o código bate com o do edital, mas a descrição da proposta não repete parte da especificação técnica pedida. Pode ser só abreviação ou jeito diferente de escrever, e pode ser produto de especificação inferior. Comparar as duas descrições e, na dúvida, pedir a ficha técnica em diligência antes de qualquer decisão.', espec);
+    if(!qtdDiv.length && !sobre.length && !conta.length && !baixo.length && !unDiv.length && !extra.length && !espec.length) push('Planilha item a item','conforme','Quantitativos, unidades, especificações, unitários e totais conferem com a referência nos itens lidos.');
     var g=(l.valorProposta>0)?l.valorProposta:anValorGlobal(licTxt);
     if(g && soma>0 && Math.abs(soma-g)>Math.max(1, g*0.005)) push('Soma dos itens x valor global','atencao','A soma dos itens lidos ('+money(soma)+') difere do valor global da proposta ('+money(g)+'). Conferir se a leitura pegou todas as páginas da planilha ou se há erro de soma.',
       'A soma dos itens da planilha deveria ser igual ao valor global que a empresa declarou, e os dois números não batem: diferença de '+money(Math.abs(soma-g))+'. Antes de tratar como erro da empresa, conferir se a leitura do sistema pegou todas as páginas da planilha.');
@@ -4283,13 +4340,45 @@ function anAnaliseObra(p,l){
   // BDI
   var bdiRef=anExtraiBDI(refTxt), bdiLic=anExtraiBDI(licTxt);
   if(p.obra==='Sim'){
+    // Composição do BDI recomposta pela fórmula do Acórdão 2622/2013 do TCU, sobre os números da própria empresa
+    var comp=anExtraiBDIComp(licTxt), calc=anBdiFormula(comp);
+    if(calc!=null && bdiLic!=null && Math.abs(calc-bdiLic)>0.01){
+      push('Composição do BDI não fecha com o BDI declarado','atencao',
+        'A empresa declara BDI de '+bdiLic+'%, mas as parcelas que ela mesma apresentou resultam em '+calc+'% pela fórmula do Acórdão 2622/2013 do TCU. Diferença de '+(Math.round(Math.abs(calc-bdiLic)*10000)/10000)+' ponto percentual. Erro material pode ser saneado por diligência (art. 64, § 1º).',
+        'A conta do BDI não fecha com ela mesma. Aplicando a fórmula do TCU nas parcelas que a própria empresa declarou (administração central '+comp.ac+'%, seguro e garantia '+comp.sg+'%, risco '+comp.r+'%, despesas financeiras '+comp.df+'%, lucro '+comp.l+'%, tributos '+comp.i+'%), o BDI daria '+calc+'%, e não os '+bdiLic+'% que ela declarou. Como o BDI multiplica o custo de todos os itens, essa diferença contamina o preço da obra inteira.',
+        ['Fórmula do Acórdão 2622/2013 do TCU: BDI = ((1 + AC + S + G + R) x (1 + DF) x (1 + L) / (1 - I)) - 1',
+         'Parcelas lidas na proposta: AC '+comp.ac+'%, S+G '+comp.sg+'%, R '+comp.r+'%, DF '+comp.df+'%, L '+comp.l+'%, I '+comp.i+'%',
+         'BDI que essas parcelas produzem: '+calc+'% | BDI declarado pela empresa: '+bdiLic+'%']);
+    }
+    else if(calc!=null && bdiLic!=null) push('Composição do BDI','conforme','As parcelas declaradas recompõem o BDI de '+bdiLic+'% pela fórmula do Acórdão 2622/2013 do TCU.');
+    else if(bdiLic!=null && !comp.completa) push('Composição do BDI','conferir','O BDI de '+bdiLic+'% foi localizado, mas não a composição completa em parcelas.',
+      'O sistema achou o percentual do BDI, porém não conseguiu ler todas as parcelas (administração central, seguro e garantia, risco, despesas financeiras, lucro e tributos) para refazer a conta pela fórmula do TCU. Sem elas não dá para dizer se o BDI fecha. Conferir na planilha de composição do BDI se o edital a exige.');
     if(bdiLic==null) push('Composição do BDI','conferir','BDI não localizado na proposta. Em obras, a composição do BDI acompanha a planilha (conferir exigência do edital).');
     else if(bdiRef!=null && bdiLic>bdiRef+0.001) push('BDI acima da referência','atencao','BDI da proposta ('+bdiLic+'%) acima da referência do edital ('+bdiRef+'%). Conferir o limite fixado.',
       'O edital adotou BDI de referência de '+bdiRef+'% e a empresa aplicou '+bdiLic+'%, ou seja, '+(Math.round((bdiLic-bdiRef)*100)/100)+' ponto(s) percentual(is) acima. Conferir no edital se esse percentual é limite fixado ou apenas referência.');
     else push('BDI','conforme','BDI da proposta: '+bdiLic+'%'+(bdiRef!=null?' (referência do edital: '+bdiRef+'%)':'')+'.');
-    // Cronograma físico-financeiro
-    if(/cronograma\s+f[ií]sico[\s-]*financeiro/i.test(anNormTxt(licTxt))||/cronograma\s+fisico/i.test(anNormTxt(licTxt))) push('Cronograma físico-financeiro','conforme','Cronograma localizado nos documentos do licitante.');
-    else push('Cronograma físico-financeiro','conferir','Cronograma não localizado nos documentos do licitante. Conferir se o edital o exige junto com a proposta.');
+    // Encargos sociais: o confronto certo é contra o percentual que o EDITAL adotou, não contra tabela de fora
+    var encRef=anExtraiEncargos(refTxt), encLic=anExtraiEncargos(licTxt);
+    if(encRef!=null && encLic!=null && Math.abs(encRef-encLic)>0.01) push('Encargos sociais diferentes dos do edital','conferir',
+      'A proposta adota encargos sociais de '+encLic+'% e o edital adota '+encRef+'%. Conferir o regime adotado antes de qualquer decisão.',
+      'A empresa aplicou '+encLic+'% de encargos sociais e a planilha do edital usa '+encRef+'%. Diferença de '+(Math.round(Math.abs(encRef-encLic)*100)/100)+' ponto percentual sobre toda a mão de obra. A diferença pode ser legítima (regime desonerado ou não desonerado, horista ou mensalista) ou pode ser subdimensionamento de encargo, que reaparece depois como pedido de reequilíbrio. Conferir qual regime o edital fixou e qual a empresa declarou.');
+    else if(encRef!=null && encLic!=null) push('Encargos sociais','conforme','Encargos sociais da proposta ('+encLic+'%) conferem com os do edital.');
+    else if(encRef!=null && encLic==null) push('Encargos sociais','conferir','O edital adota encargos sociais de '+encRef+'%, mas o percentual não foi localizado na proposta.',
+      'O edital declara os encargos sociais que compõem o preço da mão de obra, e o sistema não achou esse percentual na proposta da empresa. Sem ele não dá para conferir se a mão de obra foi orçada com o mesmo encargo. Conferir se o edital exige a memória de composição junto da proposta.');
+    // Cronograma físico-financeiro: presença E confronto da soma das parcelas com o valor global
+    var crono=anSecaoCrono(licTxt);
+    if(crono){
+      var parc=anCronoValores(crono), somaC=parc.reduce(function(a,b){return a+b;},0);
+      var gl=(l.valorProposta>0)?l.valorProposta:anValorGlobal(licTxt);
+      if(parc.length>=2 && gl>0 && Math.abs(somaC-gl)>Math.max(1, gl*0.005)) push('Cronograma não fecha com o valor da proposta','conferir',
+        'As parcelas do cronograma somam '+money(somaC)+' e o valor global da proposta é '+money(gl)+'. Conferir a leitura do cronograma e a soma das parcelas.',
+        'O cronograma físico-financeiro divide o valor da obra nas medições mês a mês, então a soma das parcelas tem que dar o valor global da proposta. Aqui a soma deu '+money(somaC)+' contra '+money(gl)+' declarados, diferença de '+money(Math.abs(somaC-gl))+'. Pode ser erro de soma da empresa, ou pode ser que a leitura do sistema tenha pego valores acumulados ou de outra tabela junto. Conferir o cronograma na proposta antes de tratar como erro.');
+      else if(parc.length>=2 && gl>0) push('Cronograma físico-financeiro','conforme','Cronograma localizado e as parcelas somam o valor global da proposta ('+money(gl)+').');
+      else push('Cronograma físico-financeiro','conferir','Cronograma localizado, mas o sistema não conseguiu ler as parcelas em dinheiro para conferir a soma.',
+        'O cronograma está nos documentos, porém o sistema não leu as parcelas mês a mês em formato de valor. Conferir manualmente se a soma das medições fecha com o valor global da proposta.');
+    }
+    else push('Cronograma físico-financeiro','conferir','Cronograma não localizado nos documentos do licitante. Conferir se o edital o exige junto com a proposta.',
+      'O sistema não achou cronograma físico-financeiro nos arquivos desta empresa. Em obra, é ele que amarra o desembolso da prefeitura ao andamento do serviço. Conferir se o edital o exige junto com a proposta: exigindo e não vindo, é documento faltando.');
     if(!/memorial\s+descritivo|memorial\s+de\s+c[aá]lculo/i.test(anNormTxt(refTxt))) push('Memorial no edital','conferir','Memorial descritivo não localizado nos documentos da licitação. Se houver, suba na aba Certame para enriquecer o confronto.');
   }
   return {checks:checks, det:det, refItens:refIt.length, licItens:licIt.length};
@@ -4428,6 +4517,28 @@ function anOnUploadCertame(input){ var files=input.files; if(!files||!files.leng
 }
 function anDelDocCert(i){ var p=anCur(); if(!p||!p.docsCertame) return; var nm=(p.docsCertame[i]&&p.docsCertame[i].nome)||'este arquivo'; if(!confirm('Remover o documento da licitação "'+nm+'"? Ele é a régua da comparação.')) return; p.docsCertame.splice(i,1); p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); }
 function anStatusGeral(itens,prop,obra,exig){ if(prop&&prop.status==='atencao'&&/ACIMA do estimado|INEXEQU/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); var extra=[].concat((obra&&obra.checks)||[],exig||[]); var xAt=extra.some(function(c){return c.status==='atencao';}); var xCf=extra.some(function(c){return c.status==='conferir';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')||xAt) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})||xCf) return 'ressalvas'; return 'habilitado'; }
+// Confere UM licitante (o motor). anConferir é o clique na tela; anConferirTodos roda a fila inteira.
+function anConferirLic(p,l){ if(!p||!l) return false; var docs=l.docs||[]; if(!docs.length) return false;
+  var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas;
+  var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; });
+  var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l);
+  if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null;
+  var exig=anExigenciasEdital(p,l);
+  l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje()};
+  l.statusSugerido=anStatusGeral(itens,prop,obra,exig);
+  return true;
+}
+// Automação de verdade: o pregoeiro sobe os documentos de todas as empresas e confere a fila num clique.
+function anConferirTodos(){ var p=anCur(); if(!p) return; var ls=(p.licitantes||[]);
+  var comDoc=ls.filter(function(l){ return (l.docs||[]).length; });
+  if(!comDoc.length){ toast('Nenhum licitante tem documento enviado. Suba os documentos antes de conferir.'); return; }
+  var n=0; comDoc.forEach(function(l){ if(anConferirLic(p,l)) n++; });
+  anSave();
+  try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu todos os licitantes', p.processo+' ('+n+' licitantes)', org); } }catch(e){}
+  renderAnalise();
+  var semDoc=ls.length-comDoc.length;
+  toast('Conferidos '+n+' licitante(s).'+(semDoc>0?(' '+semDoc+' sem documento enviado ficaram de fora.'):'')+' A decisão de cada um continua sendo da comissão.');
+}
 function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; var exig=anExigenciasEdital(p,l); l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop,obra,exig); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
 // ---------- Base legal dos apontamentos (artigos ja conferidos em fonte oficial; o texto explica, a comissao decide) ----------
 var AN_LEGAL={
