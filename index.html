@@ -3881,6 +3881,12 @@ function anRenderProc(root){
   h+=anLeg('<b>O que é o Certame:</b> aqui você descreve a licitação (o objeto, a modalidade, o valor que a prefeitura estima gastar) e sobe o edital, o termo de referência e a planilha. Isso vira a régua: o sistema compara os documentos das empresas com o que está aqui.');
   h+='<div class="field" style="margin-bottom:12px"><label>Modalidade</label>'+pills('anmod',ANMODS,p.modalidade)+'</div>';
   h+='<div class="frow c2"><div class="field"><label>Nº do processo administrativo</label><input id="an-proc" value="'+esc(p.processo)+'" placeholder="ex.: 2859/2026"></div><div class="field"><label>Objeto é obra ou serviço de engenharia?</label>'+pills('anobra',['Não','Sim'],p.obra)+'</div></div>';
+  if(p.obra==='Sim'){
+    h+='<div class="field"><label>Tipo de obra (para comparar o BDI com a faixa do TCU)</label><select id="an-tipoobra" onchange="anSetTipoObra(this.value)">'
+      +'<option value="">selecione o tipo de obra</option>'
+      +anTipoObraOpcoes().map(function(o){ return '<option value="'+o.k+'"'+(p.tipoObra===o.k?' selected':'')+'>'+esc(o.nome)+'</option>'; }).join('')
+      +'</select><div class="hint" style="margin-top:5px">O Acórdão 2622/2013 do TCU traz uma faixa de BDI para cada tipo de obra. Escolhendo aqui, o sistema compara cada parcela do BDI da proposta com a faixa daquele tipo. É referência de análise: acima da faixa pede justificativa, não desclassifica sozinho.</div></div>';
+  }
   h+='<div class="field" style="margin:12px 0"><label>Objeto</label><input id="an-obj" value="'+esc(p.objeto)+'" placeholder="ex.: contratação de serviços de limpeza pública"></div>';
   h+='<div class="frow c3"><div class="field"><label>Valor total estimado (R$)</label><input id="an-valest" value="'+(p.valorEstimado?money(p.valorEstimado).replace("R$ ",""):"")+'" placeholder="1.132.989,99"></div><div class="field"><label>Data-base da sessão</label><input id="an-datab" value="'+esc(p.dataBase)+'" placeholder="dd/mm/aaaa"></div><div class="field"><label>Inversão de fases?</label>'+pills('aninv',['Não','Sim'],p.inversao)+'</div></div>';
   h+='<div class="hint" style="margin-top:12px;display:flex;gap:8px;align-items:flex-start"><svg class="ic" style="width:14px;height:14px;flex:none;margin-top:2px"><use href="#i-shield"/></svg><span>'+esc(anModoTxt(modo))+'</span></div>';
@@ -4008,7 +4014,8 @@ function anRenderLicRows(){ var p=anCur(); var b=document.getElementById('an-lic
 function anAddLic(){ var p=anCur(); if(!p) return; p.licitantes=p.licitantes||[]; p.licitantes.push({id:anGid('l'),razao:'',cnpj:'',ordem:p.licitantes.length+1,meepp:'Não'}); anSave(); anRenderLicRows(); }
 function anSetLic(i,k,v){ var p=anCur(); if(!p||!p.licitantes[i]) return; p.licitantes[i][k]=v; anSave(); }
 function anDelLic(i){ var p=anCur(); if(!p) return; var nm=(p.licitantes[i]&&p.licitantes[i].razao)||'este licitante'; if(!confirm('Remover '+nm+' e os documentos já enviados dele?')) return; p.licitantes.splice(i,1); anSave(); anRenderLicRows(); }
-function anSalvarCertame(){ var p=anCur(); if(!p) return; p.modalidade=pillVal('anmod')||p.modalidade; p.obra=pillVal('anobra')||'Não'; p.inversao=pillVal('aninv')||'Não'; var g=function(id){var e=document.getElementById(id);return e?e.value:'';}; p.processo=g('an-proc'); p.objeto=g('an-obj'); p.valorEstimado=anNum(g('an-valest')); p.dataBase=g('an-datab')||p.dataBase; anSave(); toast('Certame salvo. O rito e as exigências foram ajustados conforme a modalidade e o objeto.'); renderAnalise(); }
+function anSetTipoObra(v){ var p=anCur(); if(!p) return; p.tipoObra=v||''; anSave(); }
+function anSalvarCertame(){ var p=anCur(); if(!p) return; p.modalidade=pillVal('anmod')||p.modalidade; p.obra=pillVal('anobra')||'Não'; var _t=document.getElementById('an-tipoobra'); if(_t) p.tipoObra=_t.value||''; p.inversao=pillVal('aninv')||'Não'; var g=function(id){var e=document.getElementById(id);return e?e.value:'';}; p.processo=g('an-proc'); p.objeto=g('an-obj'); p.valorEstimado=anNum(g('an-valest')); p.dataBase=g('an-datab')||p.dataBase; anSave(); toast('Certame salvo. O rito e as exigências foram ajustados conforme a modalidade e o objeto.'); renderAnalise(); }
 
 // ---------- Bloco 2: leitura de documentos (PDF texto + OCR no navegador) e conferência ----------
 var AN_CATS=['Contrato/estatuto social','CND Federal/PGFN','FGTS (CRF)','CND Estadual','CND Municipal','CNDT (trabalhista)','Balanço patrimonial','Certidão de falência','Atestado de capacidade técnica','Proposta / planilha','Declarações','Outro'];
@@ -4320,6 +4327,32 @@ function anBdiFormula(c){
   var v=((1+(c.ac+c.sg+c.r)/100)*(1+c.df/100)*(1+c.l/100)/(1-i))-1;
   return Math.round(v*1000000)/10000; // em %, 4 casas
 }
+// FAIXAS DE BDI DO ACÓRDÃO 2622/2013 do TCU (Plenário, TC 036.076/2011-2), item 9.1.
+// Transcritas do PDF OFICIAL do acórdão, tabela por tipo de obra: 1º quartil, médio e 3º quartil de cada parcela.
+// NÃO é limite legal: é o parâmetro que o próprio TCU manda suas unidades usarem ao analisar orçamento de obra
+// pública. Acima do 3º quartil pede justificativa, não reprova sozinho. Quem decide é a comissão (E13).
+var AN_TCU_BDI={
+  edificios:{nome:'Construção de edifícios', ac:[3.00,4.00,5.50], sg:[0.80,0.80,1.00], r:[0.97,1.27,1.27], df:[0.59,1.23,1.39], l:[6.16,7.40,8.96], adm:[3.49,6.23,8.87]},
+  rodovias:{nome:'Construção de rodovias e ferrovias', ac:[3.80,4.01,4.67], sg:[0.32,0.40,0.74], r:[0.50,0.56,0.97], df:[1.02,1.11,1.21], l:[6.64,7.30,8.69], adm:[1.98,6.99,10.68]},
+  agua:{nome:'Redes de abastecimento de água, coleta de esgoto e construções correlatas', ac:[3.43,4.93,6.71], sg:[0.28,0.49,0.75], r:[1.00,1.39,1.74], df:[0.94,0.99,1.17], l:[6.74,8.04,9.40], adm:[4.13,7.64,10.89]},
+  energia:{nome:'Construção e manutenção de estações e redes de distribuição de energia elétrica', ac:[5.29,5.92,7.93], sg:[0.25,0.51,0.56], r:[1.00,1.48,1.97], df:[1.01,1.07,1.11], l:[8.00,8.31,9.51], adm:[1.85,5.05,7.45]},
+  portuarias:{nome:'Obras portuárias, marítimas e fluviais', ac:[4.00,5.52,7.85], sg:[0.81,1.22,1.99], r:[1.46,2.32,3.16], df:[0.94,1.02,1.33], l:[7.14,8.40,10.43], adm:[6.23,7.48,9.09]},
+  fornecimento:{nome:'Mero fornecimento de materiais e equipamentos', ac:[1.50,3.45,4.49], sg:[0.30,0.48,0.82], r:[0.56,0.85,0.89], df:[0.85,0.85,1.11], l:[3.50,5.11,6.22]}
+};
+var AN_TCU_ROT={ac:'Administração central', sg:'Seguro e garantia', r:'Risco', df:'Despesas financeiras', l:'Lucro'};
+function anTipoObraOpcoes(){ return Object.keys(AN_TCU_BDI).map(function(k){ return {k:k, nome:AN_TCU_BDI[k].nome}; }); }
+// Compara cada parcela declarada com a faixa do TCU para o tipo de obra escolhido pela comissão.
+function anTcuFaixas(comp, tipo){
+  var T=AN_TCU_BDI[tipo]; if(!T||!comp) return null;
+  var fora=[], dentro=[];
+  ['ac','sg','r','df','l'].forEach(function(k){
+    var v=comp[k]; if(v==null||!T[k]) return;
+    var f=T[k];
+    if(v > f[2]+0.0001) fora.push(AN_TCU_ROT[k]+': a empresa declarou '+v+'%, acima do 3º quartil do TCU ('+f[2]+'%) para '+T.nome.toLowerCase()+' (faixa: '+f[0]+'% a '+f[2]+'%, médio '+f[1]+'%)');
+    else dentro.push(AN_TCU_ROT[k]+' '+v+'%');
+  });
+  return {fora:fora, dentro:dentro, tipo:T.nome};
+}
 function anExtraiEncargos(txt){ return anPctRot(String(txt||''),'encargos\\s+sociais|leis\\s+sociais'); }
 // Cronograma físico-financeiro: pega a seção e soma as parcelas em dinheiro para confrontar com o global.
 function anSecaoCrono(txt){ var s=String(txt||''); var i=s.search(/cronograma\s+f[ií]sico[\s-]*financeiro|cronograma\s+f[ií]sico/i); return i<0?'':s.slice(i, i+6000); }
@@ -4507,6 +4540,15 @@ function anAnaliseObra(p,l){
          'BDI que essas parcelas produzem: '+calc+'% | BDI declarado pela empresa: '+bdiLic+'%']);
     }
     else if(calc!=null && bdiLic!=null) push('Composição do BDI','conforme','As parcelas declaradas recompõem o BDI de '+bdiLic+'% pela fórmula do Acórdão 2622/2013 do TCU.');
+    // Faixas do Acórdão 2622/2013 do TCU, só quando a comissão disse qual é o tipo de obra
+    var tf=p.tipoObra?anTcuFaixas(comp, p.tipoObra):null;
+    if(tf && tf.fora.length) push('Parcelas do BDI acima da faixa do TCU','conferir',
+      tf.fora.slice(0,6).join('; ')+'. Parâmetro do Acórdão 2622/2013 do TCU; acima da faixa pede justificativa, não desclassifica por si.',
+      'O TCU estudou o BDI praticado em obra pública e publicou, no Acórdão 2622/2013, a faixa de cada parcela por tipo de obra. Nesta proposta, '+tf.fora.length+' parcela(s) ficaram acima do 3º quartil para '+tf.tipo.toLowerCase()+'. Isso NÃO torna a proposta irregular: a faixa é referência de análise, e a empresa pode ter custo maior e justificar. O que a comissão faz é pedir a justificativa da parcela, em diligência, e decidir.',
+      tf.fora);
+    else if(tf && tf.dentro.length) push('Parcelas do BDI x faixa do TCU','conforme','Parcelas dentro da faixa do Acórdão 2622/2013 do TCU para '+tf.tipo.toLowerCase()+' ('+tf.dentro.join('; ')+').');
+    else if(!p.tipoObra && comp.completa) push('Faixa do BDI por tipo de obra (TCU)','conferir','As parcelas do BDI foram lidas, mas o tipo de obra não foi informado no certame, então não dá para comparar com a faixa do TCU.',
+      'O Acórdão 2622/2013 do TCU traz uma faixa de BDI diferente para cada tipo de obra (edifícios, rodovias, água e esgoto, energia, portuárias). Escolha o tipo de obra na aba Certame e confira de novo: o sistema passa a comparar cada parcela com a faixa daquele tipo.');
     else if(bdiLic!=null && !comp.completa) push('Composição do BDI','conferir','O BDI de '+bdiLic+'% foi localizado, mas não a composição completa em parcelas.',
       'O sistema achou o percentual do BDI, porém não conseguiu ler todas as parcelas (administração central, seguro e garantia, risco, despesas financeiras, lucro e tributos) para refazer a conta pela fórmula do TCU. Sem elas não dá para dizer se o BDI fecha. Conferir na planilha de composição do BDI se o edital a exige.');
     if(bdiLic==null) push('Composição do BDI','conferir','BDI não localizado na proposta. Em obras, a composição do BDI acompanha a planilha (conferir exigência do edital).');
