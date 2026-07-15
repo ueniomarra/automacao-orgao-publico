@@ -3777,13 +3777,22 @@ function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _
       }, function(err){ anSaveFalhou(p, ((err&&err.message)||'falha de rede ao gravar na nuvem')); });
   }catch(e){ anSaveFalhou(p, e.message); }
 }
-// Falha de gravação NUNCA é silenciosa: marca o processo, avisa na tela e tenta de novo.
+// O documento NUNCA é recusado. Se a nuvem não aceitar agora (internet caiu, servidor fora), o trabalho segue,
+// o arquivo original já está no cofre, e o sistema fica tentando sozinho até conseguir, inclusive depois de
+// recarregar a página. A faixa na tela é só o aviso de que ainda está sincronizando: silêncio aqui foi o que
+// apagou os documentos de 3 empresas, então o alarme fica, mas quem resolve é o sistema, não o pregoeiro.
 function anSaveFalhou(p, motivo){
-  p._naoSalvo={quando:dataHoje(), motivo:String(motivo||'motivo não informado'), tentativas:((p._naoSalvo&&p._naoSalvo.tentativas)||0)+1};
-  try{ console.error('FALHA ao salvar o processo na nuvem: '+motivo); }catch(e){}
-  try{ toast('Atenção: não foi possível salvar este processo na nuvem ('+motivo+'). Os dados estão só neste computador. Não feche o navegador antes de salvar de novo.'); }catch(e){}
+  var t=((p._naoSalvo&&p._naoSalvo.tentativas)||0)+1;
+  p._naoSalvo={quando:dataHoje(), motivo:String(motivo||'motivo não informado'), tentativas:t};
+  try{ console.error('Falha ao salvar na nuvem (tentativa '+t+'): '+motivo); }catch(e){}
+  if(t===1) try{ toast('A nuvem não respondeu agora. Pode continuar trabalhando: os arquivos já estão guardados e o sistema vai salvar sozinho assim que a conexão voltar.'); }catch(e){}
   try{ renderAnalise(); }catch(e){}
-  if(p._naoSalvo.tentativas<=3){ setTimeout(function(){ anPersist(p); }, 4000*p._naoSalvo.tentativas); }
+  var espera=Math.min(60000, 3000*Math.pow(2, Math.min(t-1,5))); // 3s, 6s, 12s, 24s, 48s, 60s, 60s...
+  setTimeout(function(){ anPersist(p); }, espera);
+}
+// Ao abrir o sistema, retoma sozinho o que ficou pendente de salvar da sessão anterior.
+function anRetomarPendentes(){
+  try{ (ANALISE.procs||[]).forEach(function(p){ if(p && p._naoSalvo){ anPersist(p); } }); }catch(e){}
 }
 function anPersist(p){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return; _anPP=p; if(_anPT) clearTimeout(_anPT); _anPT=setTimeout(anFlush,600); }
 function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER) return Promise.resolve(false); return SB.from('an_processos').select('dados').order('updated_at',{ascending:false}).then(function(r){ if(r&&r.data){
@@ -3809,7 +3818,7 @@ function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_U
   var ids={}; srv.forEach(function(x){ids[x.id]=1;});
   loc.forEach(function(lp){ if(lp&&lp.id&&!ids[lp.id]) srv.push(lp); });
   ANALISE.procs=srv; ANALISE._loaded=true; return true; } return false; }).catch(function(){ return false; }); }
-function anEntrar(){ anFlush(); ANALISE.curId=null; ANALISE.curLic=null; var r=document.getElementById('an-root'); if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&!ANALISE._loaded){ if(r) r.innerHTML='<div class="panel"><div style="padding:16px" class="hint">Carregando processos do órgão...</div></div>'; anCarregarSupabase().then(function(){ ANALISE._loaded=true; renderAnalise(); }); } else { renderAnalise(); } }
+function anEntrar(){ anFlush(); ANALISE.curId=null; ANALISE.curLic=null; var r=document.getElementById('an-root'); if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&!ANALISE._loaded){ if(r) r.innerHTML='<div class="panel"><div style="padding:16px" class="hint">Carregando processos do órgão...</div></div>'; anCarregarSupabase().then(function(){ ANALISE._loaded=true; anRetomarPendentes(); renderAnalise(); }); } else { anRetomarPendentes(); renderAnalise(); } }
 function anGid(p){ return (p||'a')+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
 function anCur(){ for(var i=0;i<ANALISE.procs.length;i++){ if(ANALISE.procs[i].id===ANALISE.curId) return ANALISE.procs[i]; } return null; }
 function anNum(s){ s=String(s==null?'':s).replace(/[^0-9,.-]/g,''); if(s.indexOf(',')>=0){ s=s.replace(/\./g,'').replace(',','.'); } return Number(s)||0; }
@@ -3858,10 +3867,10 @@ function anAvisoNaoSalvo(p){
   if(!p||!p._naoSalvo) return '';
   return '<div style="display:flex;gap:12px;align-items:flex-start;background:#FFF8E6;border:2px solid #E8A020;border-left:7px solid #E8A020;border-radius:12px;padding:14px 16px;margin-bottom:14px">'
     +'<svg class="ic" style="width:20px;height:20px;flex:none;stroke:#0A2342;margin-top:1px"><use href="#i-alert"/></svg>'
-    +'<div style="font-size:13.5px;color:#0A2342;line-height:1.55"><b>Atenção: este processo NÃO foi salvo na nuvem.</b><br>'
-    +'Motivo: '+esc(p._naoSalvo.motivo)+'. Última tentativa em '+esc(p._naoSalvo.quando)+'.<br>'
-    +'Os dados e os documentos estão somente neste computador e neste navegador. Não feche esta janela e não use outro computador antes de salvar, senão o que foi enviado se perde. '
-    +'<button class="btn-ghost" type="button" style="margin-top:8px" onclick="anTentarSalvar()">Tentar salvar de novo</button></div></div>';
+    +'<div style="font-size:13.5px;color:#0A2342;line-height:1.55"><b>Salvando na nuvem. Pode continuar trabalhando.</b><br>'
+    +'A nuvem não respondeu na última tentativa ('+esc(p._naoSalvo.motivo)+', '+esc(p._naoSalvo.quando)+'). <b>Nenhum documento foi recusado e nada foi perdido:</b> os arquivos enviados já estão guardados, e o sistema continua tentando salvar sozinho, inclusive se você recarregar a página. Este aviso some assim que gravar.<br>'
+    +'<span style="color:#5b6b82">Se ele ficar aqui por muito tempo, confira a internet e avise o suporte.</span> '
+    +'<button class="btn-ghost" type="button" style="margin-top:8px" onclick="anTentarSalvar()">Tentar agora</button></div></div>';
 }
 function anTentarSalvar(){ var p=anCur(); if(!p) return; toast('Tentando salvar na nuvem...'); anPersist(p); }
 function anRenderProc(root){
