@@ -3762,28 +3762,18 @@ function anLoad(){ try{ var s=localStorage.getItem('aop_analise_v1'); if(s){ ANA
 function anSave(){ try{ localStorage.setItem('aop_analise_v1', JSON.stringify({procs:ANALISE.procs})); }catch(e){} var c=anCur(); if(c) anPersist(c); }
 function anOrg(){ return (typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; }
 var _anPT=null,_anPP=null;
-var AN_TETO=700000; // teto de segurança do corpo enviado à nuvem
-// Enxuga o que é acessório (mapa de páginas) e NADA MAIS.
-// O texto do documento não é cortado para caber: texto cortado significa item que some, e item que some vira
-// "a empresa não cotou" contra quem cotou. Entre gravar mutilado e avisar que não gravou, avisa.
-function anEnxuga(p){
-  var body=JSON.parse(JSON.stringify(p)), cortes=[];
-  var tam=function(){ try{ return JSON.stringify(body).length; }catch(e){ return AN_TETO+1; } };
-  if(tam()<=AN_TETO) return {body:body, cortes:cortes};
-  (body.licitantes||[]).forEach(function(li){ (li.docs||[]).forEach(function(dd){ delete dd.pags; }); });
-  (body.docsCertame||[]).forEach(function(dd){ delete dd.pags; });
-  if(tam()<=AN_TETO){ cortes.push('mapa de páginas dos documentos'); return {body:body, cortes:cortes}; }
-  return {body:body, cortes:cortes, estourou:true};
-}
+// SEM LIMITE DE DOCUMENTO. O sistema recebe o que o licitante mandou, do jeito que mandou: um PDF único com
+// tudo, vários arquivos soltos ou um .zip, na quantidade que for. Nunca devolver "não cabe" na cara do pregoeiro.
+// O código antigo cortava o texto em 120 mil caracteres, e eu cheguei a pôr um teto de 700 mil, por causa de um
+// limite que NUNCA foi medido. Medido agora, gravando pela mesma via do sistema: 2,6 milhões (3 empresas x 22
+// documentos) grava em 1,2s e 20 milhões gravam em 5,3s. O limite não existia. Nada é cortado: manda inteiro,
+// e se a nuvem recusar, avisa e tenta de novo, em vez de mutilar a peça ou perder o documento calado.
 function anFlush(){ if(_anPT){ clearTimeout(_anPT); _anPT=null; } var p=_anPP; _anPP=null; if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER||!p) return;
-  var r; try{ r=anEnxuga(p); }catch(e){ anSaveFalhou(p, 'não foi possível preparar os dados: '+e.message); return; }
-  if(r.estourou){ anSaveFalhou(p, 'o processo ficou grande demais para a nuvem mesmo depois de cortar o texto dos documentos'); return; }
   try{
-    SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:r.body, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'})
+    SB.from('an_processos').upsert({orgao_id:anOrg(), proc_id:p.id, dados:p, updated_at:new Date().toISOString()}, {onConflict:'orgao_id,proc_id'})
       .then(function(res){
         if(res && res.error){ anSaveFalhou(p, (res.error.message||'a nuvem recusou a gravação')); return; }
         if(p._naoSalvo){ p._naoSalvo=null; try{ renderAnalise(); }catch(e){} }
-        if(r.cortes.length) try{ console.warn('Processo salvo com redução: '+r.cortes.join('; ')); }catch(e){}
       }, function(err){ anSaveFalhou(p, ((err&&err.message)||'falha de rede ao gravar na nuvem')); });
   }catch(e){ anSaveFalhou(p, e.message); }
 }
