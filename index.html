@@ -4990,6 +4990,7 @@ function toast(msg){
 function papelLabel(p){ return p==='superadmin'?'Superadmin':(p==='admin'?'Admin':'Staff'); }
 function orgaoNome(id){ if(id==='*') return 'todos os órgãos'; for(var i=0;i<ORGAOS.length;i++){ if(ORGAOS[i].id===id) return ORGAOS[i].nome; } return id||'(sem órgão)'; }
 function renderAdmin(){
+  if(!CURRENT_USER) return; // antes do login não há o que renderizar (o init chama renderAdmin no boot)
   var body=document.getElementById('admin-users'); if(!body) return;
   var euSuper = CURRENT_USER && CURRENT_USER.papel==='superadmin';
   var sub=document.getElementById('admin-sub');
