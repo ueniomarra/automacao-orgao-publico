@@ -318,6 +318,10 @@ td .modd{font-size:12px;color:var(--slate)}
 .an-row .rt{flex:1;font-size:12.8px;color:#3d4c63;line-height:1.6}
 .an-row .rt ul.nlist{margin:2px 0 4px 17px;padding:0}
 .an-row .rt ul.nlist li{margin:0 0 5px}
+.an-row .rt .rsum{margin:0 0 8px;color:#1f2d40}
+.an-row .rt .rsum b{color:#0A2342}
+.an-row .rt .rond{font-weight:600;color:#0A2342;margin:0 0 1px}
+.an-row .rt .rmais{margin:3px 0 0;color:#5b6b82}
 .an-row .rt .leg{display:flex;gap:8px;align-items:flex-start;margin-top:9px;padding:9px 12px;background:#F8F4E9;border-left:3.5px solid #C9A961;border-radius:8px;font-size:12.3px;color:#243b55;line-height:1.6}
 .an-row .rt .leg b{color:#0A2342}
 .an-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:800;letter-spacing:.2px;white-space:nowrap}
@@ -3891,11 +3895,15 @@ function anGerarRelatorio(){ var p=anCur(); if(!p) return; var org=(typeof ORG!=
   h+='<p><b>Data-base da sessão:</b> '+esc(p.dataBase||'-')+'</p>';
   h+='<p style="margin-top:10px"><b>Licitantes e situação:</b></p><ol>';
   var relLeg=[]; var relColher=function(txt){ if(typeof anLegalRefs!=='function') return; anLegalRefs(txt).forEach(function(k){ if(relLeg.indexOf(k)<0) relLeg.push(k); }); };
-  var relNota=function(nota){ var s=String(nota||''); var parts=s.split('; '); if(parts.length<3||s.length<110) return esc(s); return '<ul style="margin:3px 0 4px 18px;padding:0">'+parts.map(function(x){return '<li style="margin:0 0 3px">'+esc(x.replace(/\.$/,''))+'</li>';}).join('')+'</ul>'; };
-  ls.forEach(function(l){ var res=l.resultado; var pend=res?res.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';}):[]; h+='<li style="margin-bottom:10px"><b>'+esc(l.razao||'(sem nome)')+'</b> (CNPJ '+esc(l.cnpj||'-')+')'+(l.meepp==='Sim'?', ME/EPP':'')+', classificação '+esc(l.ordem||'-')+': <b>'+esc(l.situacaoTxt||'não analisado')+'</b>.';
-    if(pend.length){ h+='<br><span style="font-weight:600">Pendências:</span><ul style="margin:3px 0 4px 18px;padding:0">'+pend.map(function(i){ relColher(i.nota); return '<li style="margin:0 0 4px"><b>'+esc(i.cat)+':</b> '+relNota(i.nota)+'</li>'; }).join('')+'</ul>'; }
-    if(l.diligencia&&l.diligencia.desc){ relColher('diligência art. 64'); h+='<span style="font-weight:600">Diligência (art. 64):</span> '+esc(l.diligencia.desc)+' ['+esc(l.diligencia.situacao||'Pendente')+'].<br>'; }
-    if(res&&res.proposta){ if(res.proposta.status!=='conforme') relColher(res.proposta.nota); h+='<span style="font-weight:600">Proposta:</span> '+relNota(res.proposta.nota); }
+  // Cada apontamento em bloco próprio: o que está divergente, depois onde. A base legal vem consolidada no fim.
+  var relBloco=function(titulo,o){ relColher(String(o.nota||'')+' '+String(o.resumo||'')); return '<div style="margin:0 0 10px"><p style="margin:0 0 3px"><b>'+esc(titulo)+'</b></p><div style="margin-left:16px">'+anCorpo(o,true)+'</div></div>'; };
+  ls.forEach(function(l){ var res=l.resultado; var pend=res?res.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';}):[]; h+='<li style="margin-bottom:14px"><b>'+esc(l.razao||'(sem nome)')+'</b> (CNPJ '+esc(l.cnpj||'-')+')'+(l.meepp==='Sim'?', ME/EPP':'')+', classificação '+esc(l.ordem||'-')+': <b>'+esc(l.situacaoTxt||'não analisado')+'</b>.';
+    if(pend.length){ h+='<p style="margin:8px 0 4px;font-weight:600">Pendências de habilitação:</p>'+pend.map(function(i){ return relBloco(i.cat,i); }).join(''); }
+    if(res&&res.proposta){ h+='<p style="margin:8px 0 4px;font-weight:600">Proposta:</p>'+relBloco('Proposta e planilha',res.proposta); }
+    if(res&&res.obra&&(res.obra.checks||[]).length){ var rPr=res.obra.checks.filter(function(c){return c.status!=='conforme';});
+      if(rPr.length) h+='<p style="margin:8px 0 4px;font-weight:600">Confronto da planilha do edital com a planilha da proposta:</p>'+rPr.map(function(c){ return relBloco(c.t,c); }).join('');
+      else h+='<p style="margin:8px 0 4px"><span style="font-weight:600">Confronto da planilha:</span> sem apontamentos nos itens lidos.</p>'; }
+    if(l.diligencia&&l.diligencia.desc){ relColher('diligência art. 64'); h+='<p style="margin:8px 0 4px"><span style="font-weight:600">Diligência (art. 64):</span> '+esc(l.diligencia.desc)+' ['+esc(l.diligencia.situacao||'Pendente')+'].</p>'; }
     h+='</li>'; });
   h+='</ol>';
   if(relLeg.length){
@@ -4203,11 +4211,19 @@ function anAnaliseObra(p,l){
   var licTxt=(l.docs||[]).map(function(d){return d.texto||'';}).join('\n');
   var checks=[], det=[];
   var refIt=anParseItens(refTxt), licIt=anParseItens(licTxt);
-  var push=function(t,st,n){ checks.push({t:t,status:st,nota:n}); };
-  // Planilha item a item
-  if(refIt.length<3 && licIt.length<3){ push('Planilha orçamentária','conferir','Não foi possível ler itens de planilha nem no edital nem na proposta. Se o certame envolve planilha, suba a planilha da licitação (aba Certame) e a do licitante em PDF legível.'); }
-  else if(refIt.length<3){ push('Planilha de referência do edital','conferir','A proposta tem '+licIt.length+' itens lidos, mas a planilha de referência do edital não foi localizada nos documentos da licitação. Suba a planilha orçamentária do edital para o confronto item a item.'); }
-  else if(licIt.length<3){ push('Planilha da proposta','atencao','O edital tem '+refIt.length+' itens de planilha, mas a planilha do licitante não foi localizada ou não está legível. Solicitar a planilha ou conferir manualmente.'); }
+  // resumo = a frase que diz O QUE está divergente em relação ao que o edital pede; evid = as linhas de prova
+  var push=function(t,st,n,resumo,evid){ checks.push({t:t,status:st,nota:n,resumo:resumo||'',evid:(evid&&evid.length)?evid:null}); };
+  // Planilha item a item.
+  // Só se confronta o que foi lido de uma PLANILHA de verdade, isto é, com o layout de colunas identificado.
+  // Em texto corrido (edital, contrato) o parser chuta "itens" que na verdade são cláusula, CNPJ ou endereço:
+  // acusar a empresa de não cotar isso seria apontamento falso, e aqui o sistema aponta, não inventa (E13).
+  var plOk=function(its){ var a=its.filter(function(i){ return i.layout==='auto'; }).length; return its.length>=3 && a>=Math.max(2, Math.ceil(its.length*0.5)); };
+  var refOk=plOk(refIt), licOk=plOk(licIt);
+  if(!refOk && !licOk){ push('Planilha orçamentária','conferir','Não foi possível ler itens de planilha nem no edital nem na proposta. Se o certame envolve planilha, suba a planilha da licitação (aba Certame) e a do licitante em PDF legível.'); }
+  else if(!refOk){ push('Planilha de referência do edital','conferir','A proposta tem '+licIt.length+' itens lidos, mas a planilha de referência do edital não foi localizada nos documentos da licitação. Suba a planilha orçamentária do edital para o confronto item a item.',
+    'Sem planilha do edital não há confronto item a item: o sistema só encontrou texto corrido do edital (cláusulas, numeração de itens do texto), e daí não se extrai quantidade nem preço de referência. Suba a planilha orçamentária do edital na aba Certame. Até lá, o confronto da planilha desta proposta não foi feito, e nada aqui pesa contra a empresa.'); }
+  else if(!licOk){ push('Planilha da proposta','atencao','O edital tem '+refIt.length+' itens de planilha, mas a planilha do licitante não foi localizada ou não está legível. Solicitar a planilha ou conferir manualmente.',
+    'O edital tem planilha com '+refIt.length+' itens e o sistema não conseguiu ler a planilha desta empresa em formato de colunas (quantidade, preço unitário e total). Pode ser que a empresa não a tenha enviado, ou que o arquivo esteja ilegível. Conferir o envelope da proposta antes de tratar como falta.'); }
   else {
     var byCod={}, byDesc={};
     licIt.forEach(function(it){ byCod[it.cod]=byCod[it.cod]||it; byDesc[anNormDesc(it.desc)]=byDesc[anNormDesc(it.desc)]||it; });
@@ -4222,26 +4238,35 @@ function anAnaliseObra(p,l){
     // só aponta erro de conta quando as colunas foram identificadas com segurança (layout auto); no chute, não se acusa
     licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001, c.qtd*0.0051)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
     var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod+' '+c.desc.slice(0,35); });
-    if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado ou sem preço: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão ou recusa de cotar.');
+    if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado ou sem preço: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão ou recusa de cotar.',
+      'O edital exige preço para todos os itens da planilha. A empresa entregou '+semPreco.length+' item(ns) zerados ou em branco, ou seja, deixou de dar preço a parte do que a prefeitura vai contratar. Conferir se foi omissão de digitação ou recusa de cotar o item.', semPreco);
     var semPrecoRef=refIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod; });
-    if(semPrecoRef.length) push('Itens sem preço na planilha do edital','conferir', semPrecoRef.length+' item(ns) da referência estão com valor zerado ('+semPrecoRef.slice(0,8).join(', ')+(semPrecoRef.length>8?'...':'')+'). Sem preço de referência não há como comparar esses itens; conferir a planilha do edital.');
+    if(semPrecoRef.length) push('Itens sem preço na planilha do edital','conferir', semPrecoRef.length+' item(ns) da referência estão com valor zerado ('+semPrecoRef.slice(0,8).join(', ')+(semPrecoRef.length>8?'...':'')+'). Sem preço de referência não há como comparar esses itens; conferir a planilha do edital.',
+      'A divergência aqui é da planilha da PREFEITURA, não da empresa: '+semPrecoRef.length+' item(ns) da planilha de referência do edital estão sem preço. Sem preço de referência não existe parâmetro para dizer se a proposta está cara ou barata nesses itens, e eles ficaram fora da comparação.', semPrecoRef);
     var soma=licIt.reduce(function(a,b){return a+(b.total||0);},0);
     det=det.concat([{k:'Itens lidos no edital', v:String(refIt.length)},{k:'Itens lidos na proposta', v:String(licIt.length)},{k:'Soma dos itens da proposta', v:money(soma)}]);
-    if(faltando.length) push('Itens do edital ausentes na proposta','atencao', faltando.length+' item(ns): '+faltando.slice(0,8).join('; ')+(faltando.length>8?' e mais '+(faltando.length-8):'')+'. Proposta incompleta é desclassificável (art. 59, II).');
+    if(faltando.length) push('Itens do edital ausentes na proposta','atencao', faltando.length+' item(ns): '+faltando.slice(0,8).join('; ')+(faltando.length>8?' e mais '+(faltando.length-8):'')+'. Proposta incompleta é desclassificável (art. 59, II).',
+      'A prefeitura pediu preço para os '+refIt.length+' itens da planilha do edital e a empresa não cotou '+faltando.length+' deles. A proposta, do jeito que veio, não cobre todo o objeto que está sendo licitado.', faltando);
     else push('Cobertura dos itens','conforme','Todos os '+refIt.length+' itens lidos do edital foram localizados na proposta.');
-    if(qtdDiv.length) push('Quantitativos divergentes','atencao', qtdDiv.slice(0,8).join('; ')+(qtdDiv.length>8?' e mais '+(qtdDiv.length-8):'')+'. Quantitativo alterado descaracteriza o objeto (art. 59, II).');
-    if(sobre.length) push('Preço unitário acima da referência','atencao', sobre.slice(0,8).join('; ')+(sobre.length>8?' e mais '+(sobre.length-8):'')+'. Conferir o critério do edital para preço unitário máximo.');
-    if(baixo.length) push('Unitários possivelmente inexequíveis','conferir', baixo.slice(0,8).join('; ')+'. Diligência para comprovar exequibilidade (art. 59, §§ 2º e 3º).');
-    if(conta.length) push('Conta que não fecha (qtd x unitário difere do total)','atencao', conta.slice(0,8).join('; ')+(conta.length>8?' e mais '+(conta.length-8):'')+'. Erro material pode ser saneado por diligência (art. 64, § 1º) se não alterar a substância.');
+    if(qtdDiv.length) push('Quantitativos divergentes','atencao', qtdDiv.slice(0,8).join('; ')+(qtdDiv.length>8?' e mais '+(qtdDiv.length-8):'')+'. Quantitativo alterado descaracteriza o objeto (art. 59, II).',
+      'Em '+qtdDiv.length+' item(ns) a quantidade que a empresa cotou não é a quantidade que o edital pediu. A empresa orçou uma coisa diferente do que a prefeitura vai comprar, então os preços não são comparáveis com os das outras propostas.', qtdDiv);
+    if(sobre.length) push('Preço unitário acima da referência','atencao', sobre.slice(0,8).join('; ')+(sobre.length>8?' e mais '+(sobre.length-8):'')+'. Conferir o critério do edital para preço unitário máximo.',
+      'O edital traz um preço unitário de referência para cada item e em '+sobre.length+' item(ns) a empresa cotou acima dele. Conferir no edital se esse unitário de referência é teto (preço máximo aceito por item) ou apenas estimativa: sendo teto, o item excede o limite fixado.', sobre);
+    if(baixo.length) push('Unitários possivelmente inexequíveis','conferir', baixo.slice(0,8).join('; ')+'. Diligência para comprovar exequibilidade (art. 59, §§ 2º e 3º).',
+      'Em '+baixo.length+' item(ns) o preço da empresa ficou abaixo da metade da referência do edital. Preço muito baixo não reprova a proposta sozinho, mas levanta a dúvida de que a empresa consiga entregar o item por esse valor.', baixo);
+    if(conta.length) push('Conta que não fecha (qtd x unitário difere do total)','atencao', conta.slice(0,8).join('; ')+(conta.length>8?' e mais '+(conta.length-8):'')+'. Erro material pode ser saneado por diligência (art. 64, § 1º) se não alterar a substância.',
+      'Em '+conta.length+' item(ns) a planilha da empresa não fecha com ela mesma: quantidade vezes preço unitário não dá o total que a própria empresa imprimiu na linha. Enquanto não se sabe qual dos três números é o certo, o valor da proposta fica em dúvida.', conta);
     if(!qtdDiv.length && !sobre.length && !conta.length && !baixo.length) push('Planilha item a item','conforme','Quantitativos, unitários e totais conferem com a referência nos itens lidos.');
     var g=(l.valorProposta>0)?l.valorProposta:anValorGlobal(licTxt);
-    if(g && soma>0 && Math.abs(soma-g)>Math.max(1, g*0.005)) push('Soma dos itens x valor global','atencao','A soma dos itens lidos ('+money(soma)+') difere do valor global da proposta ('+money(g)+'). Conferir se a leitura pegou todas as páginas da planilha ou se há erro de soma.');
+    if(g && soma>0 && Math.abs(soma-g)>Math.max(1, g*0.005)) push('Soma dos itens x valor global','atencao','A soma dos itens lidos ('+money(soma)+') difere do valor global da proposta ('+money(g)+'). Conferir se a leitura pegou todas as páginas da planilha ou se há erro de soma.',
+      'A soma dos itens da planilha deveria ser igual ao valor global que a empresa declarou, e os dois números não batem: diferença de '+money(Math.abs(soma-g))+'. Antes de tratar como erro da empresa, conferir se a leitura do sistema pegou todas as páginas da planilha.');
   }
   // BDI
   var bdiRef=anExtraiBDI(refTxt), bdiLic=anExtraiBDI(licTxt);
   if(p.obra==='Sim'){
     if(bdiLic==null) push('Composição do BDI','conferir','BDI não localizado na proposta. Em obras, a composição do BDI acompanha a planilha (conferir exigência do edital).');
-    else if(bdiRef!=null && bdiLic>bdiRef+0.001) push('BDI acima da referência','atencao','BDI da proposta ('+bdiLic+'%) acima da referência do edital ('+bdiRef+'%). Conferir o limite fixado.');
+    else if(bdiRef!=null && bdiLic>bdiRef+0.001) push('BDI acima da referência','atencao','BDI da proposta ('+bdiLic+'%) acima da referência do edital ('+bdiRef+'%). Conferir o limite fixado.',
+      'O edital adotou BDI de referência de '+bdiRef+'% e a empresa aplicou '+bdiLic+'%, ou seja, '+(Math.round((bdiLic-bdiRef)*100)/100)+' ponto(s) percentual(is) acima. Conferir no edital se esse percentual é limite fixado ou apenas referência.');
     else push('BDI','conforme','BDI da proposta: '+bdiLic+'%'+(bdiRef!=null?' (referência do edital: '+bdiRef+'%)':'')+'.');
     // Cronograma físico-financeiro
     if(/cronograma\s+f[ií]sico[\s-]*financeiro/i.test(anNormTxt(licTxt))||/cronograma\s+fisico/i.test(anNormTxt(licTxt))) push('Cronograma físico-financeiro','conforme','Cronograma localizado nos documentos do licitante.');
@@ -4418,6 +4443,28 @@ function anNotaFmt(nota){ var s=String(nota||''); var parts=s.split('; ');
   if(parts.length<3 || s.length<110) return esc(s);
   return '<ul class="nlist">'+parts.map(function(x){ return '<li>'+esc(x.replace(/\.$/,''))+'</li>'; }).join('')+'</ul>';
 }
+// Mesma formatação da nota longa, na folha do documento (minuta e relatório)
+function anNotaDoc(nota){ var s=String(nota||''); var parts=s.split('; ');
+  if(parts.length<3 || s.length<110) return esc(s);
+  return '<ul style="margin:4px 0 6px 20px;padding:0">'+parts.map(function(x){ return '<li style="margin:0 0 4px">'+esc(x.replace(/\.$/,''))+'</li>'; }).join('')+'</ul>';
+}
+// Corpo do apontamento em 2 camadas: primeiro O QUE está divergente, depois ONDE (as linhas de prova).
+// A base legal entra depois, por fora, em anLegalHtml. Sem resumo, cai no formato antigo (notas de habilitação).
+function anCorpo(o,doc){
+  var resumo=String((o&&o.resumo)||''), evid=(o&&o.evid)||null, nota=String((o&&o.nota)||'');
+  if(!resumo) return doc?anNotaDoc(nota):anNotaFmt(nota);
+  var h=doc?('<p style="margin:0 0 6px"><b>O que está divergente:</b> '+esc(resumo)+'</p>')
+           :('<div class="rsum"><b>O que está divergente:</b> '+esc(resumo)+'</div>');
+  if(evid&&evid.length){
+    var lim=evid.slice(0,8);
+    var li=lim.map(function(x){ return doc?('<li style="margin:0 0 4px">'+esc(x)+'</li>'):('<li>'+esc(x)+'</li>'); }).join('');
+    h+=doc?('<p style="margin:0 0 2px"><b>Onde:</b></p><ul style="margin:4px 0 6px 20px;padding:0">'+li+'</ul>')
+          :('<div class="rond">Onde:</div><ul class="nlist">'+li+'</ul>');
+    if(evid.length>8){ var m='e mais '+(evid.length-8)+' item(ns) na mesma situação.';
+      h+=doc?('<p style="margin:0 0 6px">'+m+'</p>'):('<div class="rmais">'+m+'</div>'); }
+  }
+  return h;
+}
 function anLegalHtml(refs){ if(!refs||!refs.length) return ''; return refs.map(function(k){ var L=AN_LEGAL[k]; if(!L) return ''; return '<div class="leg"><svg class="ic" style="width:13px;height:13px;flex:none;margin-top:2px;stroke:#0A2342"><use href="#i-scale"/></svg><span><b>'+esc(L.t)+'.</b> '+esc(L.e)+'</span></div>'; }).join(''); }
 function anTag(st){ var map={conforme:['Conforme','#0A2342','#fff','i-check'],atencao:['Atenção','#E8A020','#0A2342','i-alert'],ausente:['Ausente','#475569','#fff','i-folder'],conferir:['Conferir','#ffffff','#0A2342','i-search']}; var m=map[st]||['-','#e5e7eb','#111','i-help']; var extra=st==='conferir'?';border:1.5px solid #0A2342':''; return '<span class="an-chip" style="background:'+m[1]+';color:'+m[2]+extra+'"><svg style="stroke:'+m[2]+'"><use href="#'+m[3]+'"/></svg>'+m[0]+'</span>'; }
 function anRenderConferencia(root){
@@ -4448,7 +4495,7 @@ function anRenderResultado(l){
   var cnt={conforme:0,atencao:0,conferir:0,ausente:0}; todos.forEach(function(s){ if(cnt[s]!==undefined) cnt[s]++; else if(s==='presente') cnt.conferir++; });
   var tile=function(ico,bg,stroke,n,lab){ return '<div class="an-tile"><div class="ticon" style="background:'+bg+'"><svg style="stroke:'+stroke+'"><use href="#'+ico+'"/></svg></div><div><div class="n">'+n+'</div><div class="l">'+lab+'</div></div></div>'; };
   var sec=function(ico,titulo,rows,extra){ if(!rows) return ''; return '<div class="an-sec"><div class="sh"><svg><use href="#'+ico+'"/></svg> '+titulo+(extra||'')+'</div>'+rows+'</div>'; };
-  var row=function(nome,st,nota){ var leg=(st!=='conforme')?anLegalHtml(anLegalRefs(nota)):''; return '<div class="an-row"><div class="rn">'+esc(nome)+'</div><div class="rb">'+anTag(st)+'</div><div class="rt">'+anNotaFmt(nota)+leg+'</div></div>'; };
+  var row=function(nome,st,nota,o){ var leg=(st!=='conforme')?anLegalHtml(anLegalRefs(nota+' '+((o&&o.resumo)||''))):''; return '<div class="an-row"><div class="rn">'+esc(nome)+'</div><div class="rb">'+anTag(st)+'</div><div class="rt">'+anCorpo({nota:nota,resumo:(o&&o.resumo)||'',evid:(o&&o.evid)||null},false)+leg+'</div></div>'; };
   var h='<div class="panel"><div class="ph"><h3>Resultado da conferência</h3></div><div style="padding:16px 22px">';
   h+='<div class="an-hero"><div class="hicon"><svg><use href="#'+(stIco[l.statusSugerido]||'i-shield')+'"/></svg></div><div><div class="ttl">Situação sugerida pelo sistema</div><div class="big">'+esc(stg[l.statusSugerido]||'-')+'</div><div class="sub">'+esc(l.razao||'')+(l.cnpj?(' | CNPJ '+l.cnpj):'')+' | conferido em '+esc(r.quando||'')+'. O sistema aponta; a decisão final e a assinatura são sempre da comissão.</div></div></div>';
   h+='<div class="an-tiles">'
@@ -4458,14 +4505,14 @@ function anRenderResultado(l){
     +tile('i-folder','#475569','#fff',cnt.ausente,'Ausente')
     +'</div>';
   h+=anLeg('<b>Como ler o resultado:</b> <b>Conforme</b> está certo. <b>Atenção</b> tem problema, e o texto ao lado diz qual. <b>Ausente</b> o documento não foi enviado. <b>Conferir</b> o sistema não teve certeza e a comissão precisa olhar. Nada aqui é decisão final, é só apontamento.');
-  h+=sec('i-shield','Conferido pelo sistema (objetivo)', auto.map(function(i){return row(i.cat,i.status,i.nota);}).join(''), '<span class="cnt">'+auto.length+' itens</span>');
-  if(r.proposta) h+=sec('i-money','Proposta e planilha', row('Proposta / planilha', r.proposta.status, r.proposta.nota));
-  if(r.exig && r.exig.length) h+=sec('i-doc','Exigências específicas do edital', r.exig.map(function(c){return row(c.t,c.status,c.nota);}).join(''), '<span class="cnt">'+r.exig.length+' itens</span>');
+  h+=sec('i-shield','Conferido pelo sistema (objetivo)', auto.map(function(i){return row(i.cat,i.status,i.nota,i);}).join(''), '<span class="cnt">'+auto.length+' itens</span>');
+  if(r.proposta) h+=sec('i-money','Proposta e planilha', row('Proposta / planilha', r.proposta.status, r.proposta.nota, r.proposta));
+  if(r.exig && r.exig.length) h+=sec('i-doc','Exigências específicas do edital', r.exig.map(function(c){return row(c.t,c.status,c.nota,c);}).join(''), '<span class="cnt">'+r.exig.length+' itens</span>');
   if(r.obra && (r.obra.checks||[]).length){
     var det=(r.obra.det||[]).length?('<div class="an-row"><div class="rt" style="width:100%">'+r.obra.det.map(function(d){return esc(d.k)+': <b>'+esc(d.v)+'</b>';}).join(' | ')+'</div></div>'):'';
-    h+=sec('i-chart','Confronto de obra: planilha do edital x planilha do licitante', det+r.obra.checks.map(function(c){return row(c.t,c.status,c.nota);}).join(''), '<span class="cnt">'+r.obra.checks.length+' itens</span>');
+    h+=sec('i-chart','Confronto de obra: planilha do edital x planilha do licitante', det+r.obra.checks.map(function(c){return row(c.t,c.status,c.nota,c);}).join(''), '<span class="cnt">'+r.obra.checks.length+' itens</span>');
   }
-  h+=sec('i-users','Requer conferência da comissão (subjetivo)', hum.map(function(i){return row(i.cat,i.status,i.nota);}).join(''), '<span class="cnt">'+hum.length+' itens</span>');
+  h+=sec('i-users','Requer conferência da comissão (subjetivo)', hum.map(function(i){return row(i.cat,i.status,i.nota,i);}).join(''), '<span class="cnt">'+hum.length+' itens</span>');
   h+=anRenderDiligenciaBox(l);
   h+=anRenderParecerBox(l);
   h+='</div></div>';
@@ -4503,9 +4550,8 @@ function anGerarParecer(){
   var org=(typeof ORG!=='undefined'&&ORG)?ORG:{nome:'Prefeitura Municipal'};
   var TIT=function(t){ return '<h3 style="font-weight:700;text-transform:uppercase;margin:16px 0 8px;font-size:1em">'+t+'</h3>'; };
   var UL=function(arr){ return '<ul style="margin:4px 0 10px 22px;padding:0">'+arr.map(function(x){return '<li style="margin:0 0 5px">'+esc(x)+'</li>';}).join('')+'</ul>'; };
-  // Apontamento com título em negrito e, quando a nota é longa, os pontos separados um a um (leitura fácil para a comissão)
-  var notaDoc=function(nota){ var s=String(nota||''); var parts=s.split('; '); if(parts.length<3||s.length<110) return esc(s); return '<ul style="margin:4px 0 6px 20px;padding:0">'+parts.map(function(x){return '<li style="margin:0 0 4px">'+esc(x.replace(/\.$/,''))+'</li>';}).join('')+'</ul>'; };
-  var ULrich=function(itens){ return '<ul style="margin:4px 0 10px 22px;padding:0">'+itens.map(function(it){ return '<li style="margin:0 0 8px"><b>'+esc(it.t)+':</b> '+notaDoc(it.n)+'</li>'; }).join('')+'</ul>'; };
+  // Cada apontamento vira um parágrafo próprio: título, o que está divergente, onde. Nada de bloco corrido.
+  var ULrich=function(itens){ return itens.map(function(it){ return '<div style="margin:0 0 12px"><p style="margin:0 0 4px"><b>'+esc(it.t)+'</b></p><div style="margin-left:18px">'+anCorpo({nota:it.n,resumo:it.r,evid:it.e},true)+'</div></div>'; }).join(''); };
   var legKeys=[]; var colher=function(txt){ anLegalRefs(txt).forEach(function(k){ if(legKeys.indexOf(k)<0) legKeys.push(k); }); };
   var h='';
   h+='<p style="text-align:center;font-weight:700;margin-bottom:2px">'+esc((org.nome||'').toUpperCase())+'</p>';
@@ -4523,15 +4569,15 @@ function anGerarParecer(){
   h+=TIT('II. ANÁLISE DA DOCUMENTAÇÃO E DA PROPOSTA');
   if(confs.length){ h+='<p style="margin-bottom:4px"><b>Documentos conferidos e considerados regulares:</b></p>'+UL(confs); }
   if(conf.length){ h+='<p style="margin-bottom:4px"><b>Pontos que requerem conferência da Comissão:</b></p>'+UL(conf); }
-  if(pend.length){ h+='<p style="margin-bottom:4px"><b>Pendências apontadas:</b></p>'+ULrich(pend.map(function(i){ colher(i.nota); return {t:i.cat, n:i.nota}; })); }
-  if(r.proposta){ if(r.proposta.status!=='conforme') colher(r.proposta.nota); h+='<p style="margin-bottom:4px"><b>Proposta e planilha orçamentária:</b></p><div style="margin:0 0 10px">'+notaDoc(r.proposta.nota)+'</div>'; }
+  if(pend.length){ h+='<p style="margin-bottom:4px"><b>Pendências apontadas:</b></p>'+ULrich(pend.map(function(i){ colher(i.nota+' '+(i.resumo||'')); return {t:i.cat, n:i.nota, r:i.resumo, e:i.evid}; })); }
+  if(r.proposta){ if(r.proposta.status!=='conforme') colher(r.proposta.nota+' '+(r.proposta.resumo||'')); h+='<p style="margin-bottom:4px"><b>Proposta e planilha orçamentária:</b></p><div style="margin:0 0 10px">'+anCorpo(r.proposta,true)+'</div>'; }
   if(r.exig && r.exig.length){ var xPr=r.exig.filter(function(c){return c.status!=='conforme';});
-    if(xPr.length){ h+='<p style="margin-bottom:4px"><b>Exigências específicas do edital:</b></p>'+ULrich(xPr.map(function(c){ colher(c.nota); return {t:c.t, n:c.nota}; })); }
+    if(xPr.length){ h+='<p style="margin-bottom:4px"><b>Exigências específicas do edital:</b></p>'+ULrich(xPr.map(function(c){ colher(c.nota+' '+(c.resumo||'')); return {t:c.t, n:c.nota, r:c.resumo, e:c.evid}; })); }
     else h+='<p><b>Exigências específicas do edital:</b> atendidas nos pontos verificados.</p>'; }
   if(r.obra && (r.obra.checks||[]).length){ var oOk=r.obra.checks.filter(function(c){return c.status==='conforme';}), oPr=r.obra.checks.filter(function(c){return c.status!=='conforme';});
-    h+='<p style="margin-bottom:4px"><b>Confronto de obra (planilha do edital x proposta):</b></p>';
-    if(oOk.length) h+='<p style="margin-bottom:4px">Regulares: '+esc(oOk.map(function(c){return c.t;}).join('; '))+'.</p>';
-    h+=oPr.length?ULrich(oPr.map(function(c){ colher(c.nota); return {t:c.t, n:c.nota}; })):'<p>Sem apontamentos.</p>'; }
+    h+='<p style="margin:14px 0 4px"><b>Confronto da planilha do edital com a planilha da proposta:</b></p>';
+    if(oOk.length) h+='<p style="margin-bottom:8px">Pontos conferidos e regulares: '+esc(oOk.map(function(c){return c.t;}).join('; '))+'.</p>';
+    h+=oPr.length?ULrich(oPr.map(function(c){ colher(c.nota+' '+(c.resumo||'')); return {t:c.t, n:c.nota, r:c.resumo, e:c.evid}; })):'<p>Sem apontamentos.</p>'; }
   if(legKeys.length){
     h+='<p style="margin:12px 0 4px"><b>Fundamentação legal dos apontamentos:</b></p>';
     legKeys.forEach(function(k){ var L=AN_LEGAL[k]; if(L) h+='<p style="margin:0 0 8px"><b>'+esc(L.t)+'.</b> '+esc(L.e)+'</p>'; });
