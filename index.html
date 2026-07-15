@@ -4197,7 +4197,7 @@ function anParseItens(txt){
   // por isso cada candidata guarda a linha de texto imediatamente anterior (a descrição que sobrou de fora).
   var cands=[];
   var reCab=/ITEM\s+NOME|VLR\.?\s*UNIT|QUANTIDADE\s+VLR|p[áa]gina\s+\d+/i;
-  var linhas=String(txt||'').split('\n').map(function(ln){ return ln.replace(/\s+/g,' ').trim(); }).filter(function(ln){ return ln; });
+  var linhas=String(txt||'').split('\n').map(function(ln){ return anRepCod(ln.replace(/\s+/g,' ').trim()); }).filter(function(ln){ return ln; });
   var tipo=linhas.map(function(ln){
     var m=(ln.length>=10)?re.exec(ln):null;
     if(m){ var nums=[], x; reNum.lastIndex=0; while(x=reNum.exec(m[2])) nums.push({v:x[0], i:x.index}); if(nums.length>=2) return {cand:true, cod:m[1], resto:m[2], nums:nums}; }
@@ -4299,9 +4299,18 @@ function anCronoValores(sec){ var out=[], re=/(?:R\$\s*)(\d{1,3}(?:\.\d{3})*,\d{
 // Especificação do item: palavras do edital que sumiram na descrição da proposta.
 // É juízo (abreviação, sinônimo, ordem), então nunca acusa: manda a comissão conferir.
 function anPalavras(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){ return w.length>=4; }); }
+// Texto picotado pela leitura do PDF ("FORNECIM ENTO E INSTA LA ÇÃ O"): pedaço solto demais para ser palavra.
+// Nesse texto a comparação de especificação não vale nada, e acusaria a empresa por falha da leitura.
+var AN_STOP={de:1,da:1,do:1,e:1,em:1,no:1,na:1,ao:1,os:1,as:1,um:1,uma:1,com:1,por:1,para:1,ou:1,'p/':1,'c/':1};
+function anPicotado(s){
+  var t=String(s||'').trim().split(/\s+/); if(t.length<6) return false;
+  var soltos=t.filter(function(w){ return w.length<=2 && !AN_STOP[w.toLowerCase()]; }).length;
+  return soltos/t.length > 0.25;
+}
 function anEspecDiff(descRef, descLic){
   var A=String(descRef||'').trim(), B=String(descLic||'').trim();
   if(A.length<12 || B.length<12) return null;
+  if(anPicotado(A) || anPicotado(B)) return null;
   // Descrições de tamanho muito diferente = uma das leituras veio truncada (o PDF corta e a planilha traz inteira).
   // Comparar as duas acusaria a empresa por falha de leitura do parser, e não por divergência real. Medido nas
   // fixtures reais: PDF x Excel dos mesmos 638 medicamentos gerava apontamento falso sem esta trava.
@@ -4318,34 +4327,72 @@ function anNormUn(u){
   var syn={UND:'UN',UNID:'UN',UNIDADE:'UN',PECA:'PC',CONJ:'CJ',CONJUNTO:'CJ',GLB:'VB',GL:'VB',GLOBAL:'VB',VERBA:'VB',SERV:'VB',TON:'T',TONELADA:'T',HORA:'H',HR:'H',METRO:'M',LITRO:'L',JOGO:'JG',PAR:'PAR',SACO:'SC',CAIXA:'CX'};
   return syn[s]||s;
 }
-function anNormDesc(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().slice(0,40); }
+// Conserta o código do item quando o PDF picotou a numeração ("1 .1 .0.1 ." -> "1.1.0.1.").
+// Mexe SÓ no começo da linha, onde mora o código: o resto do texto fica intacto.
+function anRepCod(ln){
+  var s=String(ln||'');
+  var m=/^(\d[\d\s.]{0,18}?\.)(\s|$)/.exec(s);
+  if(!m) return s;
+  var cod=m[1].replace(/\s+/g,'');
+  if(!/^\d+(\.\d+)*\.?$/.test(cod)) return s;
+  return cod+s.slice(m[1].length);
+}
+// Comparação de descrição SEM espaço nenhum: o PDF quebra a palavra ("FORNECIM ENTO") e o espaço vira ruído.
+// Comparar sem espaço faz "FORNECIM ENTO" casar com "FORNECIMENTO" e evita acusar a empresa de não ter cotado
+// um item que ela cotou, só porque a leitura picotou a palavra.
+function anNormDesc(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'').slice(0,40); }
+function anNormCod(s){ return String(s||'').replace(/\s+/g,''); }
 // A planilha é UM documento, não a pilha toda. Colar edital + memorial + certidões num texto só e mandar o
 // parser procurar item faz cláusula ("5.3.3.1 a sanção de impedimento"), CNPJ e endereço virarem item, e ainda
 // estraga a detecção do layout de colunas da planilha de verdade. Aqui cada documento é lido sozinho e vence o
 // que se comporta como planilha: layout de colunas identificado na maioria das linhas e mais itens.
+// Documento cuja leitura saiu picotada ("SINA P I", "M 2", "1 03689"): o código até dá para casar tirando o
+// espaço, mas os NÚMEROS não. "M 2" vira unidade M mais o número 2; o código SINAPI vira quantidade. Confrontar
+// valor em cima disso produz "conta que não fecha" e "inexequível" falsos contra quem cotou certo.
+// Assinatura da leitura picotada: LETRA SOLTA colada na palavra seguinte ("B DI", "SINA P I", "M 2", "P LA CA").
+// Planilha boa tem token curto legítimo (UN, CP, M2, código, número), mas quase nunca letra sozinha antes de
+// outra palavra. Limiar calibrado medindo os PDFs reais (medicamentos e obra ficam perto de zero; a proposta
+// picotada da MSH fica uma ordem de grandeza acima).
+function anPicoRatio(txt){
+  var s=String(txt||''); if(s.length<400) return 0;
+  var m=s.match(/\b[A-ZÀ-Ú]\s[A-ZÀ-Ú0-9]/g);
+  return m ? (m.length*1000/s.length) : 0;
+}
+// Limiar 18 medido nos documentos REAIS: orçamento analítico da prefeitura 7,3; planilha de medicamentos 4,3;
+// planilha de obra 1,3; contrato social OCRizado 10,7; a proposta picotada da MSH 43,3. Fica no meio, com folga.
+function anTextoPicotado(txt){ return anPicoRatio(txt) > 18; }
 function anMelhorPlanilha(docs){
-  var best=null, cortado=null;
+  var best=null, cortado=null, picotado=null;
   (docs||[]).forEach(function(d){
     var its=anParseItens(d.texto||'');
     if(its.length<3) return;
     var auto=its.filter(function(i){ return i.layout==='auto'; }).length;
     if(auto < Math.max(2, Math.ceil(its.length*0.5))) return;
+    if(anTextoPicotado(d.texto)){ picotado=picotado||(d.nome||'documento sem nome'); return; }
     // Documento gravado com o texto cortado (versões antigas cortavam para caber na nuvem) não serve de régua:
     // o que foi cortado vira "item que a empresa não cotou", acusando quem cotou.
     if(d.textoCortado){ cortado=cortado||(d.nome||'documento sem nome'); return; }
     if(!best || auto>best.auto) best={itens:its, auto:auto, nome:(d.nome||'documento sem nome')};
   });
   if(!best && cortado) return {truncado:cortado};
+  if(!best && picotado) return {picotado:picotado};
   return best;
 }
 function anAnaliseObra(p,l){
-  var refTxt=(p.docsCertame||[]).map(function(d){return d.texto||'';}).join('\n');
-  var licTxt=(l.docs||[]).map(function(d){return d.texto||'';}).join('\n');
+  // BDI, encargos e cronograma saem só de documento com leitura BOA. Varrer a pilha picotada faz o sistema pescar
+  // "lucro" de uma declaração e um "3%" de qualquer certidão, e depois acusar o BDI de não fechar (aconteceu, real).
+  var bom=function(d){ return d && d.texto && !d.textoCortado && !anTextoPicotado(d.texto); };
+  var refTxt=(p.docsCertame||[]).filter(bom).map(function(d){return d.texto||'';}).join('\n');
+  var licTxt=(l.docs||[]).filter(bom).map(function(d){return d.texto||'';}).join('\n');
   var checks=[], det=[];
   var refPl=anMelhorPlanilha(p.docsCertame||[]), licPl=anMelhorPlanilha(l.docs||[]);
   var trunc=(refPl&&refPl.truncado)||(licPl&&licPl.truncado);
-  if(refPl&&refPl.truncado) refPl=null;
-  if(licPl&&licPl.truncado) licPl=null;
+  var pico=(refPl&&refPl.picotado)||(licPl&&licPl.picotado);
+  if(refPl&&(refPl.truncado||refPl.picotado)) refPl=null;
+  if(licPl&&(licPl.truncado||licPl.picotado)) licPl=null;
+  if(pico) checks.push({t:'Leitura da planilha saiu picotada', status:'conferir',
+    nota:'A leitura do documento "'+pico+'" saiu com as palavras e os números quebrados. O confronto item a item não foi feito com ele. Reenvie o arquivo para o sistema ler de novo.',
+    resumo:'O PDF deste documento foi lido com as palavras partidas ("SINAPI" saiu como "SINA P I", "M2" como "M 2"). Assim o preço unitário, a quantidade e a unidade não podem ser lidos com segurança, e confrontar em cima disso apontaria conta errada e preço inexequível contra uma empresa que pode ter cotado tudo certo. Por isso o sistema não confrontou os valores deste documento. Reenvie o arquivo na tela do licitante: a leitura foi corrigida e agora monta a linha certa.', evid:null});
   var refIt=refPl?refPl.itens:[], licIt=licPl?licPl.itens:[];
   if(refPl) det.push({k:'Planilha do edital lida em', v:refPl.nome});
   if(licPl) det.push({k:'Planilha da proposta lida em', v:licPl.nome});
@@ -4362,17 +4409,18 @@ function anAnaliseObra(p,l){
   if(!refOk && !licOk){ push('Planilha orçamentária','conferir','Não foi possível ler itens de planilha nem no edital nem na proposta. Se o certame envolve planilha, suba a planilha da licitação (aba Certame) e a do licitante em PDF legível.'); }
   else if(!refOk){ push('Planilha de referência do edital','conferir','A proposta tem '+licIt.length+' itens lidos, mas a planilha de referência do edital não foi localizada nos documentos da licitação. Suba a planilha orçamentária do edital para o confronto item a item.',
     'Sem planilha do edital não há confronto item a item: o sistema só encontrou texto corrido do edital (cláusulas, numeração de itens do texto), e daí não se extrai quantidade nem preço de referência. Suba a planilha orçamentária do edital na aba Certame. Até lá, o confronto da planilha desta proposta não foi feito, e nada aqui pesa contra a empresa.'); }
+  else if(!licOk && (pico||trunc)){ /* a causa é a leitura do sistema, já apontada acima: não pesar contra a empresa */ }
   else if(!licOk){ push('Planilha da proposta','atencao','O edital tem '+refIt.length+' itens de planilha, mas a planilha do licitante não foi localizada ou não está legível. Solicitar a planilha ou conferir manualmente.',
     'O edital tem planilha com '+refIt.length+' itens e o sistema não conseguiu ler a planilha desta empresa em formato de colunas (quantidade, preço unitário e total). Pode ser que a empresa não a tenha enviado, ou que o arquivo esteja ilegível. Conferir o envelope da proposta antes de tratar como falta.'); }
   else {
     var byCod={}, byDesc={};
-    licIt.forEach(function(it){ byCod[it.cod]=byCod[it.cod]||it; byDesc[anNormDesc(it.desc)]=byDesc[anNormDesc(it.desc)]||it; });
+    licIt.forEach(function(it){ var k=anNormCod(it.cod); byCod[k]=byCod[k]||it; byDesc[anNormDesc(it.desc)]=byDesc[anNormDesc(it.desc)]||it; });
     var faltando=[], qtdDiv=[], sobre=[], baixo=[], conta=[], unDiv=[], espec=[];
     refIt.forEach(function(r){
-      var c=byCod[r.cod]||byDesc[anNormDesc(r.desc)];
+      var c=byCod[anNormCod(r.cod)]||byDesc[anNormDesc(r.desc)];
       if(!c){ faltando.push(r.cod+' '+r.desc.slice(0,40)); return; }
       // especificação: item casado pelo código, mas descrito de outro jeito na proposta
-      if(byCod[r.cod]){ var d=anEspecDiff(r.desc, c.desc); if(d) espec.push(r.cod+' (o edital especifica "'+r.desc.slice(0,45)+'" e a proposta não repete: '+d+')'); }
+      if(byCod[anNormCod(r.cod)]){ var d=anEspecDiff(r.desc, c.desc); if(d) espec.push(r.cod+' (o edital especifica "'+r.desc.slice(0,45)+'" e a proposta não repete: '+d+')'); }
       if(r.qtd!=null && c.qtd!=null && Math.abs(r.qtd-c.qtd)>0.011) qtdDiv.push(r.cod+' ('+r.qtd+' no edital, '+c.qtd+' na proposta)');
       // coluna da unidade: preço por M2 não é preço por M3, e o parser já lia a unidade sem nunca compará-la
       if(r.un && c.un && anNormUn(r.un)!==anNormUn(c.un)) unDiv.push(r.cod+' '+r.desc.slice(0,30)+' ('+r.un+' no edital, '+c.un+' na proposta)');
@@ -4381,8 +4429,8 @@ function anAnaliseObra(p,l){
     });
     // caminho inverso: item que a empresa cotou e o edital não pede (serviço acrescentado, taxa criada, linha inflada)
     var refByCod={}, refByDesc={};
-    refIt.forEach(function(r){ refByCod[r.cod]=1; refByDesc[anNormDesc(r.desc)]=1; });
-    var extraIt=licIt.filter(function(c){ return !refByCod[c.cod] && !refByDesc[anNormDesc(c.desc)]; });
+    refIt.forEach(function(r){ refByCod[anNormCod(r.cod)]=1; refByDesc[anNormDesc(r.desc)]=1; });
+    var extraIt=licIt.filter(function(c){ return !refByCod[anNormCod(c.cod)] && !refByDesc[anNormDesc(c.desc)]; });
     var extraSoma=extraIt.reduce(function(a,b){ return a+(b.total||0); },0);
     var extra=extraIt.map(function(c){ return c.cod+' '+c.desc.slice(0,40)+' ('+money(c.total)+')'; });
     // só aponta erro de conta quando as colunas foram identificadas com segurança (layout auto); no chute, não se acusa
