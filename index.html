@@ -316,6 +316,10 @@ td .modd{font-size:12px;color:var(--slate)}
 .an-row .rn{flex:none;width:200px;font-weight:700;color:var(--ink);font-size:13px;padding-top:3px;line-height:1.4}
 .an-row .rb{flex:none;width:118px;padding-top:1px}
 .an-row .rt{flex:1;font-size:12.8px;color:#3d4c63;line-height:1.6}
+.an-row .rt ul.nlist{margin:2px 0 4px 17px;padding:0}
+.an-row .rt ul.nlist li{margin:0 0 5px}
+.an-row .rt .leg{display:flex;gap:8px;align-items:flex-start;margin-top:9px;padding:9px 12px;background:#F8F4E9;border-left:3.5px solid #C9A961;border-radius:8px;font-size:12.3px;color:#243b55;line-height:1.6}
+.an-row .rt .leg b{color:#0A2342}
 .an-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:800;letter-spacing:.2px;white-space:nowrap}
 .an-chip svg{width:12px;height:12px;flex:none}
 .lic-list{display:flex;flex-direction:column;gap:10px}
@@ -3754,6 +3758,11 @@ function anCarregarSupabase(){ if(typeof SB==='undefined'||!SB||typeof CURRENT_U
     // resultado da análise, parecer e relatório gerados localmente não podem sumir se a nuvem estiver defasada
     if(lp.relatorioHtml && !sp.relatorioHtml) sp.relatorioHtml=lp.relatorioHtml;
     if(lp.recurso && !sp.recurso) sp.recurso=lp.recurso;
+    // documentos do certame (a régua) mais completos localmente também vencem a cópia defasada da nuvem
+    var tlc=0,tsc=0; try{tlc=JSON.stringify(lp.docsCertame||[]).length; tsc=JSON.stringify(sp.docsCertame||[]).length;}catch(e){}
+    if(tlc>tsc){ sp.docsCertame=lp.docsCertame; sp.textoCertame=lp.textoCertame; sp.valoresRef=lp.valoresRef; }
+    // licitante cadastrado localmente que ainda não subiu para a nuvem não pode sumir
+    (lp.licitantes||[]).forEach(function(ll){ if(!ll||!ll.id) return; var ex=(sp.licitantes||[]).some(function(x){return x&&x.id===ll.id;}); if(!ex){ sp.licitantes=(sp.licitantes||[]); sp.licitantes.push(ll); } });
     (sp.licitantes||[]).forEach(function(sl){ var ll=(lp.licitantes||[]).filter(function(x){return x&&x.id===sl.id;})[0]; if(!ll) return;
       if(ll.resultado && !sl.resultado){ sl.resultado=ll.resultado; if(ll.statusSugerido&&!sl.statusSugerido) sl.statusSugerido=ll.statusSugerido; }
       if(ll.parecerHtml && !sl.parecerHtml){ sl.parecerHtml=ll.parecerHtml; if(ll.decisao&&!sl.decisao) sl.decisao=ll.decisao; if(ll.responsavel&&!sl.responsavel) sl.responsavel=ll.responsavel; if(ll.situacao&&!sl.situacao){ sl.situacao=ll.situacao; sl.situacaoTxt=ll.situacaoTxt; } }
@@ -3881,8 +3890,19 @@ function anGerarRelatorio(){ var p=anCur(); if(!p) return; var org=(typeof ORG!=
   h+='<p><b>Objeto:</b> '+esc(p.objeto||'-')+' &nbsp;&nbsp; <b>Valor estimado:</b> '+(p.valorEstimado?money(p.valorEstimado):'não informado')+'</p>';
   h+='<p><b>Data-base da sessão:</b> '+esc(p.dataBase||'-')+'</p>';
   h+='<p style="margin-top:10px"><b>Licitantes e situação:</b></p><ol>';
-  ls.forEach(function(l){ var res=l.resultado; var pend=res?res.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';}):[]; h+='<li style="margin-bottom:6px"><b>'+esc(l.razao||'(sem nome)')+'</b> (CNPJ '+esc(l.cnpj||'-')+')'+(l.meepp==='Sim'?', ME/EPP':'')+', classificação '+esc(l.ordem||'-')+': <b>'+esc(l.situacaoTxt||'não analisado')+'</b>.'; if(pend.length) h+=' Pendências: '+esc(pend.map(function(i){return i.cat+' ('+i.nota+')';}).join('; '))+'.'; if(l.diligencia&&l.diligencia.desc) h+=' Diligência (art. 64): '+esc(l.diligencia.desc)+' ['+esc(l.diligencia.situacao||'Pendente')+'].'; if(res&&res.proposta) h+=' Proposta: '+esc(res.proposta.nota); h+='</li>'; });
+  var relLeg=[]; var relColher=function(txt){ if(typeof anLegalRefs!=='function') return; anLegalRefs(txt).forEach(function(k){ if(relLeg.indexOf(k)<0) relLeg.push(k); }); };
+  var relNota=function(nota){ var s=String(nota||''); var parts=s.split('; '); if(parts.length<3||s.length<110) return esc(s); return '<ul style="margin:3px 0 4px 18px;padding:0">'+parts.map(function(x){return '<li style="margin:0 0 3px">'+esc(x.replace(/\.$/,''))+'</li>';}).join('')+'</ul>'; };
+  ls.forEach(function(l){ var res=l.resultado; var pend=res?res.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';}):[]; h+='<li style="margin-bottom:10px"><b>'+esc(l.razao||'(sem nome)')+'</b> (CNPJ '+esc(l.cnpj||'-')+')'+(l.meepp==='Sim'?', ME/EPP':'')+', classificação '+esc(l.ordem||'-')+': <b>'+esc(l.situacaoTxt||'não analisado')+'</b>.';
+    if(pend.length){ h+='<br><span style="font-weight:600">Pendências:</span><ul style="margin:3px 0 4px 18px;padding:0">'+pend.map(function(i){ relColher(i.nota); return '<li style="margin:0 0 4px"><b>'+esc(i.cat)+':</b> '+relNota(i.nota)+'</li>'; }).join('')+'</ul>'; }
+    if(l.diligencia&&l.diligencia.desc){ relColher('diligência art. 64'); h+='<span style="font-weight:600">Diligência (art. 64):</span> '+esc(l.diligencia.desc)+' ['+esc(l.diligencia.situacao||'Pendente')+'].<br>'; }
+    if(res&&res.proposta){ if(res.proposta.status!=='conforme') relColher(res.proposta.nota); h+='<span style="font-weight:600">Proposta:</span> '+relNota(res.proposta.nota); }
+    h+='</li>'; });
   h+='</ol>';
+  if(relLeg.length){
+    h+='<p style="margin:12px 0 4px"><b>Fundamentação legal dos apontamentos:</b></p>';
+    relLeg.forEach(function(k){ var L=AN_LEGAL[k]; if(L) h+='<p style="margin:0 0 8px"><b>'+esc(L.t)+'.</b> '+esc(L.e)+'</p>'; });
+    h+='<p style="margin:0 0 10px">Os dispositivos acima fundamentam os apontamentos deste relatório. O enquadramento definitivo de cada fato e as decisões do certame competem à Comissão de Contratação e à autoridade competente.</p>';
+  }
   var v=anVencedor(p); h+='<p><b>Resultado:</b> '+(v?('licitante habilitado e vencedor: '+esc(v.razao)+(v.valorProposta?', valor global '+money(v.valorProposta):'')+'.'):'sem licitante habilitado até o momento.')+'</p>';
   if(p.recurso&&p.recurso.houve==='Sim') h+='<p><b>Fase recursal:</b> recurso interposto por '+esc(p.recurso.quem||'-')+', resultado '+esc(p.recurso.resultado||'pendente')+'. '+esc(p.recurso.decisao||'')+'</p>'; else h+='<p><b>Fase recursal:</b> sem recurso registrado.</p>';
   var vME=v&&v.meepp==='Sim'&&v.resultado&&(v.resultado.itens||[]).some(function(i){return i.status==='atencao'&&/LC 123/.test(i.nota||'');});
@@ -4109,15 +4129,22 @@ function anParseItens(txt){
   // vírgula; 3) decimal com ponto (2.52 / 8.9242); 4) inteiro.
   var reNum=/\d{1,3}(?:\.\d{3})+(?:,\d{1,4})?(?!\d)|\d+,\d{1,4}|\d+\.\d+|\d+/g;
   var UNRE=new RegExp('\\b('+AN_UNIDS+')\\.?\\s*$','i');
-  // 1ª passada: separa as linhas candidatas e seus números
+  // 1ª passada: separa as linhas candidatas e seus números.
+  // PDF costuma QUEBRAR a descrição em linhas próprias e deixar o item numa linha "15 30000 R$ 0,51 R$ 15.381,00";
+  // por isso cada candidata guarda a linha de texto imediatamente anterior (a descrição que sobrou de fora).
   var cands=[];
-  String(txt||'').split('\n').forEach(function(ln){
-    ln=ln.replace(/\s+/g,' ').trim(); if(ln.length<10) return;
-    var m=re.exec(ln); if(!m) return;
-    var resto=m[2], nums=[], x; reNum.lastIndex=0;
-    while(x=reNum.exec(resto)) nums.push({v:x[0], i:x.index});
-    if(nums.length<2) return;
-    cands.push({cod:m[1], resto:resto, nums:nums});
+  var reCab=/ITEM\s+NOME|VLR\.?\s*UNIT|QUANTIDADE\s+VLR|p[áa]gina\s+\d+/i;
+  var linhas=String(txt||'').split('\n').map(function(ln){ return ln.replace(/\s+/g,' ').trim(); }).filter(function(ln){ return ln; });
+  var tipo=linhas.map(function(ln){
+    var m=(ln.length>=10)?re.exec(ln):null;
+    if(m){ var nums=[], x; reNum.lastIndex=0; while(x=reNum.exec(m[2])) nums.push({v:x[0], i:x.index}); if(nums.length>=2) return {cand:true, cod:m[1], resto:m[2], nums:nums}; }
+    return {cand:false, ctx:(ln.length>=6 && !reCab.test(ln))?ln:null};
+  });
+  tipo.forEach(function(t,i){
+    if(!t.cand) return;
+    var prev=(i>0 && !tipo[i-1].cand)?tipo[i-1].ctx:null;      // descrição que sobrou na linha de cima
+    var next=(i+1<tipo.length && !tipo[i+1].cand)?tipo[i+1].ctx:null; // ou na linha de baixo (PDF alterna)
+    cands.push({cod:t.cod, resto:t.resto, nums:t.nums, prev:prev||'', next:next||''});
   });
   // DESCOBRE O LAYOUT DA PLANILHA em vez de chutar "os 3 últimos números".
   // Planilha de obra costuma ter 3 colunas de valor (VU sem BDI, VU com BDI, Total): ali o antepenúltimo número
@@ -4146,6 +4173,14 @@ function anParseItens(txt){
     else { var fim=c.nums.slice(-3); total=anNumIt(fim[fim.length-1].v); unit=anNumIt(fim[fim.length-2].v); qtd=fim.length>=3?anNumIt(fim[0].v):null; corte=fim[0].i; }
     var desc=c.resto.slice(0,corte).trim();
     var un=null; var mu=UNRE.exec(desc); if(mu){ un=mu[1].toUpperCase(); desc=desc.slice(0,mu.index).trim(); }
+    // descrição ficou noutra linha (PDF com texto quebrado): resgata a linha vizinha como descrição, e a unidade dela se faltar
+    if(!desc || desc.length<3){
+      var viz=c.prev||c.next;
+      if(viz){
+        if(!un){ var mu2=UNRE.exec(viz); if(mu2){ un=mu2[1].toUpperCase(); viz=viz.slice(0,mu2.index).trim(); } }
+        desc=(viz+' '+desc).trim();
+      }
+    }
     if(!desc || desc.length<3) return;
     if(unit<0 || total<0) return;
     // item com preço ZERO (não cotado) NÃO pode ser descartado em silêncio: entra e é apontado no confronto
@@ -4153,6 +4188,9 @@ function anParseItens(txt){
     var kk=c.cod+'|'+total; if(seen[kk]) return; seen[kk]=1;
     out.push({cod:c.cod, desc:desc.slice(0,120), un:un, qtd:(qtd>0?qtd:null), unit:unit, total:total, layout:layout});
   });
+  // Documento com layout identificado e muitos itens: linha que NÃO seguiu o layout e ficou sem quantidade é
+  // fragmento de descrição com números (ex.: "760 MMHG"), não item; manter geraria apontamento falso (regra E13).
+  if(OQ && out.length>=20) out=out.filter(function(it){ return it.qtd>0; });
   // remove duplicatas de cabeçalho repetido (mesmo cod+total)
   var seen={}, res=[];
   out.forEach(function(it){ var k=it.cod+'|'+it.total; if(seen[k]) return; seen[k]=1; res.push(it); });
@@ -4178,11 +4216,11 @@ function anAnaliseObra(p,l){
       var c=byCod[r.cod]||byDesc[anNormDesc(r.desc)];
       if(!c){ faltando.push(r.cod+' '+r.desc.slice(0,40)); return; }
       if(r.qtd!=null && c.qtd!=null && Math.abs(r.qtd-c.qtd)>0.011) qtdDiv.push(r.cod+' ('+r.qtd+' no edital, '+c.qtd+' na proposta)');
-      if(r.unit>0 && c.unit>r.unit*1.0001) sobre.push(r.cod+' (unitário '+money(c.unit)+' acima da referência '+money(r.unit)+')');
+      if(r.unit>0 && c.unit>r.unit*1.0001 && (c.unit-r.unit)>0.0051) sobre.push(r.cod+' (unitário '+money(c.unit)+' acima da referência '+money(r.unit)+')'); // meio centavo de folga: PDF exibe unitário arredondado a 2 casas
       if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(r.cod+' (unitário '+money(c.unit)+' abaixo de 50% da referência '+money(r.unit)+')');
     });
     // só aponta erro de conta quando as colunas foram identificadas com segurança (layout auto); no chute, não se acusa
-    licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
+    licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001, c.qtd*0.0051)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
     var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod+' '+c.desc.slice(0,35); });
     if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado ou sem preço: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão ou recusa de cotar.');
     var semPrecoRef=refIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod; });
@@ -4347,6 +4385,40 @@ function anOnUploadCertame(input){ var files=input.files; if(!files||!files.leng
 function anDelDocCert(i){ var p=anCur(); if(!p||!p.docsCertame) return; var nm=(p.docsCertame[i]&&p.docsCertame[i].nome)||'este arquivo'; if(!confirm('Remover o documento da licitação "'+nm+'"? Ele é a régua da comparação.')) return; p.docsCertame.splice(i,1); p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); }
 function anStatusGeral(itens,prop,obra,exig){ if(prop&&prop.status==='atencao'&&/ACIMA do estimado|INEXEQU/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); var extra=[].concat((obra&&obra.checks)||[],exig||[]); var xAt=extra.some(function(c){return c.status==='atencao';}); var xCf=extra.some(function(c){return c.status==='conferir';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')||xAt) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})||xCf) return 'ressalvas'; return 'habilitado'; }
 function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; var exig=anExigenciasEdital(p,l); l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop,obra,exig); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
+// ---------- Base legal dos apontamentos (artigos ja conferidos em fonte oficial; o texto explica, a comissao decide) ----------
+var AN_LEGAL={
+  art59_ii:{t:'Art. 59, inciso II, da Lei 14.133/2021', e:'Manda desclassificar a proposta que não obedece às especificações técnicas do edital. Item da planilha que falta, ou quantitativo diferente do previsto, significa proposta que não cobre exatamente o objeto licitado. Se a comissão entender que é falha formal que não altera a substância da proposta, pode esclarecer o ponto em diligência (art. 64) antes de desclassificar.'},
+  art59_iii:{t:'Art. 59, inciso III, da Lei 14.133/2021', e:'Manda desclassificar a proposta que permanece acima do orçamento estimado pela Administração ou que se mostra inexequível. Se o valor global ficou acima do estimado, a comissão verifica se houve negociação e se o preço final coube no orçamento; permanecendo acima, a proposta é desclassificada e convoca-se o próximo classificado.'},
+  art59_p23:{t:'Art. 59, §§ 2º e 3º, da Lei 14.133/2021', e:'Preço baixo demais NÃO desclassifica automaticamente: a lei determina que a comissão dê ao licitante a oportunidade de comprovar, em diligência, que consegue executar pelo valor ofertado (composição de custos, cotações, contratos semelhantes já executados). Só depois de o licitante não demonstrar a exequibilidade é que a proposta pode ser desclassificada.'},
+  art59_p4:{t:'Art. 59, § 4º, da Lei 14.133/2021 (obras e serviços de engenharia)', e:'Em obra e serviço de engenharia, presume-se inexequível a proposta com valor global inferior a 75% do valor orçado pela Administração. É presunção relativa: o licitante ainda pode demonstrar em diligência que o preço se sustenta.'},
+  art59_p5:{t:'Art. 59, § 5º, da Lei 14.133/2021 (obras e serviços de engenharia)', e:'Se a proposta vencedora ficar abaixo de 85% do valor orçado, a lei exige garantia adicional do vencedor, equivalente à diferença entre o valor orçado e o valor da proposta, como condição para a contratação.'},
+  art64:{t:'Art. 64, caput e § 1º, da Lei 14.133/2021 (diligência e saneamento)', e:'Depois de entregues os documentos, não se admite juntar documento novo, SALVO em diligência para complementar informação sobre documento já apresentado ou atualizar certidão que venceu após o recebimento das propostas. O § 1º autoriza a comissão a sanar erros e falhas que não alterem a substância dos documentos. Na prática: falha sanável pede diligência fundamentada e registrada, antes de qualquer inabilitação.'},
+  art69:{t:'Art. 69, caput e § 1º, da Lei 14.133/2021 (habilitação econômico-financeira)', e:'A capacidade financeira do licitante é aferida de forma OBJETIVA, pelos documentos e índices que o edital previu (balanço patrimonial dos exercícios exigidos, índices de liquidez e solvência). Exercício faltante ou índice abaixo do mínimo do edital é descumprimento de requisito objetivo de habilitação: a comissão confere o cálculo apresentado e, sendo o defeito sanável (por exemplo, folha faltante do balanço), faz diligência (art. 64) antes de decidir pela inabilitação.'},
+  art67:{t:'Art. 67 da Lei 14.133/2021 (qualificação técnica)', e:'Os atestados devem comprovar experiência COMPATÍVEL com o objeto licitado, nas parcelas e quantitativos que o edital definiu como relevantes. A compatibilidade é juízo da comissão: o sistema apenas compara palavras do objeto com o texto do atestado, sem valor decisório. Avalie se a experiência demonstrada equivale, em características e porte, ao que será contratado.'},
+  art58:{t:'Art. 58 da Lei 14.133/2021 (garantia de proposta)', e:'Quando o edital exige garantia de proposta como condição de participação, a ausência do comprovante impede o prosseguimento do licitante. Antes de apontar como descumprida, confirme se o edital realmente a exigiu e se o comprovante não veio dentro de outro arquivo.'},
+  lc123:{t:'Arts. 42 e 43, § 1º, da LC 123/2006 (ME/EPP)', e:'Microempresa e empresa de pequeno porte participam da licitação mesmo com pendência FISCAL ou TRABALHISTA: a regularidade só é exigida para a ASSINATURA do contrato, com prazo de 5 dias úteis, prorrogáveis por igual período, contados da declaração de vencedor. Portanto, restrição fiscal de ME/EPP não gera inabilitação na sessão; gera condição para contratar.'},
+  validade:{t:'Validade de certidões (art. 64, inciso II, da Lei 14.133/2021)', e:'Certidão que venceu DEPOIS do recebimento das propostas pode ser atualizada em diligência, sem inabilitar. Certidão que já estava vencida NA DATA do recebimento é pendência de habilitação. Sendo o licitante ME/EPP e a pendência fiscal ou trabalhista, aplica-se a regra própria da LC 123/2006 (regularização após a declaração de vencedor).'}
+};
+function anLegalRefs(txt){ var s=String(txt||''); var out=[]; var add=function(k){ if(out.indexOf(k)<0) out.push(k); };
+  if(/art\.? ?59, ?(inciso )?II\b/i.test(s)) add('art59_ii');
+  if(/art\.? ?59, ?(inciso )?III\b/i.test(s)||/ACIMA do estimado/i.test(s)) add('art59_iii');
+  if(/§§ ?2º e 3º/i.test(s)||/exequibilidade/i.test(s)) add('art59_p23');
+  if(/§ ?4º/i.test(s)||/inexequível/i.test(s)&&/75%/.test(s)) add('art59_p4');
+  if(/§ ?5º/i.test(s)||/garantia adicional/i.test(s)) add('art59_p5');
+  if(/art\.? ?64/i.test(s)||/dilig[eê]ncia/i.test(s)) add('art64');
+  if(/art\.? ?69/i.test(s)||/balanço|exerc[ií]cio|liquidez|solv[eê]ncia/i.test(s)) add('art69');
+  if(/art\.? ?67/i.test(s)||/atestado/i.test(s)) add('art67');
+  if(/art\.? ?58\b/i.test(s)) add('art58');
+  if(/LC ?123/i.test(s)||/ME\/EPP/i.test(s)) add('lc123');
+  if(/vencid/i.test(s)||/validade/i.test(s)) add('validade');
+  return out;
+}
+// Nota longa vira lista com respiro (só formatação; o texto do apontamento não muda)
+function anNotaFmt(nota){ var s=String(nota||''); var parts=s.split('; ');
+  if(parts.length<3 || s.length<110) return esc(s);
+  return '<ul class="nlist">'+parts.map(function(x){ return '<li>'+esc(x.replace(/\.$/,''))+'</li>'; }).join('')+'</ul>';
+}
+function anLegalHtml(refs){ if(!refs||!refs.length) return ''; return refs.map(function(k){ var L=AN_LEGAL[k]; if(!L) return ''; return '<div class="leg"><svg class="ic" style="width:13px;height:13px;flex:none;margin-top:2px;stroke:#0A2342"><use href="#i-scale"/></svg><span><b>'+esc(L.t)+'.</b> '+esc(L.e)+'</span></div>'; }).join(''); }
 function anTag(st){ var map={conforme:['Conforme','#0A2342','#fff','i-check'],atencao:['Atenção','#E8A020','#0A2342','i-alert'],ausente:['Ausente','#475569','#fff','i-folder'],conferir:['Conferir','#ffffff','#0A2342','i-search']}; var m=map[st]||['-','#e5e7eb','#111','i-help']; var extra=st==='conferir'?';border:1.5px solid #0A2342':''; return '<span class="an-chip" style="background:'+m[1]+';color:'+m[2]+extra+'"><svg style="stroke:'+m[2]+'"><use href="#'+m[3]+'"/></svg>'+m[0]+'</span>'; }
 function anRenderConferencia(root){
   var p=anCur(), l=anLic(); if(!l){ anRenderProc(root); return; }
@@ -4376,7 +4448,7 @@ function anRenderResultado(l){
   var cnt={conforme:0,atencao:0,conferir:0,ausente:0}; todos.forEach(function(s){ if(cnt[s]!==undefined) cnt[s]++; else if(s==='presente') cnt.conferir++; });
   var tile=function(ico,bg,stroke,n,lab){ return '<div class="an-tile"><div class="ticon" style="background:'+bg+'"><svg style="stroke:'+stroke+'"><use href="#'+ico+'"/></svg></div><div><div class="n">'+n+'</div><div class="l">'+lab+'</div></div></div>'; };
   var sec=function(ico,titulo,rows,extra){ if(!rows) return ''; return '<div class="an-sec"><div class="sh"><svg><use href="#'+ico+'"/></svg> '+titulo+(extra||'')+'</div>'+rows+'</div>'; };
-  var row=function(nome,st,nota){ return '<div class="an-row"><div class="rn">'+esc(nome)+'</div><div class="rb">'+anTag(st)+'</div><div class="rt">'+esc(nota)+'</div></div>'; };
+  var row=function(nome,st,nota){ var leg=(st!=='conforme')?anLegalHtml(anLegalRefs(nota)):''; return '<div class="an-row"><div class="rn">'+esc(nome)+'</div><div class="rb">'+anTag(st)+'</div><div class="rt">'+anNotaFmt(nota)+leg+'</div></div>'; };
   var h='<div class="panel"><div class="ph"><h3>Resultado da conferência</h3></div><div style="padding:16px 22px">';
   h+='<div class="an-hero"><div class="hicon"><svg><use href="#'+(stIco[l.statusSugerido]||'i-shield')+'"/></svg></div><div><div class="ttl">Situação sugerida pelo sistema</div><div class="big">'+esc(stg[l.statusSugerido]||'-')+'</div><div class="sub">'+esc(l.razao||'')+(l.cnpj?(' | CNPJ '+l.cnpj):'')+' | conferido em '+esc(r.quando||'')+'. O sistema aponta; a decisão final e a assinatura são sempre da comissão.</div></div></div>';
   h+='<div class="an-tiles">'
@@ -4427,10 +4499,14 @@ function anGerarParecer(){
   var r=l.resultado||{itens:[],proposta:null};
   var confs=r.itens.filter(function(i){return i.status==='conforme';}).map(function(i){return i.cat;});
   var conf=r.itens.filter(function(i){return i.status==='conferir'||i.modo==='humano';}).map(function(i){return i.cat;});
-  var pend=r.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';}).map(function(i){return i.cat+' ('+i.nota+')';});
+  var pend=r.itens.filter(function(i){return i.status==='ausente'||i.status==='atencao';});
   var org=(typeof ORG!=='undefined'&&ORG)?ORG:{nome:'Prefeitura Municipal'};
   var TIT=function(t){ return '<h3 style="font-weight:700;text-transform:uppercase;margin:16px 0 8px;font-size:1em">'+t+'</h3>'; };
   var UL=function(arr){ return '<ul style="margin:4px 0 10px 22px;padding:0">'+arr.map(function(x){return '<li style="margin:0 0 5px">'+esc(x)+'</li>';}).join('')+'</ul>'; };
+  // Apontamento com título em negrito e, quando a nota é longa, os pontos separados um a um (leitura fácil para a comissão)
+  var notaDoc=function(nota){ var s=String(nota||''); var parts=s.split('; '); if(parts.length<3||s.length<110) return esc(s); return '<ul style="margin:4px 0 6px 20px;padding:0">'+parts.map(function(x){return '<li style="margin:0 0 4px">'+esc(x.replace(/\.$/,''))+'</li>';}).join('')+'</ul>'; };
+  var ULrich=function(itens){ return '<ul style="margin:4px 0 10px 22px;padding:0">'+itens.map(function(it){ return '<li style="margin:0 0 8px"><b>'+esc(it.t)+':</b> '+notaDoc(it.n)+'</li>'; }).join('')+'</ul>'; };
+  var legKeys=[]; var colher=function(txt){ anLegalRefs(txt).forEach(function(k){ if(legKeys.indexOf(k)<0) legKeys.push(k); }); };
   var h='';
   h+='<p style="text-align:center;font-weight:700;margin-bottom:2px">'+esc((org.nome||'').toUpperCase())+'</p>';
   h+='<p style="text-align:center;font-weight:700;margin-bottom:14px">PARECER DE ANÁLISE DE PROPOSTA E HABILITAÇÃO</p>';
@@ -4447,15 +4523,20 @@ function anGerarParecer(){
   h+=TIT('II. ANÁLISE DA DOCUMENTAÇÃO E DA PROPOSTA');
   if(confs.length){ h+='<p style="margin-bottom:4px"><b>Documentos conferidos e considerados regulares:</b></p>'+UL(confs); }
   if(conf.length){ h+='<p style="margin-bottom:4px"><b>Pontos que requerem conferência da Comissão:</b></p>'+UL(conf); }
-  if(pend.length){ h+='<p style="margin-bottom:4px"><b>Pendências apontadas:</b></p>'+UL(pend); }
-  if(r.proposta) h+='<p><b>Proposta e planilha orçamentária:</b> '+esc(r.proposta.nota)+'</p>';
+  if(pend.length){ h+='<p style="margin-bottom:4px"><b>Pendências apontadas:</b></p>'+ULrich(pend.map(function(i){ colher(i.nota); return {t:i.cat, n:i.nota}; })); }
+  if(r.proposta){ if(r.proposta.status!=='conforme') colher(r.proposta.nota); h+='<p style="margin-bottom:4px"><b>Proposta e planilha orçamentária:</b></p><div style="margin:0 0 10px">'+notaDoc(r.proposta.nota)+'</div>'; }
   if(r.exig && r.exig.length){ var xPr=r.exig.filter(function(c){return c.status!=='conforme';});
-    if(xPr.length){ h+='<p style="margin-bottom:4px"><b>Exigências específicas do edital:</b></p>'+UL(xPr.map(function(c){return c.t+': '+c.nota;})); }
+    if(xPr.length){ h+='<p style="margin-bottom:4px"><b>Exigências específicas do edital:</b></p>'+ULrich(xPr.map(function(c){ colher(c.nota); return {t:c.t, n:c.nota}; })); }
     else h+='<p><b>Exigências específicas do edital:</b> atendidas nos pontos verificados.</p>'; }
   if(r.obra && (r.obra.checks||[]).length){ var oOk=r.obra.checks.filter(function(c){return c.status==='conforme';}), oPr=r.obra.checks.filter(function(c){return c.status!=='conforme';});
     h+='<p style="margin-bottom:4px"><b>Confronto de obra (planilha do edital x proposta):</b></p>';
     if(oOk.length) h+='<p style="margin-bottom:4px">Regulares: '+esc(oOk.map(function(c){return c.t;}).join('; '))+'.</p>';
-    h+=oPr.length?UL(oPr.map(function(c){return c.t+': '+c.nota;})):'<p>Sem apontamentos.</p>'; }
+    h+=oPr.length?ULrich(oPr.map(function(c){ colher(c.nota); return {t:c.t, n:c.nota}; })):'<p>Sem apontamentos.</p>'; }
+  if(legKeys.length){
+    h+='<p style="margin:12px 0 4px"><b>Fundamentação legal dos apontamentos:</b></p>';
+    legKeys.forEach(function(k){ var L=AN_LEGAL[k]; if(L) h+='<p style="margin:0 0 8px"><b>'+esc(L.t)+'.</b> '+esc(L.e)+'</p>'; });
+    h+='<p style="margin:0 0 10px">Os dispositivos acima fundamentam os apontamentos desta análise. O enquadramento definitivo de cada fato e a decisão sobre habilitação, diligência ou desclassificação competem exclusivamente à Comissão de Contratação.</p>';
+  }
   var decl={ 'Habilitado':'Diante do exposto, verificado o atendimento às exigências de habilitação, esta Comissão declara o licitante HABILITADO.', 'Habilitado com ressalvas':'Diante do exposto, esta Comissão declara o licitante HABILITADO COM RESSALVAS, condicionado à conferência final dos pontos indicados.', 'Pendente (diligência)':'Diante do exposto, esta Comissão converte o julgamento em diligência, concedendo prazo para a complementação e o saneamento da documentação, nos termos do art. 64 da Lei 14.133/2021.', 'Inabilitado':'Diante do exposto, ante o descumprimento de exigência de habilitação, esta Comissão declara o licitante INABILITADO.', 'Desclassificado (proposta)':'Diante do exposto, esta Comissão DESCLASSIFICA a proposta do licitante, nos termos do art. 59 da Lei 14.133/2021, prosseguindo-se com o exame da proposta subsequente na ordem de classificação.' };
   if(l.meepp==='Sim' && (l.decisao==='Habilitado'||l.decisao==='Habilitado com ressalvas') && (r.itens||[]).some(function(i){return i.status==='atencao' && /LC 123/.test(i.nota||'');})){ h+='<p><b>Registro ME/EPP:</b> constatada restrição na regularidade fiscal/trabalhista. Por se tratar de microempresa ou empresa de pequeno porte, fica assegurado o prazo de 5 (cinco) dias úteis, prorrogável por igual período, contado da declaração de vencedor, para a regularização da documentação, como condição para a assinatura do contrato (arts. 42 e 43, § 1º, da LC 123/2006).</p>'; }
   if(l.diligencia && l.diligencia.desc){ h+='<p><b>Diligência (art. 64 da Lei 14.133/2021):</b> '+esc(l.diligencia.desc)+(l.diligencia.data?(' Solicitada em '+esc(l.diligencia.data)):'')+(l.diligencia.prazo?(', com prazo até '+esc(l.diligencia.prazo)):'')+'. Situação: '+esc(l.diligencia.situacao||'Pendente')+'.</p>'; }
@@ -4468,6 +4549,7 @@ function anGerarParecer(){
 }
 // Word no padrão ABNT de trabalho oficial: A4, margens 3cm (sup/esq) e 2cm (inf/dir), Times New Roman 12, espaçamento 1,5, texto justificado
 function anWordAbnt(inner, arquivo){
+  inner=String(inner||'').replace(/[—–]/g,'-'); // travessão/en-dash vindos de texto OCRizado viram hífen no documento final
   var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><style>'
     +'@page WordSection1{size:21cm 29.7cm;margin:3cm 2cm 2cm 3cm;mso-page-orientation:portrait}'
     +'div.WordSection1{page:WordSection1}'
