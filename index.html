@@ -3824,18 +3824,41 @@ function anCur(){ for(var i=0;i<ANALISE.procs.length;i++){ if(ANALISE.procs[i].i
 function anNum(s){ s=String(s==null?'':s).replace(/[^0-9,.-]/g,''); if(s.indexOf(',')>=0){ s=s.replace(/\./g,'').replace(',','.'); } return Number(s)||0; }
 function anModo(mod){ if(/credenc|chamamento/i.test(mod)) return 'todos'; if(/dispensa|inexig/i.test(mod)) return 'direta'; return 'sequencial'; }
 function anModoTxt(m){ return m==='todos'?'Credenciamento ou chamamento: o sistema confere e habilita TODOS os interessados que cumprem os requisitos. Não há disputa de menor preço nem 1º colocado.':(m==='direta'?'Contratação direta (dispensa ou inexigibilidade): o sistema confere a regularidade do contratado e a justificativa. Não há disputa entre licitantes.':'Rito comum: julga-se as propostas e habilita-se o 1º colocado. Se inabilitado, convoca-se o próximo classificado (art. 63, II da Lei 14.133/2021).'); }
+// ⚠ REGRA: cada item escrito aqui TEM que ter checagem correspondente em anRequeridos/anAvaliaReq.
+// O texto da tela é contrato com o pregoeiro: ele lê "o sistema confere", acredita e assina. Item na
+// régua sem motor é check falso, que é pior que check nenhum. Ao incluir item aqui, incluir junto a
+// checagem e o teste, no mesmo commit. Artigos conferidos no texto oficial da lei (Planalto).
+// Cada item traz o 'req': o nome exato da checagem de anRequeridos que o confere, ou 'edital' quando
+// quem confere é anExigenciasEdital. O teste tprom.py quebra se algum item ficar sem motor.
 function anExigencias(obra){
   var L=[
-    {cat:'Habilitação jurídica', base:'art. 66 da Lei 14.133/2021', itens:['Ato constitutivo, contrato ou estatuto social e a última alteração','Comprovante de inscrição no CNPJ']},
-    {cat:'Regularidade fiscal, social e trabalhista', base:'art. 68 da Lei 14.133/2021', itens:['Certidão da Fazenda Federal e da Dívida Ativa da União (Receita e PGFN)','Certificado de Regularidade do FGTS (CRF)','Certidão da Fazenda Estadual','Certidão da Fazenda Municipal','Certidão Negativa de Débitos Trabalhistas (CNDT)']},
-    {cat:'Qualificação econômico-financeira', base:'art. 69 da Lei 14.133/2021', itens:['Balanço patrimonial e demonstrações contábeis dos 2 últimos exercícios','Certidão negativa de falência e de recuperação judicial']},
-    {cat:'Qualificação técnica', base:'art. 67 da Lei 14.133/2021', itens:['Atestado de capacidade técnica compatível com o objeto']},
-    {cat:'Declarações', base:'Lei 14.133/2021 e LC 123/2006', itens:['Declaração de que não emprega menor (art. 7º, XXXIII, da Constituição Federal)','Declaração de enquadramento como ME ou EPP, quando for o caso','Declaração de cumprimento da reserva de cargos para pessoa com deficiência e reabilitado da Previdência (art. 63, IV, da Lei 14.133/2021)','Declaração de inexistência de fato impeditivo da habilitação']}
+    {cat:'Habilitação jurídica', base:'art. 66 da Lei 14.133/2021', itens:[
+      {t:'Ato constitutivo, contrato ou estatuto social e a última alteração', req:'Contrato/estatuto social'},
+      {t:'Autorização para o exercício da atividade, quando for cabível', req:'Inscrição no cadastro de contribuintes'}]},
+    {cat:'Regularidade fiscal, social e trabalhista', base:'art. 68 da Lei 14.133/2021', itens:[
+      {t:'Comprovante de inscrição no CNPJ (inciso I)', req:'Comprovante de inscrição no CNPJ'},
+      {t:'Inscrição no cadastro de contribuintes estadual e/ou municipal, se houver (inciso II)', req:'Inscrição no cadastro de contribuintes'},
+      {t:'Certidão da Fazenda Federal e da Dívida Ativa da União, Receita e PGFN (inciso III)', req:'CND Federal/PGFN'},
+      {t:'Certidão da Fazenda Estadual (inciso III)', req:'CND Estadual'},
+      {t:'Certidão da Fazenda Municipal (inciso III)', req:'CND Municipal'},
+      {t:'Certificado de Regularidade do FGTS, CRF (inciso IV)', req:'FGTS (CRF)'},
+      {t:'Certidão Negativa de Débitos Trabalhistas, CNDT (inciso V)', req:'CNDT (trabalhista)'},
+      {t:'Declaração de que não emprega menor, art. 7º, XXXIII, da Constituição Federal (inciso VI)', req:'Declaração de não emprega menor'}]},
+    {cat:'Qualificação econômico-financeira', base:'art. 69 da Lei 14.133/2021', itens:[
+      {t:'Balanço patrimonial, demonstração de resultado e demais demonstrações contábeis dos 2 últimos exercícios sociais (inciso I)', req:'Balanço patrimonial'},
+      {t:'Certidão negativa de feitos sobre falência, expedida pelo distribuidor da sede do licitante (inciso II)', req:'Certidão de falência'},
+      {t:'Índices contábeis previstos no edital, conferidos contra o balanço (caput e § 1º)', req:'Balanço patrimonial'}]},
+    {cat:'Qualificação técnica', base:'art. 67 da Lei 14.133/2021', itens:[
+      {t:'Atestado de capacidade técnica compatível com o objeto (incisos I e II)', req:'Atestado de capacidade técnica'}]},
+    {cat:'Declarações', base:'Lei 14.133/2021 e LC 123/2006', itens:[
+      {t:'Declaração de cumprimento da reserva de cargos para pessoa com deficiência e reabilitado da Previdência (art. 63, IV)', req:'Declaração de reserva de cargos (PCD)'},
+      {t:'Declaração de que a proposta compreende a integralidade dos custos trabalhistas (art. 63, § 1º)', req:'Declaração de custos trabalhistas na proposta'},
+      {t:'Declaração de enquadramento como ME ou EPP, quando for o caso (LC 123/2006)', req:'Declaração de enquadramento ME/EPP'}]}
   ];
   if(obra){
-    L[2].itens.push('Comprovação de capital social ou patrimônio líquido mínimo exigido no edital');
-    L[3].itens.push('Registro e quitação junto ao CREA ou CAU');
-    L[3].itens.push('Certidão de Acervo Técnico (CAT) do responsável técnico');
+    L[2].itens.push({t:'Capital social ou patrimônio líquido mínimo, quando o edital exigir, limitado a 10% do valor estimado (§ 4º)', req:'edital'});
+    L[3].itens.push({t:'Registro ou inscrição da empresa e do responsável técnico no CREA ou CAU (inciso V)', req:'Registro no conselho (CREA/CAU)'});
+    L[3].itens.push({t:'Certidão de Acervo Técnico (CAT) do responsável técnico, emitida pelo conselho', req:'Certidão de Acervo Técnico (CAT)'});
   }
   return L;
 }
@@ -3911,7 +3934,7 @@ function anRenderProc(root){
   h+='<div class="panel"><div class="ph"><h3>Exigências de habilitação</h3></div><div style="padding:16px 22px">';
   h+=anLeg('<b>O que é:</b> a lista de documentos que a lei exige de cada empresa para ela poder ser habilitada. O sistema monta sozinho conforme o tipo de objeto. É contra esta lista que ele confere os documentos de cada licitante.');
   h+='<div class="hint" style="margin-bottom:10px">Checklist montado automaticamente conforme a Lei 14.133/2021 e o tipo de objeto. É a régua que o sistema usa para conferir cada licitante.</div>';
-  exs.forEach(function(g){ h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> '+esc(g.cat)+'</div><div class="hint" style="margin:-4px 0 8px">'+esc(g.base)+'</div><ul class="checks">'+g.itens.map(function(it){return '<li>'+esc(it)+'</li>';}).join('')+'</ul></div>'; });
+  exs.forEach(function(g){ h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> '+esc(g.cat)+'</div><div class="hint" style="margin:-4px 0 8px">'+esc(g.base)+'</div><ul class="checks">'+g.itens.map(function(it){return '<li>'+esc(it.t||it)+'</li>';}).join('')+'</ul></div>'; });
   h+='</div></div>';
   h+=anRenderRecurso(p);
   h+=anRenderRelatorioPanel(p);
@@ -4181,7 +4204,16 @@ function anExigExercicios(txt){ var t=anNormTxt(txt);
 // Anos de exercício presentes no balanço do licitante
 function anAnosBalanco(txt){ var t=anNormTxt(txt); var anos={}, re=/(?:exerc[ií]cio[^0-9]{0,25}|encerrad[oa][^0-9]{0,20}|balan[çc]o\s+patrimonial[^0-9]{0,30}|31[\/.]12[\/.]|em\s+31\s+de\s+dezembro\s+de\s+)(20\d{2})/g, m; while(m=re.exec(t)) anos[+m[1]]=1; return Object.keys(anos).map(Number).sort(); }
 // Índice declarado no documento do licitante (valor)
-function anIndiceDecl(txt, nomeRe){ var t=anNormTxt(txt); var re=new RegExp('(?:'+nomeRe+')[^0-9]{0,22}(\\d{1,3}(?:[.,]\\d{1,3}))','i'); var m=re.exec(t); return m?anNumIdx(m[1]):null; }
+// ⚠ Nunca ler índice contábil do dossiê inteiro. Medido no dado real (5103/2026): a composição do
+// BDI da proposta da MSH traz "Seguro e Garantia SG 0,80%", e a sigla SG era lida como Solvência
+// Geral = 0,80, acusando de insolvente uma empresa com R$ 2,9 milhões de patrimônio líquido.
+// Por isso: siglas de 2 letras estão proibidas, e número seguido de % não é índice, é percentual.
+function anIndiceDecl(txt, nomeRe){ var t=anNormTxt(txt); var re=new RegExp('(?:'+nomeRe+')[^0-9]{0,22}(\\d{1,3}(?:[.,]\\d{1,3}))(\\s*%)?','i'); var m=re.exec(t); if(!m||m[2]) return null; return anNumIdx(m[1]); }
+// Só documento com cara de contábil serve de fonte de índice: balanço, demonstração, declaração do
+// contador. Proposta, BDI e certidão não entram.
+function anTextoContabil(docs){ return (docs||[]).filter(function(d){ var t=(d&&d.texto)||''; if(!t||d.textoCortado||anTextoPicotado(t)) return false;
+    return /balan[çc]o\s+patrimonial|demonstra[çc][aã]o\s+do\s+resultado|[ií]ndice\s+de\s+liquidez|liquidez\s+corrente|termo\s+de\s+(abertura|encerramento)|\bcrc\b|contabilidade/.test(anNormTxt(t)); })
+  .map(function(d){return d.texto||'';}).join('\n'); }
 // Piso de índice exigido pelo edital (o menor limiar citado perto do nome, ou o geral "maiores que 1")
 function anIndicePiso(txt, nomeRe){ var t=anNormTxt(txt);
   var re=new RegExp('(?:'+nomeRe+')[^0-9]{0,45}?(?:maior|igual|superior|iguais|maiores|superiores|>=|≥|de|a|,)+[^0-9]{0,12}(\\d{1,2}(?:[.,]\\d{1,3})?)','i'); var m=re.exec(t); if(m) return anNumIdx(m[1]);
@@ -4200,15 +4232,26 @@ function anExigenciasEdital(p,l){
   var licTxt=(l.docs||[]).map(function(d){return d.texto||'';}).join('\n'); var lt=anNormTxt(licTxt);
   var checks=[]; if(!rt || rt.replace(/\s/g,'').length<200) return checks; // sem edital, nada a confrontar
   var push=function(t,st,n){ checks.push({t:t,status:st,nota:n}); };
-  // Registro no conselho (CREA/CAU) quando o edital exige
-  if(/registro\s+ou\s+inscri[çc][aã]o[^.]{0,60}(crea|cau|conselho\s+regional)|certid[aã]o\s+de\s+registro[^.]{0,30}(crea|cau)|quita[çc][aã]o[^.]{0,20}(crea|cau)/.test(rt)){
-    var temReg=/crea|cau|conselho\s+regional\s+de\s+engenharia|conselho\s+de\s+arquitetura|registro\s+e\s+quita[çc][aã]o|acervo\s+tecnico/.test(lt);
-    push('Registro no conselho (CREA/CAU)', temReg?'conferir':'atencao', temReg?'O edital exige registro/inscrição no conselho (CREA/CAU); há menção nos documentos do licitante, a comissão confere a vigência e a quitação.':'O edital exige registro/inscrição no conselho (CREA/CAU) e não foi localizado nos documentos do licitante. Solicitar ou inabilitar.');
-  }
+  // O registro no conselho (CREA/CAU) saiu daqui: virou item próprio do checklist (regra 'conselho'),
+  // que distingue a certidão da empresa da certidão do profissional em vez de aceitar qualquer menção.
   // Capital social / patrimônio líquido mínimo
   var cap=anExigCapitalPL(refTxt);
-  if(cap){ var alvo=cap.v!=null?cap.v:(cap.pct!=null&&p.valorEstimado?p.valorEstimado*cap.pct/100:null); var decl=anExtraiCapitalDeclarado(licTxt);
-    if(alvo!=null && decl!=null) push(cap.tipo, decl>=alvo*0.999?'conforme':'atencao', cap.tipo+': edital exige '+money(alvo)+(cap.pct!=null?(' ('+cap.pct+'% do estimado)'):'')+'; documento do licitante indica '+money(decl)+'.'+(decl<alvo*0.999?' Abaixo do exigido.':''));
+  // art. 69, § 4º: capital ou patrimônio líquido mínimo só pode ir até 10% do valor estimado. Acima
+  // disso a exigência é ilegal e derruba o certame do próprio órgão, então o alarme é sobre o EDITAL.
+  if(cap){ var _alvoT=cap.v!=null?cap.v:(cap.pct!=null&&p.valorEstimado?p.valorEstimado*cap.pct/100:null);
+    var _pctT=cap.pct!=null?cap.pct:((_alvoT!=null&&p.valorEstimado>0)?(_alvoT/p.valorEstimado*100):null);
+    if(_pctT!=null && _pctT>10.0001) push('Exigência de '+cap.tipo.toLowerCase()+' acima do teto legal', 'atencao', 'O EDITAL exige '+cap.tipo.toLowerCase()+' de '+(cap.pct!=null?(cap.pct+'% do valor estimado'):money(_alvoT))+', o que equivale a '+(Math.round(_pctT*100)/100).toString().replace('.',',')+'% do valor estimado do certame. O art. 69, § 4º, da Lei 14.133/2021 admite no máximo 10% (dez por cento). Falha do EDITAL, não do licitante: rever antes de julgar a habilitação, sob pena de anulação.');
+  }
+  if(cap){ var alvo=cap.v!=null?cap.v:(cap.pct!=null&&p.valorEstimado?p.valorEstimado*cap.pct/100:null);
+    // O valor é lido só de onde a lei e o edital mandam provar (balanço, contrato social, certidão da
+    // Junta), nunca do dossiê inteiro: número solto vira acusação falsa.
+    var _fonteCap=null, _capTxt='';
+    (l.docs||[]).forEach(function(d){ var t=(d&&d.texto)||''; if(!t||d.textoCortado||anTextoPicotado(t)) return;
+      if(!/balan[çc]o\s+patrimonial|junta\s+comercial|contrato\s+social|estatuto\s+social|ato\s+constitutivo|certid[aã]o\s+simplificada/.test(anNormTxt(t))) return;
+      if(!_fonteCap && /capital\s+social|patrim[oô]nio\s+l[ií]quido/.test(anNormTxt(t))){ _fonteCap=d; _capTxt=t; } });
+    var pl0=_capTxt?anIndicesCalculados(_capTxt)._pl:null;
+    var decl=(/patrim/i.test(cap.tipo)&&pl0!=null)?pl0:(_capTxt?anExtraiCapitalDeclarado(_capTxt):null);
+    if(alvo!=null && decl!=null) push(cap.tipo, decl>=alvo*0.999?'conforme':'atencao', cap.tipo+': edital exige '+money(alvo)+(cap.pct!=null?(' ('+cap.pct+'% do estimado)'):'')+'; "'+anNomeDoc(_fonteCap)+'" indica '+money(decl)+'.'+(decl<alvo*0.999?' Abaixo do exigido. O valor foi lido por digitalização: conferir no documento antes de decidir.':''));
     else push(cap.tipo, 'conferir', 'O edital exige '+cap.tipo.toLowerCase()+(cap.v!=null?(' de '+money(cap.v)):(cap.pct!=null?(' de '+cap.pct+'% do valor estimado'):''))+'. Conferir o valor no balanço/contrato social do licitante.'); }
   // Garantia de proposta (art. 58)
   if(/garantia\s+(?:de|da)\s+proposta|garantia\s+de\s+participa[çc][aã]o/.test(rt)){ var temG=anTemGarantiaProposta(licTxt)||/ap[oó]lice|carta\s+fian[çc]a|seguro[- ]garantia|dep[oó]sito|comprovante\s+de\s+garantia/.test(lt);
@@ -4624,8 +4667,74 @@ function anPaginaCertidao(pages, cat, cnpj){
   var comCnpj=cand.filter(function(pt){return anTemCNPJ(pt,cnpj)===true;}); var pool=comCnpj.length?comCnpj:cand;
   var comData=pool.filter(function(pt){return anValidade(pt);}); if(comData.length) return comData[0];
   return pool[0]||pages[0]||''; }
+// ===== Base das checagens que a TELA promete =====
+// Regra da casa: todo item escrito no checklist da tela tem que ter motor aqui. Texto de tela é
+// contrato com o pregoeiro, não decoração.
+// Procura pelo CONTEÚDO em QUALQUER documento do licitante, nunca pelo nome do arquivo: no dossiê
+// real da MSH a certidão do CREA veio dentro de "Declaração de enquadramento MEEPP.pdf". Documento
+// com leitura ruim (cortado ou picotado) não serve de prova NEM de acusação: vira aviso para conferir.
+function anBuscaTodos(docs, re){ var bons=[], ruim=null;
+  (docs||[]).forEach(function(d){ var t=(d&&d.texto)||''; if(!t) return;
+    var leituraBoa=!d.textoCortado && !anTextoPicotado(t);
+    if(!re.test(anNormTxt(t))) return;
+    if(leituraBoa) bons.push(d); else if(!ruim) ruim=d; });
+  return {docs:bons, ruim:ruim}; }
+// ruim = documento que CASOU com a busca mas está ilegível. Documento ilegível que nada tem a ver
+// com o item procurado não vira aviso: senão a proposta picotada da MSH sujava todos os itens.
+function anBuscaTexto(docs, re){ var r=anBuscaTodos(docs, re); return {doc:r.docs[0]||null, ruim:r.ruim}; }
+function anRefTxt(p){ return ((p&&p.docsCertame)||[]).map(function(d){return d.texto||'';}).join('\n'); }
+function anTemEdital(p){ var t=anRefTxt(p); return !!t && t.replace(/\s/g,'').length>=200; }
+function anEditalPede(p, re){ return anTemEdital(p) && re.test(anNormTxt(anRefTxt(p))); }
+function anNomeDoc(d){ return (d&&d.nome)||'documento enviado'; }
+// Presença de um documento/declaração exigido. A regra de ouro vem do dado real: no 5103/2026 o
+// edital de Turvelândia NÃO pediu a declaração de PCD que o art. 63, IV manda pedir. Não se inabilita
+// licitante por exigência que o edital não fez; o que se faz é avisar a comissão e corrigir o edital.
+function anPresencaReq(docs, p, o){
+  var b=anBuscaTexto(docs, o.re);
+  var aviso=b.ruim?' Atenção: o dossiê tem documento com leitura ruim ("'+anNomeDoc(b.ruim)+'"); confira no original antes de decidir.':'';
+  if(b.doc) return {status:'conforme', nota:o.ok.replace('{doc}', anNomeDoc(b.doc))+aviso};
+  if(o.reEdital && anEditalPede(p, o.reEdital)) return {status:'atencao', nota:o.falta+' O EDITAL exige este documento e ele não foi localizado nos documentos do licitante. Falha sanável por diligência, a critério da comissão (art. 64, § 1º, da Lei 14.133/2021).'+aviso};
+  if(!anTemEdital(p)) return {status:'conferir', nota:o.falta+' O sistema não localizou o documento e o EDITAL não foi enviado na aba Certame, então não deu para confrontar a exigência. Suba o edital ou confira no dossiê.'+aviso};
+  return {status:'conferir', nota:o.falta+' O sistema não localizou o documento nos arquivos do licitante e o EDITAL também não o exigiu expressamente. '+(o.semEdital||'A comissão decide: não se inabilita por exigência que o edital não fez (art. 64, § 1º).')+aviso};
+}
+// Certidão do conselho (CREA/CAU): a lei pede registro/inscrição na entidade profissional competente
+// (art. 67, V). No dossiê real a MSH mandou a certidão do PROFISSIONAL e o edital pedia a da EMPRESA
+// e a do responsável técnico: por isso as duas são distinguidas em vez de dar um "conforme" cego.
+function anConselhoTipo(txt){ var t=anNormTxt(txt);
+  var pj=/certid[aã]o\s+de\s+registro[^.]{0,60}pessoa\s+jur[ií]dica|registro\s+e\s+quita[çc][aã]o\s+de\s+pessoa\s+jur[ií]dica/.test(t);
+  var pf=/certid[aã]o\s+de\s+registro[^.]{0,60}pessoa\s+f[ií]sica|registro\s+e\s+quita[çc][aã]o\s+de\s+pessoa\s+f[ií]sica/.test(t);
+  return {pj:pj, pf:pf}; }
+// Índices contábeis calculados a partir do próprio balanço, e não só o número que o licitante declarou.
+// O edital real do 5103 traz as fórmulas (ILC = AC/PC etc). Balanço é OCR: se a conta sair abaixo do
+// piso, o sistema mostra a conta e manda conferir, NUNCA inabilita sozinho por leitura de scanner.
+function anValorRotulo(txt, re){ var t=anNormTxt(txt);
+  var m=new RegExp('(?:'+re+')[^0-9\\-]{0,40}(\\d{1,3}(?:\\.\\d{3})*,\\d{2})','i').exec(t);
+  return m?anNum(m[1]):null; }
+function anIndicesCalculados(bt){
+  var ac=anValorRotulo(bt, 'ativo\\s+circulante|circulante\\s+ativo');
+  var pc=anValorRotulo(bt, 'passivo\\s+circulante');
+  var at=anValorRotulo(bt, 'ativo\\s+total|total\\s+do\\s+ativo');
+  var pl=anValorRotulo(bt, 'patrim[oô]nio\\s+l[ií]quido');
+  var out={};
+  if(ac!=null && pc!=null && pc>0) out['Liquidez Corrente']={v:ac/pc, conta:'ativo circulante '+money(ac)+' ÷ passivo circulante '+money(pc)};
+  if(at!=null && pc!=null && pc>0) out['Solvência Geral']={v:at/pc, conta:'ativo total '+money(at)+' ÷ passivo circulante '+money(pc)+' (sem o passivo não circulante, que o sistema não isolou)'};
+  out._pl=pl; out._ac=ac; out._pc=pc;
+  return out; }
+// Data do ato constitutivo: manda no art. 69, § 6º (menos de 2 anos = só o último exercício) e no
+// art. 65, § 1º (criada no exercício da licitação = balanço de abertura). Sem a data, não se aplica
+// a exceção nem se acusa: o sistema diz que não achou.
+function anDataConstituicao(docs){ var out=null;
+  (docs||[]).forEach(function(d){ if(out) return; var t=anNormTxt((d&&d.texto)||''); if(!t) return;
+    // Na certidão da Junta Comercial os rótulos vêm todos juntos e os valores depois, com NIRE e CNPJ
+    // no meio ("Data de Ato Constitutivo Início de Atividade 52204819124 34.823.584/0001-17 10/09/2019").
+    // Por isso o vão até a data aceita números, mas a primeira data no formato dd/mm/aaaa é a válida.
+    var m=/(?:ato\s+constitutivo|in[ií]cio\s+de\s+atividade|data\s+de\s+abertura|data\s+de\s+constitui[çc][aã]o)(?:(?!\d{2}\/\d{2}\/(?:19|20)\d{2})[\s\S]){0,120}?(\d{2}\/\d{2}\/(?:19|20)\d{2})/.exec(t);
+    if(m) out={data:m[1], doc:anNomeDoc(d)}; });
+  return out; }
 function anRequeridos(){ return [
   {cat:'Contrato/estatuto social', regra:'pres_cnpj', modo:'auto'},
+  {cat:'Comprovante de inscrição no CNPJ', regra:'cartao_cnpj', modo:'auto'},
+  {cat:'Inscrição no cadastro de contribuintes', regra:'contribuintes', modo:'auto'},
   {cat:'CND Federal/PGFN', regra:'certidao', modo:'auto', fisc:1},
   {cat:'FGTS (CRF)', regra:'certidao', modo:'auto', fisc:1},
   {cat:'CND Estadual', regra:'certidao', modo:'auto', fisc:1},
@@ -4634,7 +4743,11 @@ function anRequeridos(){ return [
   {cat:'Balanço patrimonial', regra:'balanco', modo:'auto'},
   {cat:'Certidão de falência', regra:'certidao', modo:'auto'},
   {cat:'Atestado de capacidade técnica', regra:'compat', modo:'humano'},
-  {cat:'Declarações', regra:'presenca', modo:'auto'},
+  {cat:'Certidão de Acervo Técnico (CAT)', regra:'cat', modo:'auto', so_obra:1},
+  {cat:'Registro no conselho (CREA/CAU)', regra:'conselho', modo:'auto', so_obra:1},
+  {cat:'Declaração de não emprega menor', regra:'decl_menor', modo:'auto'},
+  {cat:'Declaração de reserva de cargos (PCD)', regra:'decl_pcd', modo:'auto'},
+  {cat:'Declaração de custos trabalhistas na proposta', regra:'decl_trab', modo:'auto'},
   {cat:'Declaração de enquadramento ME/EPP', regra:'meepp_decl', modo:'auto', so_meepp:1},
   {cat:'Consulta CEIS/CNEP (impedimentos)', regra:'ceis', modo:'humano'}
 ]; }
@@ -4642,6 +4755,79 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
   // Checagens que não dependem de arquivo enviado
   if(req.regra==='ceis') return {status:'conferir', nota:'Consulta obrigatória a sanções vigentes (CEIS e CNEP, no Portal da Transparência, e cadastros do TCU/TCE) antes da habilitação. A comissão consulta pelo CNPJ e anexa o comprovante ao processo (art. 14 da Lei 14.133/2021).'};
   if(req.regra==='meepp_decl'){ var achouD=(docs||[]).some(function(d){ return /microempresa|empresa de pequeno porte|\bme\b|\bepp\b|simples nacional/i.test(String(d.texto||'')); }); return achouD?{status:'conforme', nota:'Localizada menção ao enquadramento ME/EPP nos documentos enviados; a comissão confirma a declaração formal.'}:{status:'conferir', nota:'Licitante marcado como ME/EPP, mas a declaração de enquadramento não foi localizada nos documentos. Solicitar ou conferir manualmente.'}; }
+  // Comprovante de inscrição no CNPJ: é do art. 68, I (fiscal), não da habilitação jurídica.
+  if(req.regra==='cartao_cnpj') return anPresencaReq(docs, p, {
+    re:/cadastro\s+nacional\s+da\s+pessoa\s+jur[ií]dica|comprovante\s+de\s+inscri[çc][aã]o\s+e\s+de\s+situa[çc][aã]o\s+cadastral|situa[çc][aã]o\s+cadastral/,
+    ok:'Comprovante de inscrição no CNPJ localizado em "{doc}" (art. 68, I, da Lei 14.133/2021).',
+    falta:'Comprovante de inscrição no CNPJ (art. 68, I, da Lei 14.133/2021).',
+    reEdital:/prova\s+de\s+inscri[çc][aã]o\s+no\s+cadastro\s+nacional|inscri[çc][aã]o\s+no\s+cnpj|comprovante\s+de\s+inscri[çc][aã]o[^.]{0,30}cnpj/ });
+  // Inscrição no cadastro de contribuintes estadual e/ou municipal, se houver (art. 68, II).
+  // ⚠ Medido no dado real: a CND Municipal da MSH traz o rótulo "inscrição municipal: contribuinte:
+  // 708666". Isso NÃO é o comprovante de inscrição, é uma menção dentro de uma certidão de débito.
+  // Carimbar "conforme" por causa desse rótulo seria um check falso, que é pior que check nenhum.
+  if(req.regra==='contribuintes'){
+    var reFortC=/comprovante\s+de\s+inscri[çc][aã]o[^.]{0,40}(?:estadual|municipal|contribuinte)|cadastro\s+de\s+contribuintes|ficha\s+de\s+inscri[çc][aã]o\s+cadastral|cart[aã]o\s+de\s+inscri[çc][aã]o|cadastro\s+mobili[aá]rio|alvar[aá]\s+de\s+(?:funcionamento|localiza)/;
+    var bFortC=anBuscaTexto(docs, reFortC);
+    if(bFortC.doc) return {status:'conforme', nota:'Prova de inscrição no cadastro de contribuintes localizada em "'+anNomeDoc(bFortC.doc)+'" (art. 68, II, da Lei 14.133/2021).'};
+    var numC=null, docC=null;
+    (docs||[]).forEach(function(d){ if(numC) return; var t=(d&&d.texto)||''; if(!t||d.textoCortado||anTextoPicotado(t)) return;
+      var m=/inscri[çc][aã]o\s+(estadual|municipal)[^0-9a-z]{0,20}(?:contribuinte[^0-9]{0,6})?(\d{4,})/.exec(anNormTxt(t));
+      if(m){ numC={esfera:m[1], n:m[2]}; docC=d; } });
+    if(numC) return {status:'conferir', nota:'O comprovante de inscrição no cadastro de contribuintes não foi enviado como documento próprio, mas "'+anNomeDoc(docC)+'" indica inscrição '+numC.esfera+' nº '+numC.n+' em nome do licitante. O art. 68, § 1º, da Lei 14.133/2021 admite que o documento seja suprido por outro meio hábil: a comissão decide se este supre a exigência do art. 68, II.'};
+    return anPresencaReq(docs, p, {
+      re:reFortC,
+      ok:'Prova de inscrição no cadastro de contribuintes localizada em "{doc}" (art. 68, II, da Lei 14.133/2021).',
+      falta:'Prova de inscrição no cadastro de contribuintes estadual e/ou municipal (art. 68, II, da Lei 14.133/2021).',
+      semEdital:'A lei pede o cadastro se houver e conforme o ramo de atividade: a comissão decide se cabe a este objeto.',
+      reEdital:/inscri[çc][aã]o\s+no\s+cadastro\s+de\s+contribuintes/ });
+  }
+  // Certidão de Acervo Técnico: prometida na tela desde sempre e nunca conferida (furo achado em 15/07).
+  if(req.regra==='cat') return anPresencaReq(docs, p, {
+    re:/certid[aã]o\s+de\s+acervo\s+t[eé]cnico|acervo\s+t[eé]cnico|cat\s+com\s+registro\s+de\s+atestado/,
+    ok:'Certidão de Acervo Técnico (CAT) localizada em "{doc}". A comissão confere se a CAT cobre as parcelas de maior relevância exigidas no edital (art. 67, I e II, e §§ 1º e 2º, da Lei 14.133/2021).',
+    falta:'Certidão de Acervo Técnico (CAT) emitida pelo conselho profissional (art. 67, I e II, da Lei 14.133/2021).',
+    reEdital:/acervo\s+t[eé]cnico|\bcat\b/ });
+  // Registro/inscrição na entidade profissional competente (art. 67, V).
+  if(req.regra==='conselho'){
+    var reCons=/conselho\s+regional\s+de\s+engenharia|conselho\s+de\s+arquitetura|\bcrea\b|\bcau\b/;
+    var todosC=anBuscaTodos(docs, reCons);
+    var pedeEmpresa=anEditalPede(p, /registro\s+ou\s+inscri[çc][aã]o\s+da\s+empresa|da\s+empresa\s+e\s+do\(?s?\)?\s*respons[aá]vel|registro[^.]{0,40}pessoa\s+jur[ií]dica/);
+    if(!todosC.docs.length) return anPresencaReq(docs, p, {
+      re:reCons,
+      ok:'Registro no conselho localizado em "{doc}".',
+      falta:'Registro ou inscrição na entidade profissional competente, CREA ou CAU (art. 67, V, da Lei 14.133/2021).',
+      reEdital:/\bcrea\b|\bcau\b|conselho\s+regional\s+de\s+engenharia|entidade\s+profissional/ });
+    // Vários documentos citam o conselho (a CAT cita, o atestado cita). Escolhe a CERTIDÃO DE
+    // REGISTRO, e prefere a da pessoa jurídica: quem manda no art. 67, V é a certidão, não a menção.
+    var djC=null, dfC=null;
+    todosC.docs.forEach(function(d){ var tp=anConselhoTipo(d.texto); if(tp.pj && !djC) djC=d; if(tp.pf && !dfC) dfC=d; });
+    if(djC) return {status:'conforme', nota:'Certidão de registro e quitação de PESSOA JURÍDICA localizada em "'+anNomeDoc(djC)+'" (art. 67, V, da Lei 14.133/2021). A comissão confere a validade.'+(dfC?' A certidão do profissional (pessoa física) também está no dossiê, em "'+anNomeDoc(dfC)+'".':'')};
+    if(dfC) return {status:'conferir', nota:'A certidão localizada em "'+anNomeDoc(dfC)+'" é de registro e quitação de PESSOA FÍSICA, ou seja, do profissional, e não da empresa. O sistema não localizou a certidão de registro da PESSOA JURÍDICA no dossiê.'+(pedeEmpresa?' O edital exige o registro DA EMPRESA e do(s) responsável(is) técnico(s): conferir, é falha sanável por diligência (art. 64, § 1º).':' Conferir se este edital exige também o registro da empresa, além do profissional (art. 67, V).')};
+    return {status:'conferir', nota:'Há menção ao conselho profissional (CREA/CAU) em "'+anNomeDoc(todosC.docs[0])+'", mas o sistema não localizou a certidão de registro e quitação em si. Conferir o dossiê (art. 67, V).'};
+  }
+  // Declaração de não emprega menor: art. 68, VI, c/c art. 7º, XXXIII, da Constituição.
+  if(req.regra==='decl_menor') return anPresencaReq(docs, p, {
+    re:/n[aã]o\s+emprega\s+menor|menor\s+de\s+dezoito\s+anos|trabalho\s+noturno,?\s+perigoso\s+ou\s+insalubre|m[aã]o\s+de\s+obra\s+infantil|xxxiii\s+do\s+art|art(?:igo)?\.?\s*7[°º]?\s*,?\s*xxxiii/,
+    ok:'Declaração de que não emprega menor localizada em "{doc}" (art. 68, VI, da Lei 14.133/2021, c/c art. 7º, XXXIII, da Constituição Federal).',
+    falta:'Declaração de cumprimento do art. 7º, XXXIII, da Constituição Federal, ou seja, de que não emprega menor (art. 68, VI, da Lei 14.133/2021).',
+    reEdital:/n[aã]o\s+emprega\s+menor|menor\s+de\s+dezoito|xxxiii/ });
+  // Declaração de reserva de cargos para PCD e reabilitado: art. 63, IV. A lei manda EXIGIR.
+  // Medido no dado real: o edital do 5103/2026 não pediu, e o dossiê da MSH não trouxe.
+  if(req.regra==='decl_pcd'){
+    var bP=anBuscaTexto(docs, /reserva\s+de\s+cargos|pessoa\s+com\s+defici[eê]ncia|portador(?:a|es)?\s+de\s+defici[eê]ncia|reabilitad[oa]s?\s+d[aeo]/);
+    var pedePcd=anEditalPede(p, /reserva\s+de\s+cargos|pessoa\s+com\s+defici[eê]ncia|reabilitad/);
+    if(bP.doc) return {status:'conforme', nota:'Declaração de cumprimento da reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social localizada em "'+anNomeDoc(bP.doc)+'" (art. 63, IV, da Lei 14.133/2021).'};
+    if(pedePcd) return {status:'atencao', nota:'O edital exige a declaração de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social (art. 63, IV, da Lei 14.133/2021) e ela não foi localizada nos documentos do licitante. Falha sanável por diligência, a critério da comissão (art. 64, § 1º).'};
+    if(!anTemEdital(p)) return {status:'conferir', nota:'Declaração de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social (art. 63, IV) não localizada nos documentos do licitante. O edital não foi enviado na aba Certame, então o sistema não pôde conferir se ele a exigiu.'};
+    return {status:'conferir', nota:'A declaração de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência não foi localizada nos documentos do licitante, e ESTE EDITAL também não a exigiu, embora o art. 63, IV, da Lei 14.133/2021 mande exigi-la em todas as licitações. Não se inabilita licitante por exigência que o edital não fez: a comissão pode sanar por diligência (art. 64, § 1º). Incluir a declaração no modelo de edital dos próximos certames.'};
+  }
+  // Declaração de que a proposta cobre a integralidade dos custos trabalhistas: art. 63, § 1º.
+  // A lei manda o edital exigir SOB PENA DE DESCLASSIFICAÇÃO, por isso a falta pesa na proposta.
+  if(req.regra==='decl_trab') return anPresencaReq(docs, p, {
+    re:/integralidade\s+dos\s+custos|custos\s+para\s+atendimento\s+dos\s+direitos\s+trabalhistas|direitos\s+trabalhistas\s+assegurados/,
+    ok:'Declaração de que a proposta compreende a integralidade dos custos trabalhistas localizada em "{doc}" (art. 63, § 1º, da Lei 14.133/2021).',
+    falta:'Declaração de que a proposta econômica compreende a integralidade dos custos para atendimento dos direitos trabalhistas (art. 63, § 1º, da Lei 14.133/2021, exigida no edital sob pena de desclassificação).',
+    reEdital:/integralidade\s+dos\s+custos|direitos\s+trabalhistas\s+assegurados/ });
   var ds=docs.filter(function(d){return d.categoria===req.cat;});
   if(!ds.length && secoes && secoes[req.cat]) ds=[{texto:secoes[req.cat], categoria:req.cat}];
   if(!ds.length) return {status:'ausente', nota:'Documento não localizado entre os enviados.'+((req.fisc&&l&&l.meepp==='Sim')?' Mesmo sendo ME/EPP, o documento fiscal deve ser apresentado ainda que com restrição (art. 43, caput, da LC 123/2006).':'')};
@@ -4682,17 +4868,43 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
     var anosPres=anAnosBalanco(bt), exig=anExigExercicios(refTxt);
     if(anosPres.length) bNotas.push('exercício(s) apresentado(s): '+anosPres.join(', '));
     else { pior('conferir'); bNotas.push('ano do exercício não localizado no texto, conferir se é o último exigível (art. 69, I)'); }
-    if(exig){ bNotas.push('edital exige '+exig+' exercício(s)'); if(anosPres.length && anosPres.length<exig){ pior('atencao'); bProbl.push('o edital exige o balanço dos '+exig+' últimos exercícios e o licitante apresentou '+anosPres.length+' ('+anosPres.join(', ')+'), faltando exercício(s)'); } }
+    // Empresa nova: o art. 69, § 6º limita ao ÚLTIMO exercício quando a PJ tem menos de 2 anos, e o
+    // art. 65, § 1º autoriza o balanço de abertura para quem foi criada no exercício da licitação.
+    // Sem isso o sistema acusaria empresa nova de "faltar exercício" que a lei não exige dela.
+    var constit=anDataConstituicao((l&&l.docs)||[]), anosEmp=null, anoBaseX=(anParseDt(p.dataBase)||new Date()).getFullYear();
+    if(constit){ var dC=anParseDt(constit.data), dB=anParseDt(p.dataBase)||new Date();
+      if(dC&&dB){ anosEmp=(dB-dC)/(365.25*24*3600*1000); bNotas.push('ato constitutivo em '+constit.data+', conforme "'+constit.doc+'"'); } }
+    var novaMenos2=(anosEmp!=null && anosEmp<2), criadaNoExercicio=(constit && anParseDt(constit.data) && anParseDt(constit.data).getFullYear()===anoBaseX);
+    var abertura=/balan[çc]o\s+de\s+abertura/.test(bn);
+    if(criadaNoExercicio){ exig=null; bNotas.push('empresa criada no exercício da licitação: pode substituir as demonstrações pelo BALANÇO DE ABERTURA (art. 65, § 1º)'+(abertura?', e o balanço de abertura foi localizado':'')); }
+    else if(novaMenos2){ if(exig&&exig>1) bNotas.push('empresa constituída há menos de 2 anos: a exigência limita-se ao último exercício (art. 69, § 6º), o edital não pode cobrar '+exig); exig=1; }
+    if(exig){ bNotas.push('edital exige '+exig+' exercício(s)'); if(anosPres.length && anosPres.length<exig){ pior('atencao'); bProbl.push('o edital exige o balanço dos '+exig+' últimos exercícios e o licitante apresentou '+anosPres.length+' ('+anosPres.join(', ')+'), faltando exercício(s)'+(constit?'; a empresa foi constituída em '+constit.data+', então não se aplica a exceção do art. 69, § 6º':'; se a empresa tiver menos de 2 anos, aplica-se a exceção do art. 69, § 6º e a exigência cai para o último exercício')); } }
     else if(anosPres.length){ var anoBase=(anParseDt(p.dataBase)||new Date()).getFullYear(); var anoBal=Math.max.apply(null,anosPres); if(anoBal<anoBase-1){ pior('atencao'); bProbl.push('balanço mais recente é do exercício de '+anoBal+', pode não ser o último exigível (art. 69, I)'); } }
     // ESCRITURAÇÃO
     if(/termo de abertura|termo de encerramento|junta comercial|livro di[aá]rio|\bsped\b|escritura[çc][aã]o cont[aá]bil/.test(bn)) bNotas.push('há menção a registro/escrituração'); else { pior('conferir'); bNotas.push('não localizada menção a termo de abertura/encerramento ou registro; conferir a escrituração'); }
     // ÍNDICES CONTÁBEIS: exigidos pelo edital x declarados pelo licitante
-    var idxDefs=[['Liquidez Corrente','liquidez\\s+corrente|\\bilc\\b|\\blc\\b'],['Liquidez Geral','liquidez\\s+geral|\\bilg\\b|\\blg\\b'],['Solvência Geral','solv[eê]ncia\\s+geral|\\bisg\\b|\\bsg\\b']];
-    var licAll=(l.docs||[]).map(function(x){return x.texto||'';}).join('\n');
+    // Siglas de 2 letras (LC, LG, SG) saíram: LC casava com "LC 123/2006" e SG com "Seguro e Garantia"
+    // do BDI. O nome por extenso e a sigla de 3 letras (ILC/ILG/ISG) são inequívocos.
+    var idxDefs=[['Liquidez Corrente','liquidez\\s+corrente|\\bilc\\b'],['Liquidez Geral','liquidez\\s+geral|\\bilg\\b'],['Solvência Geral','solv[eê]ncia\\s+geral|\\bisg\\b']];
+    var licAll=anTextoContabil(l.docs);
+    // O sistema CALCULA o índice a partir do balanço quando o licitante não declarou o número.
+    // Balanço é digitalizado: se a conta der ABAIXO do piso, mostra a conta e manda conferir. Nunca
+    // inabilita empresa por aritmética feita em cima de leitura de scanner.
+    var calc=(criadaNoExercicio&&/dispensa/.test(anNormTxt(refTxt)))?{}:anIndicesCalculados(bt);
     idxDefs.forEach(function(ix){ var piso=anIndicePiso(refTxt, ix[1]); if(piso==null) return; var decl=anIndiceDecl(licAll, ix[1]);
-      if(decl==null){ pior('conferir'); bProbl.push('o edital exige '+ix[0]+' >= '+String(piso).replace('.',',')+' e o índice não foi localizado nos documentos do licitante; calcular/conferir'); }
+      if(decl==null && calc[ix[0]]){ var c=calc[ix[0]], v2=Math.round(c.v*100)/100;
+        if(v2 >= piso*0.999){ bNotas.push(ix[0]+' não veio declarado, mas o sistema calculou '+String(v2).replace('.',',')+' pelo balanço ('+c.conta+'), acima do mínimo '+String(piso).replace('.',',')+'; a comissão confere a conta'); }
+        else { pior('conferir'); bProbl.push('o edital exige '+ix[0]+' >= '+String(piso).replace('.',',')+', o índice não veio declarado e a conta feita pelo sistema com os valores lidos no balanço ('+c.conta+') dá '+String(v2).replace('.',',')+', ABAIXO do mínimo. Como o balanço é lido por digitalização, CONFERIR os valores no documento antes de qualquer decisão'); }
+        return; }
+      if(decl==null){ pior('conferir'); bProbl.push('o edital exige '+ix[0]+' >= '+String(piso).replace('.',',')+' e o índice não foi localizado nos documentos do licitante, nem foi possível calculá-lo pelo balanço; calcular/conferir'); }
       else if(decl < piso*0.999){ pior('atencao'); bProbl.push(ix[0]+' declarado '+String(decl).replace('.',',')+' ABAIXO do mínimo exigido '+String(piso).replace('.',',')+' (art. 69, § 1º)'); }
       else bNotas.push(ix[0]+' '+String(decl).replace('.',',')+' (>= '+String(piso).replace('.',',')+' exigido)'); });
+    // Patrimônio líquido e capital social lidos do balanço: servem à comprovação do art. 69, § 4º.
+    if(calc._pl!=null) bNotas.push('patrimônio líquido no balanço: '+money(calc._pl));
+    // art. 69, § 2º: o edital NÃO pode exigir faturamento mínimo nem índice de rentabilidade. Aqui
+    // o sistema protege o próprio órgão, porque edital ilegal derruba o certame inteiro.
+    if(/faturamento\s+m[ií]nimo|faturamento\s+anterior/.test(anNormTxt(refTxt))){ pior('conferir'); bProbl.push('o EDITAL parece exigir faturamento mínimo anterior, o que é VEDADO pelo art. 69, § 2º, da Lei 14.133/2021. Isso é falha do edital, não do licitante: conferir antes de usar como critério'); }
+    if(/[ií]ndice\s+de\s+(rentabilidade|lucratividade)/.test(anNormTxt(refTxt))){ pior('conferir'); bProbl.push('o EDITAL parece exigir índice de rentabilidade ou lucratividade, o que é VEDADO pelo art. 69, § 2º, da Lei 14.133/2021. Falha do edital, não do licitante'); }
     if(/patrim[oô]nio l[ií]quido[^0-9a-z]{0,20}(negativ|\(|-)/.test(bn)){ pior('atencao'); bProbl.push('indício de patrimônio líquido negativo'); }
     if(bProbl.length) return {status:bst==='conforme'?'atencao':bst, nota:'Pendência: '+bProbl.join('; ')+'.'+(bNotas.length?' ('+bNotas.join('; ')+')':'')};
     return {status:bst, nota:'Balanço presente ('+bNotas.join('; ')+').'+(anExigExercicios(refTxt)||anIndicePiso(refTxt,'liquidez\\s+corrente')!=null?'':' Se o edital exigir número de exercícios ou índices contábeis, suba o edital na aba Certame para o confronto automático.')};
@@ -4738,7 +4950,7 @@ function anStatusGeral(itens,prop,obra,exig){ if(prop&&prop.status==='atencao'&&
 // Confere UM licitante (o motor). anConferir é o clique na tela; anConferirTodos roda a fila inteira.
 function anConferirLic(p,l){ if(!p||!l) return false; var docs=l.docs||[]; if(!docs.length) return false;
   var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas;
-  var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; });
+  var itens=anRequeridos().filter(function(r){ return (!r.so_meepp || (l.meepp==='Sim')) && (!r.so_obra || (p.obra==='Sim')); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; });
   var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l);
   if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null;
   var exig=anExigenciasEdital(p,l);
