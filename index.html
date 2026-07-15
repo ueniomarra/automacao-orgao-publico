@@ -4023,30 +4023,54 @@ var AN_UNIDS='UN|UND|UNID|UNIDADE|M2|M3|M²|M³|M|KM|KG|TON|T|VB|SERV|H|HORA|MES
 function anNumIt(s){ s=String(s||'').trim(); if(/^\d{1,3}(\.\d{3})+$/.test(s)) return parseInt(s.replace(/\./g,''),10); if(s.indexOf(',')>=0) return parseFloat(s.replace(/\./g,'').replace(',','.')); return parseFloat(s.replace(/\.(?=\d{3}\b)/g,'')); }
 function anParseItens(txt){
   var out=[], re=new RegExp('^\\s*(\\d{1,4}(?:\\.\\d{1,3}){0,3})[\\s.):-]+(.+)$');
-  // token de número: milhar com ponto (com/sem decimal), ou inteiro/decimal simples
-  var reNum=/\d{1,3}(?:\.\d{3})+(?:,\d{1,4})?|\d+,\d{1,4}|\d{2,}|\d+/g;
+  // Token de número. A planilha real MISTURA padrões (quantidade "2.52" com ponto e dinheiro "72,37" com vírgula),
+  // então a ordem importa: 1) milhar com ponto (1.234.567,89 / 3.000) sem dígito colado depois; 2) decimal com
+  // vírgula; 3) decimal com ponto (2.52 / 8.9242); 4) inteiro.
+  var reNum=/\d{1,3}(?:\.\d{3})+(?:,\d{1,4})?(?!\d)|\d+,\d{1,4}|\d+\.\d+|\d+/g;
   var UNRE=new RegExp('\\b('+AN_UNIDS+')\\.?\\s*$','i');
-  var UNMID=new RegExp('\\b('+AN_UNIDS+')\\.?\\b','ig');
+  // 1ª passada: separa as linhas candidatas e seus números
+  var cands=[];
   String(txt||'').split('\n').forEach(function(ln){
     ln=ln.replace(/\s+/g,' ').trim(); if(ln.length<10) return;
     var m=re.exec(ln); if(!m) return;
-    var resto=m[2];
-    var nums=[], x; reNum.lastIndex=0; while(x=reNum.exec(resto)) nums.push({v:x[0], i:x.index, f:x.index+x[0].length});
+    var resto=m[2], nums=[], x; reNum.lastIndex=0;
+    while(x=reNum.exec(resto)) nums.push({v:x[0], i:x.index});
     if(nums.length<2) return;
-    // qtd, unit, total = os TRÊS últimos números da linha (padrão de planilha: ... QTD VLR.UNIT VLR.TOTAL)
-    var fim=nums.slice(-3);
-    var total=anNumIt(fim[fim.length-1].v), unit=anNumIt(fim[fim.length-2].v), qtd=fim.length>=3?anNumIt(fim[0].v):null;
-    var corte=fim[0].i, desc=resto.slice(0,corte).trim();
-    // se só há 2 números, tenta achar a quantidade (inteiro) antes deles
-    if(qtd==null){ var mi=new RegExp('(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s+(?:'+AN_UNIDS+')?\\.?\\s*$','i').exec(desc); if(mi) qtd=anNumIt(mi[1]); }
+    cands.push({cod:m[1], resto:resto, nums:nums});
+  });
+  // DESCOBRE O LAYOUT DA PLANILHA em vez de chutar "os 3 últimos números".
+  // Planilha de obra costuma ter 3 colunas de valor (VU sem BDI, VU com BDI, Total): ali o antepenúltimo número
+  // NÃO é a quantidade. Aqui se procura, contando do fim, as posições de QTD e UNIT cujo produto bate com o TOTAL,
+  // e se adota a posição que se repete na maioria dos itens do documento.
+  var tally={};
+  cands.forEach(function(c){
+    var n=c.nums.length, total=anNumIt(c.nums[n-1].v); if(!(total>0)) return;
+    for(var ou=2; ou<=Math.min(5,n); ou++){
+      for(var oq=ou+1; oq<=Math.min(8,n); oq++){
+        var u=anNumIt(c.nums[n-ou].v), q=anNumIt(c.nums[n-oq].v);
+        if(!(u>0)||!(q>0)) continue;
+        if(Math.abs(q*u-total)<=Math.max(0.02,total*0.005)){ var k=oq+'|'+ou; tally[k]=(tally[k]||0)+1; return; }
+      }
+    }
+  });
+  var modal=null, best=0;
+  Object.keys(tally).forEach(function(k){ if(tally[k]>best){ best=tally[k]; modal=k; } });
+  var OQ=null, OU=null;
+  if(modal && best>=Math.max(2, Math.floor(cands.length*0.15))){ var pp=modal.split('|'); OQ=+pp[0]; OU=+pp[1]; }
+  // 2ª passada: aplica o layout achado a TODOS os itens (inclusive os que não fecham, que viram apontamento real)
+  var seen={};
+  cands.forEach(function(c){
+    var n=c.nums.length, total=anNumIt(c.nums[n-1].v), qtd=null, unit=null, corte=c.nums[n-1].i, layout='fim';
+    if(OQ && n>=OQ){ unit=anNumIt(c.nums[n-OU].v); qtd=anNumIt(c.nums[n-OQ].v); corte=c.nums[n-OQ].i; layout='auto'; }
+    else { var fim=c.nums.slice(-3); total=anNumIt(fim[fim.length-1].v); unit=anNumIt(fim[fim.length-2].v); qtd=fim.length>=3?anNumIt(fim[0].v):null; corte=fim[0].i; }
+    var desc=c.resto.slice(0,corte).trim();
     var un=null; var mu=UNRE.exec(desc); if(mu){ un=mu[1].toUpperCase(); desc=desc.slice(0,mu.index).trim(); }
-    else { UNMID.lastIndex=0; var arr,last=null; while(arr=UNMID.exec(desc)) last=arr; }
-    // corrige coerência: se qtd*unit bate melhor com o total trocando a ordem, mantém (planilhas variam)
     if(!desc || desc.length<3) return;
     if(unit<0 || total<0) return;
     // item com preço ZERO (não cotado) NÃO pode ser descartado em silêncio: entra e é apontado no confronto
     if(!(total>0) && !(qtd>0)) return;
-    out.push({cod:m[1], desc:desc.slice(0,120), un:un, qtd:(qtd>0?qtd:null), unit:unit, total:total});
+    var kk=c.cod+'|'+total; if(seen[kk]) return; seen[kk]=1;
+    out.push({cod:c.cod, desc:desc.slice(0,120), un:un, qtd:(qtd>0?qtd:null), unit:unit, total:total, layout:layout});
   });
   // remove duplicatas de cabeçalho repetido (mesmo cod+total)
   var seen={}, res=[];
@@ -4076,7 +4100,8 @@ function anAnaliseObra(p,l){
       if(r.unit>0 && c.unit>r.unit*1.0001) sobre.push(r.cod+' (unitário '+money(c.unit)+' acima da referência '+money(r.unit)+')');
       if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(r.cod+' (unitário '+money(c.unit)+' abaixo de 50% da referência '+money(r.unit)+')');
     });
-    licIt.forEach(function(c){ if(c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
+    // só aponta erro de conta quando as colunas foram identificadas com segurança (layout auto); no chute, não se acusa
+    licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
     var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod+' '+c.desc.slice(0,35); });
     if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado ou sem preço: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão ou recusa de cotar.');
     var semPrecoRef=refIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod; });
