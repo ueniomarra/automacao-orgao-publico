@@ -3757,8 +3757,8 @@ function anRenderProc(root){
   h+='<div class="frow c3"><div class="field"><label>Valor total estimado (R$)</label><input id="an-valest" value="'+(p.valorEstimado?money(p.valorEstimado).replace("R$ ",""):"")+'" placeholder="1.132.989,99"></div><div class="field"><label>Data-base da sessão</label><input id="an-datab" value="'+esc(p.dataBase)+'" placeholder="dd/mm/aaaa"></div><div class="field"><label>Inversão de fases?</label>'+pills('aninv',['Não','Sim'],p.inversao)+'</div></div>';
   h+='<div class="hint" style="margin-top:12px;display:flex;gap:8px;align-items:flex-start"><svg class="ic" style="width:14px;height:14px;flex:none;margin-top:2px"><use href="#i-shield"/></svg><span>'+esc(anModoTxt(modo))+'</span></div>';
   h+='<div class="fgroup" style="margin-top:14px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos da licitação (a régua da comparação)</div>';
-  h+='<div class="hint" style="margin-bottom:8px">Suba o edital, o termo de referência e, em obras, a planilha orçamentária de referência, o memorial e o cronograma. O sistema lê tudo e confronta item a item com a planilha, o BDI e o cronograma de cada licitante.</div>';
-  h+='<input id="an-file-cert" type="file" accept=".pdf,.zip,image/*,application/pdf,application/zip" multiple onchange="anOnUploadCertame(this)">';
+  h+='<div class="hint" style="margin-bottom:8px">Suba o edital, o termo de referência e a planilha de referência (PDF ou Excel), e em obras também o memorial e o cronograma. O sistema lê tudo e confronta item a item com a planilha, o BDI e o cronograma de cada licitante.</div>';
+  h+='<input id="an-file-cert" type="file" accept=".pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip" multiple onchange="anOnUploadCertame(this)">';
   h+='<div id="an-prog-cert" class="hint" style="margin-top:6px"></div>';
   if((p.docsCertame||[]).length){ h+='<table class="itab" style="margin-top:10px"><tbody>'; p.docsCertame.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td style="width:110px">'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td style="width:90px"><button class="btn-ghost" type="button" onclick="anDelDocCert('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
   h+='</div>';
@@ -3893,6 +3893,19 @@ async function anLerEntrada(file, prog){
     return out;
   }
   if(/^(png|jpg|jpeg|webp|bmp|tif|tiff|gif)$/.test(ext) || tp.indexOf('image/')===0){ var ri=await anLerImagem(file, prog); return [{nome:name, texto:ri.texto, ocr:ri.ocr, paginas:ri.paginas, pags:ri.pags}]; }
+  // Planilha (Excel/CSV): a licitação de muitos itens costuma vir em Excel. Os números saem em padrão brasileiro
+  // (vírgula decimal, sem separador de milhar) para o confronto item a item ler sem ambiguidade.
+  if(/^(xlsx|xls|csv)$/.test(ext) || tp.indexOf('spreadsheet')>=0 || tp.indexOf('excel')>=0 || tp.indexOf('csv')>=0){
+    if(prog) prog('Lendo a planilha "'+name+'"...');
+    var XLSX=await anEnsureXlsx(); var wb=XLSX.read(new Uint8Array(await file.arrayBuffer()), {type:'array'});
+    // quebra de linha DENTRO da célula (descrição em 2 linhas) partiria o item em duas linhas e corromperia a leitura: virar espaço
+    var fmt=function(v){ if(v==null) return ''; if(typeof v==='number'){ if(!isFinite(v)) return ''; var s=(Math.round(v*10000)/10000).toFixed(4); s=s.replace(/0+$/,'').replace(/\.$/,''); return s.replace('.',','); } return String(v).replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim(); };
+    var linhas=[];
+    wb.SheetNames.forEach(function(sn){ var ws=wb.Sheets[sn]; if(!ws) return; var rows=XLSX.utils.sheet_to_json(ws,{header:1, raw:true, defval:''});
+      rows.forEach(function(r){ var cel=(r||[]).map(fmt).filter(function(x){return x!=='';}); if(cel.length) linhas.push(cel.join(' ')); }); });
+    var txt=linhas.join('\n');
+    return [{nome:name, texto:txt, ocr:false, paginas:1, pags:[txt]}];
+  }
   var buf=await file.arrayBuffer(); var r=await anLerPdf(buf, prog); return [{nome:name, texto:r.texto, ocr:r.ocr, paginas:r.paginas, pags:r.pags}];
 }
 async function anLerPdf(buf, prog){
@@ -4030,7 +4043,9 @@ function anParseItens(txt){
     else { UNMID.lastIndex=0; var arr,last=null; while(arr=UNMID.exec(desc)) last=arr; }
     // corrige coerência: se qtd*unit bate melhor com o total trocando a ordem, mantém (planilhas variam)
     if(!desc || desc.length<3) return;
-    if(!(total>0) || unit<0) return;
+    if(unit<0 || total<0) return;
+    // item com preço ZERO (não cotado) NÃO pode ser descartado em silêncio: entra e é apontado no confronto
+    if(!(total>0) && !(qtd>0)) return;
     out.push({cod:m[1], desc:desc.slice(0,120), un:un, qtd:(qtd>0?qtd:null), unit:unit, total:total});
   });
   // remove duplicatas de cabeçalho repetido (mesmo cod+total)
@@ -4062,6 +4077,10 @@ function anAnaliseObra(p,l){
       if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(r.cod+' (unitário '+money(c.unit)+' abaixo de 50% da referência '+money(r.unit)+')');
     });
     licIt.forEach(function(c){ if(c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
+    var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod+' '+c.desc.slice(0,35); });
+    if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado ou sem preço: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão ou recusa de cotar.');
+    var semPrecoRef=refIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod; });
+    if(semPrecoRef.length) push('Itens sem preço na planilha do edital','conferir', semPrecoRef.length+' item(ns) da referência estão com valor zerado ('+semPrecoRef.slice(0,8).join(', ')+(semPrecoRef.length>8?'...':'')+'). Sem preço de referência não há como comparar esses itens; conferir a planilha do edital.');
     var soma=licIt.reduce(function(a,b){return a+(b.total||0);},0);
     det=det.concat([{k:'Itens lidos no edital', v:String(refIt.length)},{k:'Itens lidos na proposta', v:String(licIt.length)},{k:'Soma dos itens da proposta', v:money(soma)}]);
     if(faltando.length) push('Itens do edital ausentes na proposta','atencao', faltando.length+' item(ns): '+faltando.slice(0,8).join('; ')+(faltando.length>8?' e mais '+(faltando.length-8):'')+'. Proposta incompleta é desclassificável (art. 59, II).');
@@ -4230,8 +4249,8 @@ function anRenderConferencia(root){
   h+=anLeg('<b>O que fazer nesta tela:</b> suba os documentos que esta empresa enviou (certidões, balanço, atestado, proposta e planilha). O sistema lê cada arquivo, até os escaneados, e você confere a categoria de cada um. Depois clique em <b>Conferir</b>: ele compara tudo com as exigências e com o edital e mostra o resultado embaixo.');
   h+='<div class="hint"><b>'+esc(l.razao||'(licitante sem nome)')+'</b> | CNPJ: '+esc(l.cnpj||'não informado')+' | Classificação: '+esc(l.ordem||'-')+'</div>';
   h+='<div class="fgroup" style="margin-top:12px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos do licitante</div>';
-  h+='<div class="hint" style="margin-bottom:8px">Suba tudo que o licitante enviou, do jeito que veio: um PDF único com todos os documentos, vários arquivos soltos (PDF ou imagem), ou um arquivo compactado (.zip). Não há limite de quantidade. O sistema lê página por página, faz OCR sozinho das páginas escaneadas, identifica cada documento e confere com o edital. Você não precisa separar nada.</div>';
-  h+='<input id="an-file" type="file" accept=".pdf,.zip,image/*,application/pdf,application/zip" multiple onchange="anOnUpload(this)">';
+  h+='<div class="hint" style="margin-bottom:8px">Suba tudo que o licitante enviou, do jeito que veio: um PDF único com todos os documentos, vários arquivos soltos (PDF, imagem ou planilha em Excel), ou um arquivo compactado (.zip). Não há limite de quantidade. O sistema lê página por página, faz OCR sozinho das páginas escaneadas, identifica cada documento e confere com o edital. Você não precisa separar nada.</div>';
+  h+='<input id="an-file" type="file" accept=".pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip" multiple onchange="anOnUpload(this)">';
   h+='<div id="an-prog" class="hint" style="margin-top:6px"></div>';
   if(docs.length){ h+='<table class="itab" style="margin-top:10px"><thead><tr><th style="width:42%">Arquivo</th><th>Categoria</th><th>Leitura</th><th></th></tr></thead><tbody>'; docs.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td><select onchange="anSetDocCat('+i+',this.value)">'+AN_CATS.map(function(c){return '<option'+(c===d.categoria?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td>'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td><button class="btn-ghost" type="button" onclick="anDelDoc('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
   if(docs.length){ var _dos=anSecoesDossie(docs).contagem, _dk=Object.keys(_dos); if(_dk.length){ h+='<div style="display:flex;gap:8px;align-items:flex-start;background:#f1f5fb;border-left:4px solid #C9A961;border-radius:8px;padding:9px 12px;margin-top:10px"><svg class="ic" style="width:15px;height:15px;flex:none;margin-top:1px"><use href="#i-folder"/></svg><span style="font-size:13px;color:#0A2342;line-height:1.55"><b>Documentos identificados dentro dos arquivos enviados:</b> '+_dk.map(function(k){return esc(k)+' ('+_dos[k]+' pg)';}).join(', ')+'. Quando o licitante envia tudo num arquivo só, o sistema lê página por página, separa por tipo e confere cada um com o edital. Confira a lista; se faltar algum tipo, o documento não foi localizado.</span></div>'; } }
