@@ -4205,6 +4205,13 @@ function anParseItens(txt){
   return res;
 }
 function anExtraiBDI(txt){ var m=/\bB\.?\s?D\.?\s?I\.?\b[^0-9%]{0,60}?(\d{1,2}(?:[.,]\d{1,4})?)\s*%/i.exec(String(txt||'')); return m?anNum(m[1]):null; }
+// Unidade normalizada antes de comparar: UN, UND, UNID e UNIDADE são a mesma coisa, M² e M2 também.
+// Sem isso, sinônimo de unidade viraria apontamento falso contra a empresa (E13).
+function anNormUn(u){
+  var s=String(u||'').toUpperCase().replace(/[.\s]/g,'').replace(/²/g,'2').replace(/³/g,'3').normalize('NFD').replace(/[̀-ͯ]/g,'');
+  var syn={UND:'UN',UNID:'UN',UNIDADE:'UN',PECA:'PC',CONJ:'CJ',CONJUNTO:'CJ',GLB:'VB',GL:'VB',GLOBAL:'VB',VERBA:'VB',SERV:'VB',TON:'T',TONELADA:'T',HORA:'H',HR:'H',METRO:'M',LITRO:'L',JOGO:'JG',PAR:'PAR',SACO:'SC',CAIXA:'CX'};
+  return syn[s]||s;
+}
 function anNormDesc(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().slice(0,40); }
 function anAnaliseObra(p,l){
   var refTxt=(p.docsCertame||[]).map(function(d){return d.texto||'';}).join('\n');
@@ -4227,14 +4234,22 @@ function anAnaliseObra(p,l){
   else {
     var byCod={}, byDesc={};
     licIt.forEach(function(it){ byCod[it.cod]=byCod[it.cod]||it; byDesc[anNormDesc(it.desc)]=byDesc[anNormDesc(it.desc)]||it; });
-    var faltando=[], qtdDiv=[], sobre=[], baixo=[], conta=[];
+    var faltando=[], qtdDiv=[], sobre=[], baixo=[], conta=[], unDiv=[];
     refIt.forEach(function(r){
       var c=byCod[r.cod]||byDesc[anNormDesc(r.desc)];
       if(!c){ faltando.push(r.cod+' '+r.desc.slice(0,40)); return; }
       if(r.qtd!=null && c.qtd!=null && Math.abs(r.qtd-c.qtd)>0.011) qtdDiv.push(r.cod+' ('+r.qtd+' no edital, '+c.qtd+' na proposta)');
+      // coluna da unidade: preço por M2 não é preço por M3, e o parser já lia a unidade sem nunca compará-la
+      if(r.un && c.un && anNormUn(r.un)!==anNormUn(c.un)) unDiv.push(r.cod+' '+r.desc.slice(0,30)+' ('+r.un+' no edital, '+c.un+' na proposta)');
       if(r.unit>0 && c.unit>r.unit*1.0001 && (c.unit-r.unit)>0.0051) sobre.push(r.cod+' (unitário '+money(c.unit)+' acima da referência '+money(r.unit)+')'); // meio centavo de folga: PDF exibe unitário arredondado a 2 casas
       if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(r.cod+' (unitário '+money(c.unit)+' abaixo de 50% da referência '+money(r.unit)+')');
     });
+    // caminho inverso: item que a empresa cotou e o edital não pede (serviço acrescentado, taxa criada, linha inflada)
+    var refByCod={}, refByDesc={};
+    refIt.forEach(function(r){ refByCod[r.cod]=1; refByDesc[anNormDesc(r.desc)]=1; });
+    var extraIt=licIt.filter(function(c){ return !refByCod[c.cod] && !refByDesc[anNormDesc(c.desc)]; });
+    var extraSoma=extraIt.reduce(function(a,b){ return a+(b.total||0); },0);
+    var extra=extraIt.map(function(c){ return c.cod+' '+c.desc.slice(0,40)+' ('+money(c.total)+')'; });
     // só aponta erro de conta quando as colunas foram identificadas com segurança (layout auto); no chute, não se acusa
     licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001, c.qtd*0.0051)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
     var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod+' '+c.desc.slice(0,35); });
@@ -4256,7 +4271,11 @@ function anAnaliseObra(p,l){
       'Em '+baixo.length+' item(ns) o preço da empresa ficou abaixo da metade da referência do edital. Preço muito baixo não reprova a proposta sozinho, mas levanta a dúvida de que a empresa consiga entregar o item por esse valor.', baixo);
     if(conta.length) push('Conta que não fecha (qtd x unitário difere do total)','atencao', conta.slice(0,8).join('; ')+(conta.length>8?' e mais '+(conta.length-8):'')+'. Erro material pode ser saneado por diligência (art. 64, § 1º) se não alterar a substância.',
       'Em '+conta.length+' item(ns) a planilha da empresa não fecha com ela mesma: quantidade vezes preço unitário não dá o total que a própria empresa imprimiu na linha. Enquanto não se sabe qual dos três números é o certo, o valor da proposta fica em dúvida.', conta);
-    if(!qtdDiv.length && !sobre.length && !conta.length && !baixo.length) push('Planilha item a item','conforme','Quantitativos, unitários e totais conferem com a referência nos itens lidos.');
+    if(unDiv.length) push('Unidade de medida divergente','atencao', unDiv.slice(0,8).join('; ')+(unDiv.length>8?' e mais '+(unDiv.length-8):'')+'. Unidade diferente da do edital descaracteriza o item (art. 59, II).',
+      'Em '+unDiv.length+' item(ns) a empresa cotou numa unidade de medida diferente da que o edital pediu. Preço por metro quadrado não se compara com preço por metro cúbico: muda o que está embutido no item, e o preço deixa de ser comparável com o das outras propostas.', unDiv);
+    if(extra.length) push('Itens na proposta que o edital não pede','atencao', extra.length+' item(ns): '+extra.slice(0,8).join('; ')+(extra.length>8?' e mais '+(extra.length-8):'')+'. Item fora do objeto licitado não integra a proposta (art. 59, II).',
+      'A empresa incluiu '+extra.length+' item(ns) que não estão na planilha do edital, somando '+money(extraSoma)+'. Serviço que a prefeitura não licitou não pode entrar na proposta: infla o valor e desiguala a disputa com quem cotou só o que foi pedido. Conferir se é item acrescentado mesmo ou linha de subtotal ou agrupamento que o sistema leu como item.', extra);
+    if(!qtdDiv.length && !sobre.length && !conta.length && !baixo.length && !unDiv.length && !extra.length) push('Planilha item a item','conforme','Quantitativos, unidades, unitários e totais conferem com a referência nos itens lidos.');
     var g=(l.valorProposta>0)?l.valorProposta:anValorGlobal(licTxt);
     if(g && soma>0 && Math.abs(soma-g)>Math.max(1, g*0.005)) push('Soma dos itens x valor global','atencao','A soma dos itens lidos ('+money(soma)+') difere do valor global da proposta ('+money(g)+'). Conferir se a leitura pegou todas as páginas da planilha ou se há erro de soma.',
       'A soma dos itens da planilha deveria ser igual ao valor global que a empresa declarou, e os dois números não batem: diferença de '+money(Math.abs(soma-g))+'. Antes de tratar como erro da empresa, conferir se a leitura do sistema pegou todas as páginas da planilha.');
