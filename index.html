@@ -3889,7 +3889,7 @@ function anRenderProc(root){
   h+='<div class="hint" style="margin-bottom:8px">Suba o edital, o termo de referência e a planilha de referência (PDF ou Excel), e em obras também o memorial e o cronograma. O sistema lê tudo e confronta item a item com a planilha, o BDI e o cronograma de cada licitante.</div>';
   h+='<input id="an-file-cert" type="file" accept=".pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip" multiple onchange="anOnUploadCertame(this)">';
   h+='<div id="an-prog-cert" class="hint" style="margin-top:6px"></div>';
-  if((p.docsCertame||[]).length){ h+='<table class="itab" style="margin-top:10px"><tbody>'; p.docsCertame.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td style="width:110px">'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td style="width:90px"><button class="btn-ghost" type="button" onclick="anDelDocCert('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
+  if((p.docsCertame||[]).length){ h+='<table class="itab" style="margin-top:10px"><tbody>'; p.docsCertame.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td style="width:110px">'+(d.leituraFalhou?'<b>falhou</b>':(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)')+'</td><td style="width:95px">'+anArqCel(d)+'</td><td style="width:90px"><button class="btn-ghost" type="button" onclick="anDelDocCert('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
   h+='</div>';
   h+='<button class="btn-primary" type="button" style="margin-top:12px;justify-content:center" onclick="anSalvarCertame()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Salvar certame</button>';
   h+='</div></div>';
@@ -4041,6 +4041,35 @@ function anWorker(){ if(_anWk) return _anWk; _anWk=anEnsureTess().then(function(
 function anScheduler(){ if(_anSch) return _anSch; _anSch=anEnsureTess().then(async function(Tess){ var n=Math.max(2, Math.min(4, (navigator.hardwareConcurrency||4)-1)); var s=Tess.createScheduler(); for(var i=0;i<n;i++){ s.addWorker(await Tess.createWorker('por')); } s._n=n; return s; }); return _anSch; }
 function anEnsureZip(){ if(window.JSZip) return Promise.resolve(window.JSZip); if(!_anZip){ _anZip=anLoadScript('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js').then(function(){ return window.JSZip; }); } return _anZip; }
 async function anLerImagem(file, prog){ var sch=await anScheduler(); if(prog) prog('Lendo por OCR a imagem "'+(file.name||'imagem')+'"...'); var cv=await camImagemParaCanvas(file); var r=await sch.addJob('recognize', cv); var t=(r&&r.data&&r.data.text)||''; return {texto:t, ocr:true, paginas:1, pags:[t]}; }
+// COFRE DOS ARQUIVOS. O sistema guardava só o texto extraído e jogava o arquivo fora: documento de licitação
+// é prova e base documental do órgão, não pode existir só na memória do navegador de quem subiu. Aqui o arquivo
+// ORIGINAL vai para o bucket privado docs-licitacao, em {orgao}/{processo}/{id}__{nome}, e o processo guarda só
+// o caminho. Serve para reler quando a leitura melhorar, para mostrar o original ao pregoeiro e como prova.
+var AN_BUCKET='docs-licitacao';
+function anArqPath(procId, docId, nome){
+  var limpo=String(nome||'arquivo').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9._-]/g,'_').slice(-90);
+  return anOrg()+'/'+procId+'/'+docId+'__'+limpo;
+}
+function anGuardarArquivo(file, procId, docId, nome){
+  if(typeof SB==='undefined'||!SB||typeof CURRENT_USER==='undefined'||!CURRENT_USER) return Promise.resolve({erro:'sem sessão'});
+  var path=anArqPath(procId, docId, nome);
+  return SB.storage.from(AN_BUCKET).upload(path, file, {upsert:true, contentType:(file&&file.type)||'application/octet-stream'})
+    .then(function(r){ return (r&&r.error) ? {erro:(r.error.message||'a nuvem recusou o arquivo')} : {path:path, tam:(file&&file.size)||0}; },
+          function(e){ return {erro:((e&&e.message)||'falha de rede ao guardar o arquivo')}; });
+}
+// Célula "Original": diz na cara se o arquivo está guardado ou se só existe o texto lido (documento antigo).
+function anArqCel(d){
+  if(d && d.arq) return '<button class="btn-ghost" type="button" onclick="anBaixarArquivo(\''+esc(d.arq)+'\',\''+esc(d.arqNome||d.nome||'documento')+'\')"><svg class="ic" style="width:13px;height:13px"><use href="#i-save"/></svg> baixar</button>';
+  return '<span title="Enviado antes do cofre de arquivos existir: só o texto lido foi guardado. Reenvie o arquivo para arquivar o original." style="color:#8a6d3b">só texto</span>';
+}
+function anBaixarArquivo(path, nome){
+  if(!path||typeof SB==='undefined'||!SB){ toast('Arquivo original não disponível para este documento.'); return; }
+  SB.storage.from(AN_BUCKET).createSignedUrl(path, 120).then(function(r){
+    if(r&&r.error){ toast('Não foi possível abrir o arquivo: '+(r.error.message||'')); return; }
+    var u=r&&r.data&&r.data.signedUrl; if(!u){ toast('Não foi possível abrir o arquivo.'); return; }
+    var a=document.createElement('a'); a.href=u; a.download=nome||'documento'; a.target='_blank'; document.body.appendChild(a); a.click(); a.remove();
+  }, function(){ toast('Não foi possível abrir o arquivo.'); });
+}
 async function anLerEntrada(file, prog){
   var name=file.name||'arquivo', ext=(name.split('.').pop()||'').toLowerCase(), tp=(file.type||'');
   if(ext==='zip' || tp.indexOf('zip')>=0){
@@ -4511,8 +4540,18 @@ function anAnaliseObra(p,l){
   }
   return {checks:checks, det:det, refItens:refIt.length, licItens:licIt.length};
 }
-function anOnUpload(input){ var files=input.files; if(!files||!files.length) return; var l=anLic(); if(!l) return; l.docs=l.docs||[]; var arr=[].slice.call(files); var prog=function(msg){ var el=document.getElementById('an-prog'); if(el) el.textContent=msg; };
-  (function next(k){ if(k>=arr.length){ input.value=''; prog('Leitura concluída. Confira os documentos identificados abaixo e clique em Conferir.'); anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); anLerEntrada(f, prog).then(function(list){ (list||[]).forEach(function(d){ l.docs.push({nome:d.nome, categoria:anSugereCat(d.nome), texto:d.texto, ocr:d.ocr, paginas:d.paginas, pags:d.pags||null}); }); anSave(); toast('Lido: '+f.name+((list&&list.length>1)?(' ('+list.length+' documentos)'):'')); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
+function anOnUpload(input){ var files=input.files; if(!files||!files.length) return; var p=anCur(), l=anLic(); if(!p||!l) return; l.docs=l.docs||[]; var arr=[].slice.call(files); var prog=function(msg){ var el=document.getElementById('an-prog'); if(el) el.textContent=msg; };
+  (function next(k){ if(k>=arr.length){ input.value=''; prog('Leitura concluída. Confira os documentos identificados abaixo e clique em Conferir.'); anSave(); renderAnalise(); return; } var f=arr[k];
+    // O arquivo vai para o cofre ANTES da leitura: se a leitura ou a gravação do processo falhar, o original está salvo.
+    prog('Guardando '+f.name+' no cofre de documentos...');
+    var docId=anGid('d');
+    anGuardarArquivo(f, p.id, docId, f.name).then(function(g){
+      if(g.erro){ prog(''); toast('Não foi possível guardar "'+f.name+'" no cofre ('+g.erro+'). O arquivo NÃO foi salvo: tente de novo antes de seguir.'); next(k+1); return; }
+      prog('Lendo '+f.name+'...');
+      anLerEntrada(f, prog).then(function(list){ (list||[]).forEach(function(d,ix){ l.docs.push({id:(ix?anGid('d'):docId), nome:d.nome, categoria:anSugereCat(d.nome), texto:d.texto, ocr:d.ocr, paginas:d.paginas, pags:d.pags||null, arq:g.path, arqNome:f.name, arqTam:g.tam}); }); anSave(); toast('Guardado e lido: '+f.name+((list&&list.length>1)?(' ('+list.length+' documentos)'):'')); next(k+1); })
+      .catch(function(e){ toast('Arquivo "'+f.name+'" guardado no cofre, mas a leitura falhou: '+e.message+'. Ele fica salvo para reenvio.'); l.docs.push({id:docId, nome:f.name, categoria:anSugereCat(f.name), texto:'', ocr:false, paginas:0, arq:g.path, arqNome:f.name, arqTam:g.tam, leituraFalhou:true}); anSave(); next(k+1); });
+    });
+  })(0);
 }
 function anSetDocCat(i,cat){ var l=anLic(); if(!l||!l.docs[i]) return; l.docs[i].categoria=cat; anSave(); }
 function anDelDoc(i){ var l=anLic(); if(!l) return; var nm=(l.docs[i]&&l.docs[i].nome)||'este arquivo'; if(!confirm('Remover o documento "'+nm+'"?')) return; l.docs.splice(i,1); anSave(); renderAnalise(); }
@@ -4641,7 +4680,16 @@ function anCompatAtestado(txt,p){ var kws=anObjKeywords(p.objeto||''); if(!kws.l
   return {status:'atencao', nota:'Não foram encontrados no atestado os termos do objeto do certame ('+faltou.join(', ')+'). Verifique a compatibilidade (art. 67).'};
 }
 function anOnUploadCertame(input){ var files=input.files; if(!files||!files.length) return; var p=anCur(); if(!p) return; p.docsCertame=p.docsCertame||[]; var arr=[].slice.call(files); var prog=function(m){ var el=document.getElementById('an-prog-cert'); if(el) el.textContent=m; };
-  (function next(k){ if(k>=arr.length){ input.value=''; p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); return; } var f=arr[k]; prog('Lendo '+f.name+'...'); anLerEntrada(f, prog).then(function(list){ (list||[]).forEach(function(d){ p.docsCertame.push({nome:d.nome,texto:d.texto,ocr:d.ocr,paginas:d.paginas}); }); anSave(); toast('Documento da licitação lido: '+f.name); next(k+1); }).catch(function(e){ toast('Falha ao ler '+f.name+': '+e.message); next(k+1); }); })(0);
+  (function next(k){ if(k>=arr.length){ input.value=''; p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); return; } var f=arr[k];
+    prog('Guardando '+f.name+' no cofre de documentos...');
+    var docId=anGid('d');
+    anGuardarArquivo(f, p.id, docId, f.name).then(function(g){
+      if(g.erro){ prog(''); toast('Não foi possível guardar "'+f.name+'" no cofre ('+g.erro+'). O arquivo NÃO foi salvo: tente de novo antes de seguir.'); next(k+1); return; }
+      prog('Lendo '+f.name+'...');
+      anLerEntrada(f, prog).then(function(list){ (list||[]).forEach(function(d,ix){ p.docsCertame.push({id:(ix?anGid('d'):docId), nome:d.nome, texto:d.texto, ocr:d.ocr, paginas:d.paginas, arq:g.path, arqNome:f.name, arqTam:g.tam}); }); anSave(); toast('Guardado e lido: '+f.name); next(k+1); })
+      .catch(function(e){ toast('Arquivo "'+f.name+'" guardado no cofre, mas a leitura falhou: '+e.message+'.'); p.docsCertame.push({id:docId, nome:f.name, texto:'', ocr:false, paginas:0, arq:g.path, arqNome:f.name, arqTam:g.tam, leituraFalhou:true}); anSave(); next(k+1); });
+    });
+  })(0);
 }
 function anDelDocCert(i){ var p=anCur(); if(!p||!p.docsCertame) return; var nm=(p.docsCertame[i]&&p.docsCertame[i].nome)||'este arquivo'; if(!confirm('Remover o documento da licitação "'+nm+'"? Ele é a régua da comparação.')) return; p.docsCertame.splice(i,1); p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); }
 function anStatusGeral(itens,prop,obra,exig){ if(prop&&prop.status==='atencao'&&/ACIMA do estimado|INEXEQU/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); var extra=[].concat((obra&&obra.checks)||[],exig||[]); var xAt=extra.some(function(c){return c.status==='atencao';}); var xCf=extra.some(function(c){return c.status==='conferir';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')||xAt) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})||xCf) return 'ressalvas'; return 'habilitado'; }
@@ -4735,7 +4783,7 @@ function anRenderConferencia(root){
   h+='<div class="hint" style="margin-bottom:8px">Suba tudo que o licitante enviou, do jeito que veio: um PDF único com todos os documentos, vários arquivos soltos (PDF, imagem ou planilha em Excel), ou um arquivo compactado (.zip). Não há limite de quantidade. O sistema lê página por página, faz OCR sozinho das páginas escaneadas, identifica cada documento e confere com o edital. Você não precisa separar nada.</div>';
   h+='<input id="an-file" type="file" accept=".pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip" multiple onchange="anOnUpload(this)">';
   h+='<div id="an-prog" class="hint" style="margin-top:6px"></div>';
-  if(docs.length){ h+='<table class="itab" style="margin-top:10px"><thead><tr><th style="width:42%">Arquivo</th><th>Categoria</th><th>Leitura</th><th></th></tr></thead><tbody>'; docs.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td><select onchange="anSetDocCat('+i+',this.value)">'+AN_CATS.map(function(c){return '<option'+(c===d.categoria?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td>'+(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)</td><td><button class="btn-ghost" type="button" onclick="anDelDoc('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
+  if(docs.length){ h+='<table class="itab" style="margin-top:10px"><thead><tr><th style="width:38%">Arquivo</th><th>Categoria</th><th>Leitura</th><th>Original</th><th></th></tr></thead><tbody>'; docs.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td><select onchange="anSetDocCat('+i+',this.value)">'+AN_CATS.map(function(c){return '<option'+(c===d.categoria?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td>'+(d.leituraFalhou?'<b>falhou</b>':(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)')+'</td><td>'+anArqCel(d)+'</td><td><button class="btn-ghost" type="button" onclick="anDelDoc('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
   if(docs.length){ var _dos=anSecoesDossie(docs).contagem, _dk=Object.keys(_dos); if(_dk.length){ h+='<div style="display:flex;gap:8px;align-items:flex-start;background:#f1f5fb;border-left:4px solid #C9A961;border-radius:8px;padding:9px 12px;margin-top:10px"><svg class="ic" style="width:15px;height:15px;flex:none;margin-top:1px"><use href="#i-folder"/></svg><span style="font-size:13px;color:#0A2342;line-height:1.55"><b>Documentos identificados dentro dos arquivos enviados:</b> '+_dk.map(function(k){return esc(k)+' ('+_dos[k]+' pg)';}).join(', ')+'. Quando o licitante envia tudo num arquivo só, o sistema lê página por página, separa por tipo e confere cada um com o edital. Confira a lista; se faltar algum tipo, o documento não foi localizado.</span></div>'; } }
   h+='<div class="frow c2" style="margin-top:10px"><div class="field"><label>Valor global da proposta, conforme a planilha (R$)</label><input id="an-valprop" value="'+(l.valorProposta?money(l.valorProposta).replace("R$ ",""):"")+'" placeholder="ex.: 1.132.989,99"></div></div>';
   h+='<div class="hint" style="margin-top:4px">Em planilha escaneada o sistema nem sempre isola o total com segurança. Confirme aqui o valor global e o sistema compara automaticamente com o valor estimado do certame.</div>';
