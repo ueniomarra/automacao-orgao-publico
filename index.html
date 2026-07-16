@@ -4246,13 +4246,14 @@ function anExigenciasEdital(p,l){
   // que distingue a certidão da empresa da certidão do profissional em vez de aceitar qualquer menção.
   // Capital social / patrimônio líquido mínimo
   var cap=anExigCapitalPL(refTxt);
+  var _estCap=anValorEstimadoEfetivo(p).v;
   // art. 69, § 4º: capital ou patrimônio líquido mínimo só pode ir até 10% do valor estimado. Acima
   // disso a exigência é ilegal e derruba o certame do próprio órgão, então o alarme é sobre o EDITAL.
-  if(cap){ var _alvoT=cap.v!=null?cap.v:(cap.pct!=null&&p.valorEstimado?p.valorEstimado*cap.pct/100:null);
-    var _pctT=cap.pct!=null?cap.pct:((_alvoT!=null&&p.valorEstimado>0)?(_alvoT/p.valorEstimado*100):null);
+  if(cap){ var _alvoT=cap.v!=null?cap.v:(cap.pct!=null&&_estCap>0?_estCap*cap.pct/100:null);
+    var _pctT=cap.pct!=null?cap.pct:((_alvoT!=null&&_estCap>0)?(_alvoT/_estCap*100):null);
     if(_pctT!=null && _pctT>10.0001) push('Exigência de '+cap.tipo.toLowerCase()+' acima do teto legal', 'atencao', 'O EDITAL exige '+cap.tipo.toLowerCase()+' de '+(cap.pct!=null?(cap.pct+'% do valor estimado'):money(_alvoT))+', o que equivale a '+(Math.round(_pctT*100)/100).toString().replace('.',',')+'% do valor estimado do certame. O art. 69, § 4º, da Lei 14.133/2021 admite no máximo 10% (dez por cento). Falha do EDITAL, não do licitante: rever antes de julgar a habilitação, sob pena de anulação.');
   }
-  if(cap){ var alvo=cap.v!=null?cap.v:(cap.pct!=null&&p.valorEstimado?p.valorEstimado*cap.pct/100:null);
+  if(cap){ var alvo=cap.v!=null?cap.v:(cap.pct!=null&&_estCap>0?_estCap*cap.pct/100:null);
     // O valor é lido só de onde a lei e o edital mandam provar (balanço, contrato social, certidão da
     // Junta), nunca do dossiê inteiro: número solto vira acusação falsa.
     var _fonteCap=null, _capTxt='';
@@ -4509,6 +4510,23 @@ function anMelhorPlanilha(docs){
   if(!best && picotado) return {picotado:picotado};
   return best;
 }
+// ===== O sistema não depende de digitação: deriva o valor estimado e o objeto DO PRÓPRIO EDITAL =====
+// ⚠ Nunca inventa número: só lê do orçamento e do texto do edital que o pregoeiro subiu. Marca a fonte
+// ('informado' x 'derivado') para o pregoeiro saber que o valor veio do edital, não de digitação.
+function anValorEstimadoEfetivo(p){
+  if(p && p.valorEstimado>0) return {v:p.valorEstimado, fonte:'informado'};
+  var g=anValorGlobal(anRefTxt(p)); if(g>0) return {v:g, fonte:'derivado'};
+  var refPl=anMelhorPlanilha((p&&p.docsCertame)||[]);
+  if(refPl && refPl.itens){ var s=refPl.itens.reduce(function(a,x){return a+(x.total||0);},0); if(s>0) return {v:s, fonte:'derivado-soma'}; }
+  return {v:0, fonte:'nenhum'};
+}
+function anObjetoEfetivo(p){
+  if(p && p.objeto && String(p.objeto).trim()) return {txt:String(p.objeto).trim(), fonte:'informado'};
+  var t=String(anRefTxt(p)||'').replace(/\s+/g,' '); if(!t) return {txt:'', fonte:'nenhum'};
+  var m=/\bobjeto\b[^A-Za-zÀ-ú0-9]{0,25}((?:a\s+)?(?:contrata[çc][aã]o|aquisi[çc][aã]o|execu[çc][aã]o|presta[çc][aã]o|amplia[çc][aã]o|constru[çc][aã]o|reforma|pavimenta[çc][aã]o|fornecimento)[^.]{10,200})/i.exec(t);
+  if(m) return {txt:m[1].trim().slice(0,200), fonte:'derivado'};
+  return {txt:'', fonte:'nenhum'};
+}
 // Critério de aceitabilidade de preço UNITÁRIO fixado no edital (art. 59, § 3º): quando existe, cada
 // item tem teto unitário e o licitante não pode ultrapassá-lo mesmo dando desconto no global.
 function anCriterioUnitario(refTxt){ var t=anNormTxt(refTxt);
@@ -4696,20 +4714,33 @@ function anAnaliseObra(p,l){
     // ===== RÉGUA DO LANCE: até onde a empresa pode baixar, e o que não pode mexer (art. 59) =====
     // O pregoeiro pediu: no lance a empresa reduz o preço para vencer. O sistema mostra os limites
     // legais em REAIS e diz, item a item, o que pode e o que não pode ser alterado no desconto.
-    var gLance=(l.valorProposta>0)?l.valorProposta:anValorGlobal(licTxt); if(!(gLance>0) && soma>0) gLance=soma;
-    var rl=anReguaLance(p.valorEstimado, true, gLance>0?gLance:null);
+    // ⚠ O valor da proposta para a regua so vale se for CONFIAVEL: confirmado pela comissao
+    // (valorProposta) ou somado de uma planilha lida LIMPA (licOk + soma). Medido no dado real: a
+    // proposta do MSH esta picotada, e anValorGlobal(licTxt) pescava "100.000" do capital social do
+    // contrato, marcando a empresa como inexequivel FALSAMENTE. Sem valor confiavel, a regua mostra
+    // so os limites em reais e pede para confirmar o valor da proposta, sem classificar em faixa.
+    var gLance=(l.valorProposta>0)?l.valorProposta:((licOk&&soma>0)?soma:null);
+    var estEf=anValorEstimadoEfetivo(p);
+    var fonteEst=(estEf.fonte==='informado')?'':' (valor derivado automaticamente do orçamento do edital, pois o campo Valor estimado não foi preenchido; confira)';
+    var rl=anReguaLance(estEf.v>0?estEf.v:0, true, gLance>0?gLance:null);
     var citaInexeq=/inexequ[ií]veis?\s+as\s+propostas|75\s*%[^.]{0,40}or[çc]ad|acord[aã]o\s+2198\/2023/i.test(anNormTxt(refTxt));
     var critUnit=anCriterioUnitario(refTxt);
-    var regraItens='No lance, o desconto se dá REDUZINDO preços unitários dos itens, nunca alterando quantitativos: mudar quantidade da planilha descaracteriza o objeto e desclassifica (art. 59, II). '+(critUnit?'Este edital fixou critério de aceitabilidade de preço UNITÁRIO: mesmo baixando o global, nenhum item pode ficar ACIMA do unitário de referência (o sistema já aponta isso em "Preço unitário acima da referência").':'Este edital NÃO fixou critério de aceitabilidade de preço unitário; o controle é o preço GLOBAL, mas item cotado a valor irrisório ainda pode ser questionado em diligência de exequibilidade (art. 59, §§ 2º e 3º).');
+    // Régua POR ITEM: quantos itens da proposta passam do unitário de referência do edital (o teto de
+    // cada item quando há critério de aceitabilidade unitário). É a resposta a "o que pode ser mexido".
+    var acimaUnit=0, tetoUnit=[];
+    if(refOk && licOk){ var refU={}; refIt.forEach(function(r){ if(r.unit>0) refU[anNormCod(r.cod)]=r; });
+      licIt.forEach(function(c){ if(c.layout!=='auto'||!(c.unit>0)) return; var rr=refU[anNormCod(c.cod)]; if(rr && c.unit>rr.unit*1.0001 && (c.unit-rr.unit)>0.0051){ acimaUnit++; if(tetoUnit.length<6) tetoUnit.push(rr.cod+' (cotou '+money(c.unit)+', teto de referência '+money(rr.unit)+')'); } }); }
+    var regraItens='No lance, o desconto se dá REDUZINDO preços unitários dos itens, nunca alterando quantitativos: mudar quantidade da planilha descaracteriza o objeto e desclassifica (art. 59, II). '+(critUnit?'Este edital FIXOU critério de aceitabilidade de preço UNITÁRIO: mesmo baixando o global, nenhum item pode ficar ACIMA do unitário de referência do edital, que é o TETO de cada item.':'Este edital NÃO fixou critério de aceitabilidade de preço unitário; o controle é o preço GLOBAL, mas item cotado a valor irrisório ainda pode ser questionado em diligência de exequibilidade (art. 59, §§ 2º e 3º).')+(refOk&&licOk?(acimaUnit>0?' Nesta proposta, '+acimaUnit+' item(ns) estão acima do unitário de referência'+(tetoUnit.length?': '+tetoUnit.join('; ')+(acimaUnit>tetoUnit.length?' e mais '+(acimaUnit-tetoUnit.length):''):'')+'.':' Nesta proposta, nenhum item passou do unitário de referência do edital.'):'');
     if(!rl){
       push('Régua do lance (limites legais do desconto)','conferir','Informe o valor estimado do certame (aba Certame) para o sistema calcular, em reais, até onde a empresa pode baixar antes de a proposta virar inexequível (art. 59, § 4º) ou exigir garantia adicional (art. 59, § 5º).',
         'Sem o valor orçado pela Administração não dá para traçar a régua do lance. Preencha o valor estimado do certame: o sistema passa a mostrar o teto (art. 59, III), o piso de 85% que exige garantia adicional (art. 59, § 5º) e o piso de 75% abaixo do qual a proposta é presumida inexequível (art. 59, § 4º). '+regraItens);
     } else {
-      var base='Sobre o valor orçado de '+money(rl.teto)+': TETO '+money(rl.teto)+' (acima disso a proposta é desclassificada, art. 59, III); de '+money(rl.p85)+' a '+money(rl.teto)+' a empresa pode baixar livremente; de '+money(rl.p75)+' a '+money(rl.p85)+' a proposta é aceita mas o vencedor presta GARANTIA ADICIONAL igual à diferença até '+money(rl.p85)+' (art. 59, § 5º); abaixo de '+money(rl.p75)+' (75%) a proposta é presumida INEXEQUÍVEL (art. 59, § 4º'+(citaInexeq?', regra que este edital repete':'')+'), e só segue se a empresa comprovar exequibilidade em diligência (art. 59, § 2º). '+regraItens;
+      var base='Sobre o valor orçado de '+money(rl.teto)+fonteEst+': TETO '+money(rl.teto)+' (acima disso a proposta é desclassificada, art. 59, III); de '+money(rl.p85)+' a '+money(rl.teto)+' a empresa pode baixar livremente; de '+money(rl.p75)+' a '+money(rl.p85)+' a proposta é aceita mas o vencedor presta GARANTIA ADICIONAL igual à diferença até '+money(rl.p85)+' (art. 59, § 5º); abaixo de '+money(rl.p75)+' (75%) a proposta é presumida INEXEQUÍVEL (art. 59, § 4º'+(citaInexeq?', regra que este edital repete':'')+'), e só segue se a empresa comprovar exequibilidade em diligência (art. 59, § 2º). '+regraItens;
       if(rl.faixa==='acima') push('Régua do lance: proposta ACIMA do orçado','atencao','A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está ACIMA do valor estimado de '+money(rl.teto)+': desclassificável por excesso (art. 59, III). '+base, base);
       else if(rl.faixa==='inexeq') push('Régua do lance: proposta INEXEQUÍVEL (abaixo de 75%)','atencao','A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está ABAIXO de 75% do valor orçado ('+money(rl.p75)+'): presumida INEXEQUÍVEL (art. 59, § 4º). Não se desclassifica de imediato: abrir diligência para a empresa demonstrar exequibilidade (art. 59, § 2º). '+base, base);
       else if(rl.faixa==='garantia') push('Régua do lance: exige garantia adicional (75% a 85%)','conferir','A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está entre 75% e 85% do orçado: exequível, mas o vencedor deve prestar GARANTIA ADICIONAL de '+money(rl.p85-rl.gAtual)+' (diferença até 85% de '+money(rl.p85)+'), art. 59, § 5º. '+base, base);
-      else push('Régua do lance (limites legais do desconto)','conforme',(rl.gAtual!=null?'A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está na faixa livre, entre 85% e 100% do orçado. ':'')+base, base);
+      else if(rl.gAtual!=null) push('Régua do lance (limites legais do desconto)','conforme','A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está na faixa livre, entre 85% e 100% do orçado. '+base, base);
+      else push('Régua do lance (limites legais do desconto)','conferir','O sistema não conseguiu ler com segurança o valor global desta proposta (a planilha do licitante pode estar ilegível ou não foi confirmada): confirme o valor da proposta no campo indicado para o sistema dizer em que faixa ela cai. Os limites legais do certame são estes. '+base, base);
     }
   }
   return {checks:checks, det:det, refItens:refIt.length, licItens:licIt.length};
@@ -5115,13 +5146,15 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
 }
 function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){return d.categoria==='Proposta / planilha';}); if(!ds.length && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; if(ds.length && ds[0].pags && ds[0].pags.length>6 && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; var manual=(l&&l.valorProposta>0)?l.valorProposta:null; if(!ds.length && manual==null) return null; var t=ds.length?ds[0].texto:''; var todos=anValores(t); var g=(manual!=null)?manual:anValorGlobal(t); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
   var obra=(p.obra==='Sim');
+  // Valor estimado: usa o informado; se vazio, DERIVA do orçamento do edital (nunca inventa) e avisa.
+  var _est=anValorEstimadoEfetivo(p); var est=_est.v; var estNota=(_est.fonte!=='informado'&&est>0)?' (orçado derivado do edital, o campo Valor estimado não foi preenchido)':'';
   if(g!=null){
-    if(!p.valorEstimado){ pior('conferir'); notas.push('valor global '+money(g)+fonte+'; informe o valor estimado do certame para comparar'); }
-    else if(g>p.valorEstimado*1.0001){ pior('atencao'); notas.push('valor global '+money(g)+fonte+' ACIMA do estimado '+money(p.valorEstimado)+' (proposta desclassificável por excesso, art. 59, III)'); }
-    else if(obra && g<p.valorEstimado*0.75){ pior('atencao'); notas.push('valor global '+money(g)+fonte+' abaixo de 75% do orçado '+money(p.valorEstimado)+': em obras e serviços de engenharia a proposta é presumida INEXEQUÍVEL (art. 59, § 4º); diligência para o licitante comprovar exequibilidade antes de desclassificar'); }
-    else if(obra && g<p.valorEstimado*0.85){ pior('conferir'); notas.push('valor global '+money(g)+fonte+' entre 75% e 85% do orçado '+money(p.valorEstimado)+': exequível, mas será exigida GARANTIA ADICIONAL do vencedor, igual à diferença entre 85% do orçado e a proposta (art. 59, § 5º)'); }
-    else if(!obra && g<p.valorEstimado*0.5){ pior('conferir'); notas.push('valor global '+money(g)+fonte+' muito abaixo do estimado '+money(p.valorEstimado)+' (verificar exequibilidade, art. 59, §§ 2º e 3º)'); }
-    else notas.push('valor global '+money(g)+fonte+' dentro do estimado '+money(p.valorEstimado));
+    if(!(est>0)){ pior('conferir'); notas.push('valor global '+money(g)+fonte+'; informe o valor estimado do certame (ou suba o orçamento do edital) para comparar'); }
+    else if(g>est*1.0001){ pior('atencao'); notas.push('valor global '+money(g)+fonte+' ACIMA do estimado '+money(est)+estNota+' (proposta desclassificável por excesso, art. 59, III)'); }
+    else if(obra && g<est*0.75){ pior('atencao'); notas.push('valor global '+money(g)+fonte+' abaixo de 75% do orçado '+money(est)+estNota+': em obras e serviços de engenharia a proposta é presumida INEXEQUÍVEL (art. 59, § 4º); diligência para o licitante comprovar exequibilidade antes de desclassificar'); }
+    else if(obra && g<est*0.85){ pior('conferir'); notas.push('valor global '+money(g)+fonte+' entre 75% e 85% do orçado '+money(est)+estNota+': exequível, mas será exigida GARANTIA ADICIONAL do vencedor, igual à diferença entre 85% do orçado e a proposta (art. 59, § 5º)'); }
+    else if(!obra && g<est*0.5){ pior('conferir'); notas.push('valor global '+money(g)+fonte+' muito abaixo do estimado '+money(est)+estNota+' (verificar exequibilidade, art. 59, §§ 2º e 3º)'); }
+    else notas.push('valor global '+money(g)+fonte+' dentro do estimado '+money(est)+estNota);
   } else if(todos.length){ pior('conferir'); notas.push('valor global não isolado automaticamente; valores encontrados: '+todos.slice().sort(function(a,b){return b-a;}).slice(0,6).map(money).join('; ')+' (confirme o valor global no campo indicado)'); }
   else { pior('conferir'); notas.push('nenhum valor localizado; confira a planilha'); }
   if(todos.length>=3){ var ord=todos.slice().sort(function(a,b){return b-a;}); var tot=ord[0], resto=ord.slice(1).reduce(function(a,b){return a+b;},0); if(tot>0){ var dif=Math.abs(tot-resto)/tot; if(dif<=0.02) notas.push('a soma dos itens confere com o maior valor da planilha'); else { pior('conferir'); notas.push('a soma dos itens ('+money(resto)+') não fecha com o maior valor da planilha ('+money(tot)+'), conferir'); } } }
@@ -5130,10 +5163,10 @@ function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){retur
 }
 function anObjKeywords(s){ var stop={de:1,da:1,do:1,das:1,dos:1,para:1,com:1,sem:1,por:1,em:1,no:1,na:1,nos:1,nas:1,ao:1,aos:1,que:1,uma:1,uns:1,ou:1,servico:1,servicos:1,contratacao:1,aquisicao:1,prestacao:1,fornecimento:1,empresa:1,especializada:1,municipio:1,municipal:1,futura:1,eventual:1,execucao:1,referente:1}; var t=String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' '); var w=t.split(/\s+/).filter(function(x){return x.length>=4 && !stop[x];}); var seen={},out=[]; w.forEach(function(x){ if(!seen[x]){seen[x]=1; out.push(x);} }); return out.slice(0,10); }
 function anNormTxt(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
-function anCompatAtestado(txt,p){ var kws=anObjKeywords(p.objeto||''); if(!kws.length) return {status:'conferir', nota:'Atestado presente. Informe o objeto do certame para o sistema comparar; a compatibilidade final é da comissão (art. 67).'}; var nt=anNormTxt(txt); var achou=kws.filter(function(k){return nt.indexOf(k)>=0;}); var faltou=kws.filter(function(k){return nt.indexOf(k)<0;}); var cob=achou.length/kws.length;
-  if(cob>=0.5) return {status:'conforme', nota:'Atestado aparentemente compatível com o objeto: encontrados os termos ('+achou.join(', ')+'). A comissão confirma a compatibilidade (art. 67).'};
-  if(cob>0) return {status:'atencao', nota:'Baixa aderência ao objeto: encontrados ('+achou.join(', ')+'), NÃO encontrados ('+faltou.join(', ')+'). Verifique se o atestado é compatível (art. 67).'};
-  return {status:'atencao', nota:'Não foram encontrados no atestado os termos do objeto do certame ('+faltou.join(', ')+'). Verifique a compatibilidade (art. 67).'};
+function anCompatAtestado(txt,p){ var _obj=anObjetoEfetivo(p); var kws=anObjKeywords(_obj.txt||''); var objNota=(_obj.fonte==='derivado')?' (objeto lido automaticamente do edital, pois o campo Objeto não foi preenchido)':''; if(!kws.length) return {status:'conferir', nota:'Atestado presente. Informe o objeto do certame (ou suba o edital) para o sistema comparar; a compatibilidade final é da comissão (art. 67).'}; var nt=anNormTxt(txt); var achou=kws.filter(function(k){return nt.indexOf(k)>=0;}); var faltou=kws.filter(function(k){return nt.indexOf(k)<0;}); var cob=achou.length/kws.length;
+  if(cob>=0.5) return {status:'conforme', nota:'Atestado aparentemente compatível com o objeto'+objNota+': encontrados os termos ('+achou.join(', ')+'). A comissão confirma a compatibilidade (art. 67).'};
+  if(cob>0) return {status:'atencao', nota:'Baixa aderência ao objeto'+objNota+': encontrados ('+achou.join(', ')+'), NÃO encontrados ('+faltou.join(', ')+'). Verifique se o atestado é compatível (art. 67).'};
+  return {status:'atencao', nota:'Não foram encontrados no atestado os termos do objeto do certame'+objNota+' ('+faltou.join(', ')+'). Verifique a compatibilidade (art. 67).'};
 }
 function anOnUploadCertame(input){ var files=input.files; if(!files||!files.length) return; var p=anCur(); if(!p) return; p.docsCertame=p.docsCertame||[]; var arr=[].slice.call(files); var prog=function(m){ var el=document.getElementById('an-prog-cert'); if(el) el.textContent=m; };
   (function next(k){ if(k>=arr.length){ input.value=''; p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); return; } var f=arr[k];
@@ -5275,7 +5308,8 @@ function anRenderResultado(l){
   if(r.exig && r.exig.length) h+=sec('i-doc','Exigências específicas do edital', r.exig.map(function(c){return row(c.t,c.status,c.nota,c);}).join(''), '<span class="cnt">'+r.exig.length+' itens</span>');
   if(r.obra && (r.obra.checks||[]).length){
     var det=(r.obra.det||[]).length?('<div class="an-row"><div class="rt" style="width:100%">'+r.obra.det.map(function(d){return esc(d.k)+': <b>'+esc(d.v)+'</b>';}).join(' | ')+'</div></div>'):'';
-    h+=sec('i-chart','Confronto de obra: planilha do edital x planilha do licitante', det+r.obra.checks.map(function(c){return row(c.t,c.status,c.nota,c);}).join(''), '<span class="cnt">'+r.obra.checks.length+' itens</span>');
+    var infoLance=anLeg('<b>Como funciona o lance (o que a lei permite baixar).</b> No lance a empresa reduz o preço para vencer, e há limites: <b>1)</b> a proposta não pode passar do <b>valor orçado</b> (teto, art. 59, III); <b>2)</b> em obra, abaixo de <b>85%</b> do orçado o vencedor presta <b>garantia adicional</b> (a diferença até os 85%, art. 59, §&nbsp;5º); <b>3)</b> abaixo de <b>75%</b> do orçado a proposta é <b>presumida inexequível</b> e só segue se a empresa comprovar que consegue executar, em diligência (art. 59, §§&nbsp;2º e 4º). O desconto se dá <b>reduzindo preços unitários</b>: mudar <b>quantidade</b> da planilha descaracteriza o objeto e desclassifica (art. 59, II). Se o edital fixar preço unitário máximo, nenhum item pode passar desse teto. O sistema mostra esses limites em reais no item <b>Régua do lance</b> abaixo. A decisão final é sempre da comissão.');
+    h+=sec('i-chart','Confronto de obra: planilha do edital x planilha do licitante', infoLance+det+r.obra.checks.map(function(c){return row(c.t,c.status,c.nota,c);}).join(''), '<span class="cnt">'+r.obra.checks.length+' itens</span>');
   }
   h+=sec('i-users','Requer conferência da comissão (subjetivo)', hum.map(function(i){return row(i.cat,i.status,i.nota,i);}).join(''), '<span class="cnt">'+hum.length+' itens</span>');
   h+=anRenderDiligenciaBox(l);
