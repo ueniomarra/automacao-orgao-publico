@@ -505,7 +505,7 @@ td .modd{font-size:12px;color:var(--slate)}
       <div class="loginerr" id="loginerr"><svg class="ic" style="width:16px;height:16px"><use href="#i-alert"/></svg> Usuário ou senha inválidos. Confira e tente de novo.</div>
       <div class="fld">
         <label>Usuário</label>
-        <div class="inp"><svg class="ic"><use href="#i-user"/></svg><input id="in-user" type="text" placeholder="usuário ou email (ex.: ueniomarra)" autocomplete="username"></div>
+        <div class="inp"><svg class="ic"><use href="#i-user"/></svg><input id="in-user" type="text" placeholder="usuário ou email" autocomplete="username"></div>
       </div>
       <div class="fld">
         <label>Senha</label>
@@ -828,7 +828,7 @@ td .modd{font-size:12px;color:var(--slate)}
   </div>
 </section>
 
-<!-- botao flutuante removido a pedido do Uenio -->
+<!-- botao flutuante removido -->
 
 <script>
 // ---- Supabase: login real e separacao por orgao (chave publica, protegida por RLS no banco) ----
@@ -930,14 +930,34 @@ function modulosPermitidos(){
   var full = papel==='admin' || papel==='superadmin' || perm.indexOf('total')>=0;
   var o={}; MODULOS.forEach(function(m){ o[m.k]= full || m.re.test(perm); }); return o;
 }
+// Paginas de GESTAO restritas a admin/superadmin (vazam dados sensiveis: usuarios, trilha forense,
+// estrutura de secretarias). Staff comum nao entra.
+var PAGINAS_ADMIN=['admin','auditoria','secretarias'];
+function ehGestor(){ var p=(CURRENT_USER&&CURRENT_USER.papel)||'staff'; return p==='admin'||p==='superadmin'; }
+// Modulo a que pertence um tipo de documento, para a Central e a busca respeitarem a permissao.
+function moduloDoTipo(tipo){
+  tipo=String(tipo||'').toLowerCase();
+  if(tipo==='dispensa'||tipo==='inexigibilidade') return 'compras';
+  if(/c[aâ]mara|vereador|pauta|ata|mo[çc][aã]o|projeto_lei|requerimento/.test(tipo)) return 'camara';
+  if(/an[aá]lise/.test(tipo)) return 'analise';
+  if(/ambient|meio/.test(tipo)) return 'ambiente';
+  return 'licitacao'; // etp/tr/edital/minuta/contrato/aditivo/solicitacao/dfd/homologacao...
+}
+function podeVerDoc(d){ if(!CURRENT_USER) return true; var mk=moduloDoTipo(d&&d.tipo); if(mk==='modelo') return true; var pode=modulosPermitidos(); return mk in pode ? pode[mk] : true; }
 function aplicarPermissoes(){
   var pode=modulosPermitidos();
   MODULOS.forEach(function(m){ var el=document.querySelector('.nav-i[data-pg="'+m.k+'"]'); if(el) el.style.display = pode[m.k]?'':'none'; });
+  // esconde as paginas de gestao para quem nao e gestor
+  PAGINAS_ADMIN.forEach(function(k){ var el=document.querySelector('.nav-i[data-pg="'+k+'"]'); if(el) el.style.display = ehGestor()?'':'none'; });
 }
 function show(pg){
   // trava de permissao: bloqueia modulo que o usuario nao tem
   if(MODULOS.some(function(m){return m.k===pg;}) && CURRENT_USER && !modulosPermitidos()[pg]){
     toast('Você não tem permissão para este módulo. Fale com o administrador do órgão.'); pg='dashboard';
+  }
+  // trava das paginas de gestao (admin/trilha/secretarias): so gestor
+  if(PAGINAS_ADMIN.indexOf(pg)>=0 && CURRENT_USER && !ehGestor()){
+    toast('Área restrita ao administrador do órgão.'); pg='dashboard';
   }
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
   var t=document.getElementById('pg-'+pg); if(t){t.classList.add('on');}
@@ -966,15 +986,18 @@ function salvarSecretarias(){
   try{ if(SB && CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; SB.from('org_secretarias').upsert({orgao_id:org, lista:SECRETARIAS}).then(function(){},function(){}); } }catch(e){}
 }
 function addSecretaria(){
+  if(CURRENT_USER && !ehGestor()){ toast('Só o administrador do órgão altera as secretarias.'); return; }
   var inp=document.getElementById('sec-nova'); if(!inp) return; var v=(inp.value||'').trim(); if(!v) return;
   if(SECRETARIAS.some(function(s){return s.toLowerCase()===v.toLowerCase();})){ toast('Essa secretaria/fundo já está na lista.'); return; }
   SECRETARIAS.push(v); inp.value=''; salvarSecretarias(); renderSecretarias(); toast('Adicionada. Já aparece na seleção dos documentos.');
 }
 function editSecretaria(i){
+  if(CURRENT_USER && !ehGestor()){ toast('Só o administrador do órgão altera as secretarias.'); return; }
   var atual=SECRETARIAS[i]; if(atual==null) return; var nv=prompt('Editar nome da secretaria/fundo:', atual); if(nv==null) return; nv=nv.trim(); if(!nv) return;
   SECRETARIAS[i]=nv; salvarSecretarias(); renderSecretarias(); toast('Atualizada.');
 }
 function excluirSecretaria(i){
+  if(CURRENT_USER && !ehGestor()){ toast('Só o administrador do órgão altera as secretarias.'); return; }
   if(SECRETARIAS[i]==null) return; if(!confirm('Excluir "'+SECRETARIAS[i]+'" da lista?')) return;
   SECRETARIAS.splice(i,1); salvarSecretarias(); renderSecretarias(); toast('Excluída.');
 }
@@ -1131,7 +1154,9 @@ var DOCMETA = {
 var DOC = {tipo:'tr', consulta:false, itens:[], dot:[]};
 
 function money(v){ v = Number(v)||0; return 'R$ ' + v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
-function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Escapa &, <, > E as aspas: dado do usuario jogado dentro de value="..." nao pode injetar atributo
+// (nome de vereador com aspas ganhava onfocus/autofocus, e valor com aspas era truncado ao reabrir).
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function pills(key,opts,sel){ return '<div class="pills" id="pill-'+key+'">'+opts.map(function(o){return '<button type="button" class="pill'+(o===sel?' on':'')+'" onclick="setPill(\''+key+'\',this)">'+o+'</button>';}).join('')+'</div>'; }
 function setPill(key,el){ var box=el.parentNode; box.querySelectorAll('.pill').forEach(function(p){p.classList.remove('on')}); el.classList.add('on'); if(key==='modalidade'){ renderCriterios(); renderModalidadeExtra(); } if(key==='engenharia'){ renderRegime(); } if(key==='qualtec'){ renderQualTec(); } if(key==='atipo'){ renderAditivoExtra(); } if(key==='porlote'){ onPorLoteChange(el); } }
 function renderRegime(){ var box=document.getElementById('regime-box'); if(!box) return; if(pillVal('engenharia')==='Sim'){ box.innerHTML='<div class="field"><label>Regime de execução (art. 46 da Lei 14.133/2021)</label>'+pills('regime',REGIMES,'Empreitada por preço global')+'</div>'; } else { box.innerHTML=''; } }
@@ -1703,7 +1728,17 @@ var RE_LOTE=/^\s*LOTE\s*N?[ºo\.]?\s*0*(\d+)\s*[-\u2013:]\s*(.+)$/i;
 var RE_DESC=/^\s*Descri[çc][ãa]o\s*:\s*(.+)$/i;
 var RE_ANCHOR=/^0*(\d{2,6})\s+(.*?)\s+([A-Za-zÀ-ÿ]{1,6})\s+([\d.]+,\d{1,4})\s+([\d.]+,\d{1,4})\s+([\d.]+,\d{1,4})\s+([\d.]+,\d{1,4})(?:\s+R\$?[\d.,]+)?\s*$/;
 var RE_NOISE=/^(P[ÁA]G|RELAT[ÓO]RIO|PREG[ÃA]O\s*N|ESTADO DE|PREFEITURA|MUNIC[ÍI]PIO|PRODUTO\s+NOME|VLR\.|QUANTIDADE|UNID\.|TOTAL\b|SEQU[ÊE]NCIA)/i;
-function brNum(s){ if(s==null) return 0; s=String(s).replace(/\./g,'').replace(',','.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isNaN(n)?0:n; }
+// Numero em formato BR. Regra: se ha VIRGULA, ela e o decimal e os pontos sao milhar (1.234,56).
+// Sem virgula, um ponto seguido de 1-2 digitos no fim e decimal (1234.56 colado em formato US);
+// senao os pontos sao milhar (1.000 = mil). Evita ler "1234.56" como 123456 (x100).
+function brNum(s){
+  if(s==null) return 0;
+  s=String(s).trim().replace(/[^0-9.,\-]/g,'');
+  if(s==='') return 0;
+  if(s.indexOf(',')>=0){ s=s.replace(/\./g,'').replace(',','.'); }
+  else if(!/^-?\d+\.\d{1,2}$/.test(s)){ s=s.replace(/\./g,''); }
+  var n=parseFloat(s); return isNaN(n)?0:n;
+}
 // Lê o PDF do relatório de lotes (pdf.js) por COLUNAS e FAIXAS: usa a posição (x,y) do texto e as linhas da grade da tabela para reconstruir cada item exatamente como está impresso
 var UNIDS={UN:1,UND:1,UNID:1,UNIDADE:1,CX:1,KG:1,G:1,PC:1,PCT:1,PT:1,PAR:1,L:1,LT:1,ML:1,MT:1,M:1,M2:1,M3:1,DZ:1,FR:1,GL:1,RL:1,SC:1,SACO:1,BD:1,CT:1,CJ:1,JG:1,TB:1,GF:1,LATA:1,POTE:1,BJ:1,BL:1,RESMA:1,KIT:1,CAIXA:1,PACOTE:1,FARDO:1,FD:1,AMP:1,CP:1,COMP:1,FRS:1,GLS:1,UNM:1,VD:1,FCO:1,GLA:1,BR:1,RESM:1};
 async function impLerPDF(file){
@@ -1948,8 +1983,16 @@ function processarImportItens(){
   });
   if(!arr.length){ toast('Não encontrei itens no texto colado.'); return; }
   arr=impNormalizarLotes(arr);
+  // avisa quando quantidade/valor ficaram zerados ou negativos (coluna faltando, texto no lugar do numero)
+  var suspeitos=arr.filter(function(x){ return !(x.q>0) || (x.v<0); });
   preencherItens(coletaItens().concat(arr));
-  calcTotal(); fecharModal(); toast(arr.length+' item(ns) importado(s) na tabela. Confira e pesquise os preços.');
+  calcTotal(); fecharModal();
+  if(suspeitos.length){
+    var nomes=suspeitos.slice(0,3).map(function(x){return x.d;}).join('; ');
+    toast(arr.length+' item(ns) importado(s). ATENÇÃO: '+suspeitos.length+' com quantidade ou valor zerado/inválido (confira: '+nomes+(suspeitos.length>3?'...':'')+'). Corrija na tabela antes de gerar o documento.');
+  } else {
+    toast(arr.length+' item(ns) importado(s) na tabela. Confira e pesquise os preços.');
+  }
 }
 // ===== Lotes: agrupamento na tabela de itens e nos documentos =====
 function itemRows(){ return [].slice.call(document.querySelectorAll('#itab-body tr')).filter(function(r){return r.querySelector('.i-d');}); }
@@ -2284,7 +2327,9 @@ var ESTEIRA_FASES=[
   {id:'E', nome:'E. Contrato', tipos:['contrato','convocacao','ordem']},
   {id:'F', nome:'F. Execução', tipos:['aditivo','apostilamento','recebimento','ocorrencia','sancao','extincao']}
 ];
-function esteiraTipos(){ var t={}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
+// Tipos que entram no card Processos. Alem da esteira A-F, a CONTRATACAO DIRETA (dispensa/inexigibilidade),
+// que nao segue a esteira mas e um processo e precisa aparecer e poder ser baixada.
+function esteiraTipos(){ var t={dispensa:1, inexigibilidade:1}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
 function renderFormProcesso(){
   var ff=document.getElementById('ws-fields'); if(!ff) return;
   var validos=esteiraTipos();
@@ -2298,7 +2343,11 @@ function renderFormProcesso(){
     var byTipo={}; docs.forEach(function(d){ (byTipo[d.tipo]=byTipo[d.tipo]||[]).push(d); });
     var feitas=Object.keys(byTipo).length;
     var sec=(docs[0]&&docs[0].secretaria)||'';
-    var fasesH=ESTEIRA_FASES.map(function(f){
+    // contratacao direta (dispensa/inexigibilidade) nao segue a esteira A-F: bloco proprio
+    var direta = byTipo['dispensa'] || byTipo['inexigibilidade'];
+    var fasesH = direta ? ('<div style="border-left:3px solid var(--gold);padding:2px 0 2px 12px;margin:8px 0"><div style="font-weight:700;color:var(--navy);font-size:12.5px;letter-spacing:.3px;margin-bottom:2px">Contratação direta (Lei nº 14.133/2021, arts. 74 e 75)</div>'+
+      ['dispensa','inexigibilidade'].map(function(t){ var ds=byTipo[t]; if(!ds||!ds.length) return ''; return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0"><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg> Concluído</span> <b style="font-size:13px;color:var(--ink)">'+esc(nomeTipo(t))+'</b>'+ds.map(function(d){return ' <span style="cursor:pointer;color:var(--royal);font-size:12.5px;font-weight:600" onclick="abrirDocSalvo(\''+d.id+'\')">'+(d.numero?esc(d.numero):'abrir')+'</span>';}).join('')+'</div>'; }).join('')+
+      '</div>') : ESTEIRA_FASES.map(function(f){
       var linhas;
       if(!f.tipos.length){
         linhas='<div class="hint" style="margin:2px 0">Acontece na plataforma de disputa (BNC, Comprasnet, BLL). O sistema registra o resultado, que abastece o contrato. A conferência de propostas fica no módulo Análise de Licitação.</div>';
@@ -2368,12 +2417,12 @@ function exportarProcesso(objArg){
 // ===================== GESTÃO DE CONTRATOS =====================
 // status: 'ativo' | 'vence_breve' (vence em ate 30 dias) | 'vencido'. origem: 'manual' (implantacao) | 'sistema'.
 var CONTRATOS = [
-  {n:'012/2025',obj:'Coleta de resíduos sólidos',sec:'Meio Ambiente',venc:'10/07/2026',valor:432000,status:'ativo'},
-  {n:'030/2025',obj:'Merenda escolar',sec:'Educação',venc:'15/12/2026',valor:980000,status:'ativo'},
-  {n:'008/2025',obj:'Aquisição de medicamentos',sec:'Saúde',venc:'30/06/2026',valor:540000,status:'vence_breve'},
-  {n:'021/2024',obj:'Pavimentação asfáltica',sec:'Infraestrutura',venc:'25/06/2026',valor:1200000,status:'vence_breve'},
-  {n:'003/2024',obj:'Locação de veículos',sec:'Administração',venc:'31/05/2026',valor:168000,status:'vencido'},
-  {n:'015/2025',obj:'Material de expediente',sec:'Administração',venc:'01/09/2026',valor:360000,status:'ativo'}
+  {n:'012/2025',obj:'Coleta de resíduos sólidos',sec:'Secretaria de Meio Ambiente',venc:'10/07/2026',valor:432000,status:'ativo'},
+  {n:'030/2025',obj:'Merenda escolar',sec:'Secretaria de Educação e Cultura',venc:'15/12/2026',valor:980000,status:'ativo'},
+  {n:'008/2025',obj:'Aquisição de medicamentos',sec:'Secretaria Municipal de Saúde',venc:'30/06/2026',valor:540000,status:'vence_breve'},
+  {n:'021/2024',obj:'Pavimentação asfáltica',sec:'Secretaria de Infraestrutura e Serviços Urbanos',venc:'25/06/2026',valor:1200000,status:'vence_breve'},
+  {n:'003/2024',obj:'Locação de veículos',sec:'Secretaria de Administração',venc:'31/05/2026',valor:168000,status:'vencido'},
+  {n:'015/2025',obj:'Material de expediente',sec:'Secretaria de Administração',venc:'01/09/2026',valor:360000,status:'ativo'}
 ];
 function fmtMilhao(v){ return v>=1000000 ? ('R$ '+(v/1000000).toFixed(1).replace('.',',')+' mi') : money(v); }
 function novoContratoManual(){
@@ -2392,6 +2441,10 @@ async function salvarContratoManual(){
   function gv(id){ var e=document.getElementById(id); return e?e.value:''; }
   var num=(gv('nc-num')||'').trim(), obj=(gv('nc-obj')||'').trim(), sec=gv('nc-sec'), vd=gv('nc-venc'), valor=Number(gv('nc-val'))||0, st=gv('nc-st')||'ativo';
   if(!num||!obj){ toast('Preencha pelo menos o número e o objeto do contrato.'); return; }
+  var valBruto=(gv('nc-val')||'').trim();
+  if(valor<0){ toast('O valor do contrato não pode ser negativo. Corrija.'); return; }
+  if(valBruto!=='' && !(valor>0)){ toast('O valor informado não é um número válido. Corrija o campo Valor.'); return; }
+  if(valBruto==='' && !confirm('Nenhum valor informado (ficará R$ 0,00). Deseja cadastrar assim mesmo?')) return;
   for(var i=0;i<CONTRATOS.length;i++){ if(CONTRATOS[i].n===num){ toast('Já existe um contrato com o número '+num+'.'); return; } }
   var venc = vd ? vd.split('-').reverse().join('/') : 'a definir';
   var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
@@ -2459,6 +2512,27 @@ async function importarConfirmar(){
   fecharModal(); renderContratos(); if(typeof renderDashboard==='function') renderDashboard();
   toast(add?(add+' contrato(s) importado(s) para a gestão, com fonte registrada.'):'Nenhum contrato novo marcado.');
 }
+// SITUACAO EFETIVA DO CONTRATO = derivada da DATA de vigencia (nao do rotulo gravado).
+// O furo (auditoria 360, 16/07): contrato vencido pela data mas com status 'ativo' aparecia
+// "tudo em dia" e sumia do alerta. A data manda; o status gravado so vale quando nao ha data.
+// Ponto unico: todos os call sites (renderContratos, renderDashboard, alertas) usam stC(c).
+function stC(c){
+  if(!c) return 'ativo';
+  var d = c.venc ? diasAte(c.venc) : null;
+  if(d!==null){ if(d<0) return 'vencido'; if(d<=30) return 'vence_breve'; return 'ativo'; }
+  return c.status || 'ativo'; // sem data legivel: cai no rotulo gravado
+}
+// Numero do certame: o do Edital manda (numEdital); so cai no numero do TR quando o edital ainda nao foi gerado.
+function certNum(){ return (PROC && (PROC.numEdital||PROC.numTR)) || '____/2026'; }
+// Concordancia da forma com a modalidade: CONCORRENCIA e feminina (eletronica); as demais sao masculinas (eletronico).
+// "presencial" nao varia. Evita "PREGAO ELETRONICA".
+function formaAdj(modbase, forma){
+  var fem = /CONCORR/i.test(modbase||'');
+  var f = String(forma||'').toLowerCase();
+  if(/eletr/.test(f)) return fem ? 'ELETRÔNICA' : 'ELETRÔNICO';
+  if(/presen/.test(f)) return 'PRESENCIAL';
+  return String(forma||'').toUpperCase();
+}
 function stTag(s){
   if(s==='vencido') return '<span class="st st-v"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Vencido</span>';
   if(s==='vence_breve') return '<span class="st st-b"><svg class="ic" style="width:13px;height:13px"><use href="#i-clock"/></svg> Vence em breve</span>';
@@ -2474,22 +2548,22 @@ function renderContratos(){
   var f=filtroEl.value; var todos = !f || /Todas/.test(f);
   var lista = CONTRATOS.filter(function(c){ return todos || c.sec===f; });
   // stats (sempre sobre o total, nao sobre o filtro)
-  var ativos=CONTRATOS.filter(function(c){return c.status!=='vencido'}).length;
-  var venc30=CONTRATOS.filter(function(c){return c.status==='vence_breve'}).length;
-  var vencidos=CONTRATOS.filter(function(c){return c.status==='vencido'}).length;
-  var sobGestao=CONTRATOS.filter(function(c){return c.status!=='vencido'}).reduce(function(a,c){return a+c.valor},0);
+  var ativos=CONTRATOS.filter(function(c){return stC(c)!=='vencido'}).length;
+  var venc30=CONTRATOS.filter(function(c){return stC(c)==='vence_breve'}).length;
+  var vencidos=CONTRATOS.filter(function(c){return stC(c)==='vencido'}).length;
+  var sobGestao=CONTRATOS.filter(function(c){return stC(c)!=='vencido'}).reduce(function(a,c){return a+c.valor},0);
   document.getElementById('ct-stats').innerHTML=
     '<div class="bcard ok"><div class="bi"><svg class="ic" style="width:24px;height:24px;stroke:#fff"><use href="#i-check"/></svg></div><div class="bval">'+ativos+'</div><div class="blbl">Contratos ativos</div></div>'+
     '<div class="bcard warn"><div class="bi"><svg class="ic" style="width:24px;height:24px;stroke:#fff"><use href="#i-clock"/></svg></div><div class="bval">'+venc30+'</div><div class="blbl">Vencem em 30 dias</div></div>'+
     '<div class="bcard bad"><div class="bi"><svg class="ic" style="width:24px;height:24px;stroke:#fff"><use href="#i-alert"/></svg></div><div class="bval">'+vencidos+'</div><div class="blbl">Vencidos para rescisão</div></div>';
   // tabela
   document.getElementById('ct-body').innerHTML = lista.map(function(c){
-    return '<tr><td><div class="obj">'+c.n+'</div></td><td>'+esc(c.obj)+'</td><td>'+esc(c.sec)+'</td><td>'+c.venc+'</td><td>'+money(c.valor)+'</td><td>'+stTag(c.status)+'</td></tr>';
+    return '<tr><td><div class="obj">'+c.n+'</div></td><td>'+esc(c.obj)+'</td><td>'+esc(c.sec)+'</td><td>'+c.venc+'</td><td>'+money(c.valor)+'</td><td>'+stTag(stC(c))+'</td></tr>';
   }).join('') || '<tr><td colspan="6" style="color:var(--slate)">Nenhum contrato nesta secretaria.</td></tr>';
-  // alertas do mes (junho/2026): vence_breve e vencido
-  var al=CONTRATOS.filter(function(c){return c.status!=='ativo'});
+  // alertas do mes: vence_breve e vencido, pela DATA (stC)
+  var al=CONTRATOS.filter(function(c){return stC(c)!=='ativo'});
   document.getElementById('ct-alertas').innerHTML = al.map(function(c){
-    if(c.status==='vencido') return '<div class="alertbar red"><div class="ab"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#i-alert"/></svg></div><div><b>Contrato '+c.n+' vencido em '+c.venc+'</b><span>'+esc(c.obj)+'. Alerta de rescisão.</span></div><button class="x" title="resolver">✕</button></div>';
+    if(stC(c)==='vencido') return '<div class="alertbar red"><div class="ab"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#i-alert"/></svg></div><div><b>Contrato '+c.n+' vencido em '+c.venc+'</b><span>'+esc(c.obj)+'. Alerta de rescisão.</span></div><button class="x" title="resolver">✕</button></div>';
     return '<div class="alertbar amb"><div class="ab"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#i-clock"/></svg></div><div><b>Contrato '+c.n+' vence em '+c.venc+'</b><span>'+esc(c.obj)+'. Alerta de renovação.</span></div></div>';
   }).join('');
 }
@@ -2570,11 +2644,12 @@ function renderModoDisputa(){ var box=document.getElementById('e-modo'); if(!box
 function gerarEdital(){
   if(!(PROC&&PROC.objeto)){ toast('Gere o Termo de Referência primeiro. O Edital nasce do TR (objeto, itens e valor).'); return false; }
   var num=(document.getElementById('e-num').value)||PROC.numTR||'____/2026';
+  PROC.numEdital=num; // o numero do certame passa a valer para a Minuta anexa e o Contrato (nao usar o numero do TR)
   var srp=pillVal('srp')==='Sim', modo=pillVal('emodo'), plat=pillVal('eplat');
   var ini=fmtD(document.getElementById('e-ini').value), fim=fmtDT(document.getElementById('e-fim').value), sessao=fmtDT(document.getElementById('e-sessao').value), rec=document.getElementById('e-recursos').value||'3';
   var modbase=PROC.modbase, forma=PROC.forma, crit=PROC.criterio, fj=PROC.fj, valor=money(PROC.tot);
   var linhas=docItemRows(PROC.itens||[]);
-  var H=docHeader('EDITAL DE '+modbase+' '+forma.toUpperCase()+' Nº '+esc(num), esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+'<br>PROCESSO ADMINISTRATIVO Nº '+esc(PROC.processo||'')+' | INTERESSADO: '+esc(PROC.secretaria.toUpperCase()));
+  var H=docHeader('EDITAL DE '+modbase+' '+formaAdj(modbase,forma)+' Nº '+esc(num), esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+'<br>PROCESSO ADMINISTRATIVO Nº '+esc(PROC.processo||'')+' | INTERESSADO: '+esc(PROC.secretaria.toUpperCase()));
   H+='<table><tbody><tr><th>Tipo</th><td>'+esc(crit)+'</td></tr><tr><th>Julgamento</th><td>'+esc(crit)+' '+esc(fj).toLowerCase()+'</td></tr><tr><th>Modo de disputa</th><td>'+esc(modo)+'</td></tr><tr><th>Plataforma</th><td>'+esc(plat)+'</td></tr><tr><th>Início das propostas</th><td>'+ini+'</td></tr><tr><th>Término das propostas</th><td>'+fim+'</td></tr><tr><th>Sessão de disputa</th><td>'+sessao+'</td></tr><tr><th>Valor estimado</th><td>'+valor+'</td></tr></tbody></table>';
   H+='<p>O '+esc(ORG.nome)+', CNPJ nº '+ORG.cnpj+', torna público que realizará licitação na modalidade '+esc(modbase)+', sob a forma '+forma+', com critério de julgamento por '+esc(crit).toLowerCase()+' ('+esc(fj).toLowerCase()+'), nos termos da Lei Federal nº 14.133/2021 e da Lei Complementar nº 123/2006, conforme as condições deste Edital'+(srp?', sob o sistema de Registro de Preços':'')+'.</p>';
   var obra = (PROC.eng==='Sim');
@@ -2694,7 +2769,7 @@ function renderFormContrato(){
 }
 function contratoClausulas(v, embed){
   var num=(v&&v.num)||'____/2026';
-  var preg=(PROC&&PROC.numTR)||'____/2026';
+  var preg=certNum();
   var obj=(PROC&&PROC.objeto)||'[objeto, vem do TR]';
   var valor=v?money(v.valor):money((PROC&&PROC.tot)||0);
   var vig=(PROC&&PROC.vig)||'12';
@@ -3228,7 +3303,7 @@ function renderFormPublicacao(){
   var mod=(PROC&&PROC.modbase)?(PROC.modbase+(PROC.forma?' '+PROC.forma:'')):'';
   var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo</div><div class="field">'+pills('pubtipo',['Extrato de publicação','Aviso de republicação (errata)'],'Extrato de publicação')+'</div><div class="hint" style="margin-top:8px">O edital é publicado no PNCP (inteiro teor) e o extrato no Diário Oficial e em jornal (art. 54). Alteração que afete a proposta reabre o prazo (art. 55, §1º).</div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dados do certame</div>';
-  h+='<div class="frow c2"><div class="field"><label>Modalidade</label><input id="pub-mod" value="'+esc(mod)+'" placeholder="ex.: Pregão Eletrônico"></div><div class="field"><label>Nº do certame</label><input id="pub-num" value="'+esc((PROC&&PROC.numTR)||'')+'" placeholder="ex.: 15/2026"></div></div>';
+  h+='<div class="frow c2"><div class="field"><label>Modalidade</label><input id="pub-mod" value="'+esc(mod)+'" placeholder="ex.: Pregão Eletrônico"></div><div class="field"><label>Nº do certame</label><input id="pub-num" value="'+esc((PROC&&(PROC.numEdital||PROC.numTR))||'')+'" placeholder="ex.: 15/2026"></div></div>';
   h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="pub-obj" value="'+esc(ctxObj)+'" placeholder="objeto da licitação"></div>';
   h+='<input type="hidden" id="pub-sec" value="'+esc(ctxSec)+'">';
   h+='<div class="field" style="margin-top:12px"><label>Critério de julgamento</label><input id="pub-crit" value="'+esc((PROC&&PROC.criterio)||'')+'" placeholder="ex.: menor preço"></div></div>';
@@ -3265,7 +3340,7 @@ function renderFormImpugnacao(){
   var ctxObj=ctxProcObj(), ctxSec=ctxProcSec();
   var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Tipo de manifestação</div><div class="field">'+pills('imptipo',['Resposta a esclarecimento','Decisão de impugnação'],'Decisão de impugnação')+'</div><div class="hint" style="margin-top:8px">Cabimento até 3 dias úteis antes da abertura; resposta em até 3 dias úteis, limitada ao último dia útil anterior à sessão (art. 164).</div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
-  h+='<div class="frow c2"><div class="field"><label>Nº do certame</label><input id="imp-num" value="'+esc((PROC&&PROC.numTR)||'')+'" placeholder="ex.: 15/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="imp-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do certame</label><input id="imp-num" value="'+esc((PROC&&(PROC.numEdital||PROC.numTR))||'')+'" placeholder="ex.: 15/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="imp-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
   h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="imp-obj" value="'+esc(ctxObj)+'"></div>';
   h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Requerente</label><input id="imp-req" placeholder="quem pediu"></div><div class="field"><label>Data do pedido</label><input id="imp-data" placeholder="dd/mm/2026"></div></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Teor e decisão</div>';
@@ -3294,7 +3369,7 @@ function gerarImpugnacao(){
 function renderFormHomologacao(){
   var ctxObj=ctxProcObj(), ctxSec=ctxProcSec();
   var h='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
-  h+='<div class="frow c2"><div class="field"><label>Nº do certame</label><input id="hom-num" value="'+esc((PROC&&PROC.numTR)||'')+'" placeholder="ex.: 15/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="hom-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
+  h+='<div class="frow c2"><div class="field"><label>Nº do certame</label><input id="hom-num" value="'+esc((PROC&&(PROC.numEdital||PROC.numTR))||'')+'" placeholder="ex.: 15/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="hom-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
   h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="hom-obj" value="'+esc(ctxObj)+'"></div>';
   h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Autoridade que homologa</label><input id="hom-aut" value="'+esc(ORG.ordenador||'')+'"></div><div class="field"><label>Cargo</label><input id="hom-cargo" value="'+esc(ORG.cargo||'')+'"></div></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Resultado (vencedor por item ou lote)</div>';
@@ -3325,7 +3400,7 @@ function renderFormConvocacao(){
   h+='<div class="frow c2"><div class="field"><label>Nº do ofício</label><input id="cvc-num" placeholder="ex.: 120/2026"></div><div class="field"><label>Secretaria / órgão</label><select id="cvc-sec">'+SECRETARIAS.map(function(s){return '<option'+(s===ctxSec?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div></div>';
   h+='<div class="field" style="margin-top:12px"><label>Objeto</label><input id="cvc-obj" value="'+esc(ctxObj)+'"></div>';
   h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Empresa vencedora</label><input id="cvc-emp" placeholder="razão social"></div><div class="field"><label>CNPJ</label><input id="cvc-cnpj" placeholder="CNPJ"></div></div>';
-  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Certame nº</label><input id="cvc-cert" value="'+esc((PROC&&PROC.numTR)||'')+'"></div><div class="field"><label>Prazo para assinar (dias úteis)</label><input id="cvc-prazo" value="5"></div></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Certame nº</label><input id="cvc-cert" value="'+esc((PROC&&(PROC.numEdital||PROC.numTR))||'')+'"></div><div class="field"><label>Prazo para assinar (dias úteis)</label><input id="cvc-prazo" value="5"></div></div></div>';
   document.getElementById('ws-fields').innerHTML=h;
 }
 function gerarConvocacao(){
@@ -3647,9 +3722,24 @@ function renderAditivoExtra(){
   var box=document.getElementById('a-extra'); if(!box) return; var t=pillVal('atipo'); var h='';
   if(t==='Prorrogação') h='<div class="field"><label>Nova data de término</label><input id="a-data" type="date"></div>';
   else if(t==='Reajuste'||t==='Repactuação') h='<div class="frow c2"><div class="field"><label>Índice / percentual</label><input id="a-indice" placeholder="ex.: IPCA 4,5%"></div><div class="field"><label>Novo valor (R$)</label><input id="a-valor" type="number" step="0.01"></div></div>';
-  else if(t==='Acréscimo'||t==='Supressão') h='<div class="frow c2"><div class="field"><label>Percentual (limite 25%, ou 50% reforma)</label><input id="a-perc" placeholder="ex.: 25%"></div><div class="field"><label>Novo valor (R$)</label><input id="a-valor" type="number" step="0.01"></div></div>';
+  else if(t==='Acréscimo'||t==='Supressão'){ h='<div class="frow c2"><div class="field"><label>Percentual (limite 25%, ou 50% acréscimo em reforma)</label><input id="a-perc" placeholder="ex.: 25%" oninput="avisoAditivoPerc()"></div><div class="field"><label>Novo valor (R$)</label><input id="a-valor" type="number" step="0.01"></div></div>';
+    if(t==='Acréscimo') h+='<div class="field" style="margin-top:8px"><label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer"><input type="checkbox" id="a-reforma" onchange="avisoAditivoPerc()" style="width:auto"> Acréscimo em reforma de edifício ou de equipamento (art. 125: permite até 50%)</label></div>';
+    h+='<div id="a-perc-aviso" style="margin-top:8px"></div>'; }
   else if(t==='Retificação') h='<div class="frow c2"><div class="field"><label>O que se corrige</label><input id="a-campo"></div><div class="field"><label>Valor/dado correto</label><input id="a-correto"></div></div>';
   box.innerHTML=h;
+}
+// Le o percentual digitado (aceita "30", "30%", "30,5%") como numero.
+function aditivoPerc(){ var e=document.getElementById('a-perc'); if(!e) return null; var s=String(e.value||'').replace('%','').replace(',','.').trim(); if(!s) return null; var n=parseFloat(s); return isNaN(n)?null:n; }
+// Limite legal do art. 125: 25% em regra; 50% SO para acrescimo em reforma. Supressao e sempre 25%.
+function aditivoLimite(){ var t=pillVal('atipo'); var rf=document.getElementById('a-reforma'); return (t==='Acréscimo' && rf && rf.checked) ? 50 : 25; }
+// Aviso ao vivo na tela quando o percentual passa do limite (aponta, nao bloqueia; a comissao decide).
+function avisoAditivoPerc(){
+  var box=document.getElementById('a-perc-aviso'); if(!box) return;
+  var p=aditivoPerc(); if(p===null){ box.innerHTML=''; return; }
+  var lim=aditivoLimite();
+  if(p>lim){
+    box.innerHTML='<div class="alertbar red" style="margin:0"><div class="ab"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#i-alert"/></svg></div><div><b>Atenção: '+p+'% ultrapassa o limite de '+lim+'% do art. 125 da Lei nº 14.133/2021.</b><span>'+(lim===25?'Acréscimo em reforma de edifício ou equipamento pode ir até 50%: marque a opção acima se for o caso. ':'')+'Fora dessas hipóteses, o percentual acima do limite não é permitido. Confira antes de emitir.</span></div></div>';
+  } else { box.innerHTML='<div class="hint" style="color:#1f7a33;font-weight:600"><svg class="ic" style="width:13px;height:13px;stroke:#1f7a33"><use href="#i-check"/></svg> '+p+'% dentro do limite de '+lim+'% (art. 125).</div>'; }
 }
 function gerarAditivo(){
   var ct=document.getElementById('a-contrato').value||'____/____', num=document.getElementById('a-num').value||'1º', razao=document.getElementById('a-razao').value||'__________', t=pillVal('atipo'), just=document.getElementById('a-just').value||'';
@@ -3660,7 +3750,9 @@ function gerarAditivo(){
   H+='<h2>CLÁUSULA SEGUNDA, DO OBJETO DO ADITAMENTO</h2>';
   if(t==='Prorrogação') H+='<p>Fica prorrogado o prazo de vigência do contrato até '+fmtD(v('a-data'))+', nos termos da Lei nº 14.133/2021.</p>';
   else if(t==='Reajuste'||t==='Repactuação') H+='<p>Fica realizado o '+(t==='Reajuste'?'reajuste':'a repactuação')+' dos preços com base em '+esc(v('a-indice')||'índice contratual')+', passando o valor a '+money(Number(v('a-valor'))||0)+'.</p>';
-  else if(t==='Acréscimo'||t==='Supressão') H+='<p>Fica realizado o '+(t==='Acréscimo'?'acréscimo':'a supressão')+' de '+esc(v('a-perc')||'__%')+' ao quantitativo contratado, passando o valor a '+money(Number(v('a-valor'))||0)+', observados os limites do art. 125 da Lei nº 14.133/2021 (até 25%, ou até 50% para acréscimo em reforma).</p>';
+  else if(t==='Acréscimo'||t==='Supressão'){ H+='<p>Fica realizado o '+(t==='Acréscimo'?'acréscimo':'a supressão')+' de '+esc(v('a-perc')||'__%')+' ao quantitativo contratado, passando o valor a '+money(Number(v('a-valor'))||0)+', observados os limites do art. 125 da Lei nº 14.133/2021 (até 25%, ou até 50% para acréscimo em reforma de edifício ou de equipamento).</p>';
+    var _p=aditivoPerc(), _lim=aditivoLimite();
+    if(_p!==null && _p>_lim) H+='<p style="border:2px solid #C62D45;background:#fdecef;padding:10px 12px;border-radius:6px;font-weight:600">ATENÇÃO: o percentual de '+_p+'% ultrapassa o limite de '+_lim+'% do art. 125 da Lei nº 14.133/2021. '+(_lim===25?'O limite de 50% aplica-se somente a acréscimo em reforma de edifício ou de equipamento. ':'')+'Reveja o aditamento antes de assinar; fora das hipóteses legais, a alteração acima do limite é vedada.</p>'; }
   else if(t==='Retificação') H+='<p>Fica retificado '+esc(v('a-campo')||'o item indicado')+', que passa a constar como: '+esc(v('a-correto')||'__________')+'.</p>';
   if(just) H+='<p>Justificativa: '+esc(just)+'</p>';
   H+='<h2>CLÁUSULA TERCEIRA, DA VIGÊNCIA</h2><p>Este termo entra em vigor na data de sua assinatura.</p>';
@@ -3724,7 +3816,7 @@ function renderFormMinuta(){
   var temTR=!!(PROC&&PROC.objeto);
   var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'minuta\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para a Minuta</button></div>';
   h+='<div class="fgroup" style="background:#FAFBFE;border:1px solid var(--line);border-radius:10px;padding:13px"><div class="gl" style="color:#9a6a0a"><svg class="ic" style="width:14px;height:14px"><use href="#i-lock"/></svg> Minuta de contrato (anexo do edital)</div>';
-  h+= temTR ? '<div class="hint" style="line-height:1.8"><b>Objeto:</b> '+esc(PROC.objeto)+'<br><b>Vinculada ao:</b> '+esc(PROC.modbase||'PREGÃO')+' Nº '+esc(PROC.numTR||'')+'<br><b>Valor estimado:</b> '+money(PROC.tot)+'</div>' : '<div class="hint">A minuta sai pronta com as 19 cláusulas no padrão da Lei nº 14.133/2021. Se você gerar o <b>Termo de Referência</b> antes, ela já vem com o objeto, o valor e o vínculo ao certame. Sem TR, sai como <b>modelo em branco</b> para preencher.</div>';
+  h+= temTR ? '<div class="hint" style="line-height:1.8"><b>Objeto:</b> '+esc(PROC.objeto)+'<br><b>Vinculada ao:</b> '+esc(PROC.modbase||'PREGÃO')+' Nº '+esc((PROC.numEdital||PROC.numTR)||'')+'<br><b>Valor estimado:</b> '+money(PROC.tot)+'</div>' : '<div class="hint">A minuta sai pronta com as 19 cláusulas no padrão da Lei nº 14.133/2021. Se você gerar o <b>Termo de Referência</b> antes, ela já vem com o objeto, o valor e o vínculo ao certame. Sem TR, sai como <b>modelo em branco</b> para preencher.</div>';
   h+='</div>';
   h+='<div class="hint" style="margin-top:4px">A minuta também sai sozinha, como Anexo II, quando você gera o <b>Edital</b>. Use esta tela só quando precisar dela isolada. Clique em <b>Gerar documento</b>.</div>';
   document.getElementById('ws-fields').innerHTML=h;
@@ -3732,7 +3824,7 @@ function renderFormMinuta(){
 
 // ===================== BANCO LOCAL (conecta dashboard, central e contratos) =====================
 var USERS_SEED=[
-  {login:'ueniomarra@queirozmarra.com',nome:'Uenio Marra (Queiroz Marra)',papel:'superadmin',perm:'Acesso total (oculto)',ativo:true,orgao:'*'},
+  {login:'ueniomarra@queirozmarra.com',nome:'Administrador (Queiroz Marra)',papel:'superadmin',perm:'Acesso total (oculto)',ativo:true,orgao:'*'},
   {login:'admin@tur.gov.br',nome:'Administrador de Turvelândia',papel:'admin',perm:'Acesso total',ativo:true,orgao:'tur'},
   {login:'staff@tur.gov.br',nome:'Operador de Turvelândia',papel:'staff',perm:'Nenhuma (aguardando liberação)',ativo:true,orgao:'tur'}
 ];
@@ -5714,9 +5806,9 @@ function dadosRelatorio(){
   var docs=(DB.docs||[]).filter(function(d){return d.tipo!=='modelo';});
   var c={}; TIPOS_REL.forEach(function(t){c[t[0]]=0;}); docs.forEach(function(d){ if(c[d.tipo]!=null) c[d.tipo]++; });
   return { docs:docs, c:c,
-    qA:(CONTRATOS||[]).filter(function(x){return x.status==='ativo';}).length,
-    qB:(CONTRATOS||[]).filter(function(x){return x.status==='vence_breve';}).length,
-    qV:(CONTRATOS||[]).filter(function(x){return x.status==='vencido';}).length,
+    qA:(CONTRATOS||[]).filter(function(x){return stC(x)==='ativo';}).length,
+    qB:(CONTRATOS||[]).filter(function(x){return stC(x)==='vence_breve';}).length,
+    qV:(CONTRATOS||[]).filter(function(x){return stC(x)==='vencido';}).length,
     nContr:(CONTRATOS||[]).length,
     valor:(CONTRATOS||[]).reduce(function(a,x){return a+(Number(x.valor)||0);},0) };
 }
@@ -5758,30 +5850,31 @@ function renderDashboard(){
   if(!document.getElementById('m-docs')) return;
   var docs=DB.docs||[];
   var nProc=docs.filter(function(d){return ['tr','edital','contrato','dispensa','inexigibilidade'].indexOf(d.tipo)>=0;}).length;
-  var ativos=CONTRATOS.filter(function(c){return c.status!=='vencido';}).length;
-  var prazos=CONTRATOS.filter(function(c){return c.status==='vence_breve';}).length;
+  var ativos=CONTRATOS.filter(function(c){return stC(c)!=='vencido';}).length;
+  var prazos=CONTRATOS.filter(function(c){return stC(c)==='vence_breve';}).length;
   var nDocs=docs.filter(function(d){return d.tipo!=='modelo';}).length;
   setTxt('m-proc',nProc); setTxt('m-contr',ativos); setTxt('m-docs',nDocs); setTxt('m-prazos',prazos);
   var tag=document.getElementById('m-prazos-tag'); if(tag) tag.style.display = prazos>0?'inline-flex':'none';
   var rb=document.getElementById('dash-recentes'); var ger=docs.filter(function(d){return d.tipo!=='modelo';});
   if(rb) rb.innerHTML = ger.length? ger.slice(0,5).map(function(d){ return '<tr><td><div class="obj">'+esc(d.objeto)+'</div><div class="modd">'+esc(nomeTipo(d.tipo))+' '+esc(d.numero)+'</div></td><td>'+esc(nomeTipo(d.tipo))+'</td><td>'+esc(d.data)+'</td></tr>'; }).join('') : '<tr><td colspan="3" style="color:var(--slate);padding:18px">Nenhum documento gerado ainda. Comece em Licitações e Contratos.</td></tr>';
-  var pz=CONTRATOS.filter(function(c){return c.status!=='ativo';});
+  var pz=CONTRATOS.filter(function(c){return stC(c)!=='ativo';});
   var dp=document.getElementById('dash-prazos');
   if(dp){
     if(!pz.length){ dp.innerHTML='<div class="emptybox" style="margin:0;padding:26px"><svg class="ic" style="stroke:#1E7D44"><use href="#i-check"/></svg><div>Nenhum contrato vencendo. Está tudo em dia.</div></div>'; }
     else{
-      var nV=pz.filter(function(c){return c.status==='vencido';}).length, nB=pz.filter(function(c){return c.status==='vence_breve';}).length;
+      var nV=pz.filter(function(c){return stC(c)==='vencido';}).length, nB=pz.filter(function(c){return stC(c)==='vence_breve';}).length;
       var topo='<div class="prz-top">'+
         (nV?'<span class="prz-pill v"><svg class="ic" style="width:13px;height:13px;stroke:#a11d33"><use href="#i-alert"/></svg> '+nV+' vencido(s)</span>':'')+
         (nB?'<span class="prz-pill b"><svg class="ic" style="width:13px;height:13px;stroke:#9a6a0a"><use href="#i-clock"/></svg> '+nB+' vencem em breve</span>':'')+'</div>';
-      var itens=pz.map(function(c){ var venc=c.status==='vencido'; var dias=diasAte(c.venc);
+      var itens=pz.map(function(c){ var venc=stC(c)==='vencido'; var dias=diasAte(c.venc);
         var rotulo = venc ? ('VENCIDO'+(dias!=null?' há '+Math.abs(dias)+' dia(s)':'')) : ('Vence em '+(dias!=null?dias+' dia(s)':'breve'));
-        return '<div class="prazo '+(venc?'prz-red':'prz-amb')+'" onclick="goto(\'contratos\')" title="Abrir Gestão de Contratos"><div class="pi" style="background:'+(venc?'#C62D45':'#E8A020')+';color:#fff"><svg class="ic" style="width:20px;height:20px;stroke:#fff"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg></div><div style="flex:1"><div class="pt">Contrato '+esc(c.n)+'</div><div class="pd">'+esc(c.obj)+'</div><div class="prz-lbl '+(venc?'v':'b')+'"><svg class="ic" style="width:12px;height:12px;stroke:'+(venc?'#C62D45':'#9a6a0a')+'"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg> '+rotulo+'</div></div><div class="pday" style="color:'+(venc?'#a11d33':'#9a6a0a')+'">'+esc(String(c.venc).slice(0,5))+'<small>VENC.</small></div></div>'; }).join('');
+        var dm = dias!=null ? esc(String(c.venc).slice(0,5)) : 's/data';
+        return '<div class="prazo '+(venc?'prz-red':'prz-amb')+'" onclick="goto(\'contratos\')" title="Abrir Gestão de Contratos"><div class="pi" style="background:'+(venc?'#C62D45':'#E8A020')+';color:#fff"><svg class="ic" style="width:20px;height:20px;stroke:#fff"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg></div><div style="flex:1"><div class="pt">Contrato '+esc(c.n)+'</div><div class="pd">'+esc(c.obj)+'</div><div class="prz-lbl '+(venc?'v':'b')+'"><svg class="ic" style="width:12px;height:12px;stroke:'+(venc?'#C62D45':'#9a6a0a')+'"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg> '+rotulo+'</div></div><div class="pday" style="color:'+(venc?'#a11d33':'#9a6a0a')+'">'+dm+'<small>VENC.</small></div></div>'; }).join('');
       dp.innerHTML=topo+itens;
     }
   }
   var dn=document.getElementById('dash-donut');
-  if(dn){ var qA=CONTRATOS.filter(function(c){return c.status==='ativo';}).length, qB=CONTRATOS.filter(function(c){return c.status==='vence_breve';}).length, qV=CONTRATOS.filter(function(c){return c.status==='vencido';}).length;
+  if(dn){ var qA=CONTRATOS.filter(function(c){return stC(c)==='ativo';}).length, qB=CONTRATOS.filter(function(c){return stC(c)==='vence_breve';}).length, qV=CONTRATOS.filter(function(c){return stC(c)==='vencido';}).length;
     dn.innerHTML=donutHTML([{l:'Ativos',v:qA,c:'#0A2342'},{l:'Vencem em breve',v:qB,c:'#E8A020'},{l:'Vencidos',v:qV,c:'#C62D45'}], CONTRATOS.length, 'contratos'); }
   var db=document.getElementById('dash-bars');
   if(db){ var tp=[['etp','ETP'],['tr','Termo de Referência'],['edital','Edital'],['contrato','Contrato'],['minuta','Minuta'],['dispensa','Dispensa'],['inexigibilidade','Inexigibilidade'],['aditivo','Aditivo']];
@@ -5802,7 +5895,7 @@ function barsHTML(items){
 }
 function renderCentral(){
   var body=document.getElementById('central-body'); if(!body) return;
-  var docs=(DB.docs||[]).filter(function(d){return d.tipo===docTabAtual;});
+  var docs=(DB.docs||[]).filter(function(d){return d.tipo===docTabAtual && podeVerDoc(d);});
   body.innerHTML = docs.length? docs.map(function(d){
     var acao = d.tipo==='modelo'
       ? '<span class="chip c-ok" style="cursor:pointer" onclick="usarModelo(\''+d.id+'\')"><svg class="ic"><use href="#i-check"/></svg> Usar este modelo</span> <span style="cursor:pointer;color:#C62D45;font-size:11.5px;font-weight:700;margin-left:8px" onclick="excluirModelo(\''+d.id+'\')">excluir</span>'
@@ -5815,6 +5908,7 @@ function renderCentral(){
 function abrirDocSalvo(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
   if(!d) return;
+  if(!podeVerDoc(d)){ toast('Você não tem permissão para abrir documentos deste módulo.'); return; }
   DOC={tipo:d.tipo,consulta:true,itens:[],dot:[],id:d.id,supaId:d.id};
   sairModoModelo();
   setTxt('ws-modulo','Documento salvo'); setTxt('ws-titulo',nomeTipo(d.tipo)+(d.numero?' '+d.numero:'')); setTxt('ws-desc',d.objeto);
@@ -5828,10 +5922,11 @@ function abrirDocSalvo(id){
 function gerarContratoDoEdital(id){
   var d=null; for(var i=0;i<DB.docs.length;i++){ if(DB.docs[i].id===id){ d=DB.docs[i]; break; } }
   if(!d) return;
+  if(!podeVerDoc(d)){ toast('Você não tem permissão para este módulo.'); return; }
   if(!d.proc || !d.proc.objeto){ toast('Este edital foi gerado antes desta atualização. Para o contrato puxar sozinho, gere o edital de novo (ETP, TR, Edital).'); return; }
   PROC = d.proc;
   abrirDoc('contrato', false);
-  toast('Contrato vinculado ao edital '+(d.proc.numTR||d.numero||'')+'. Objeto, número e valor já vieram. Preencha só a empresa vencedora.');
+  toast('Contrato vinculado ao edital '+(d.proc.numEdital||d.proc.numTR||d.numero||'')+'. Objeto, número e valor já vieram. Preencha só a empresa vencedora.');
 }
 // Importa um modelo do órgão de verdade: lê o conteúdo do Word (.docx) e guarda usável
 function importarModelo(prefixo){
@@ -6243,7 +6338,7 @@ function inserirModeloTipo(tipo){ openModelos(tipo); }
 function buscaGlobal(){
   var q=((document.getElementById('busca-global')||{}).value||'').trim(); if(!q) return;
   var nq=pncpNorm(q);
-  var docs=(DB.docs||[]).filter(function(d){ return pncpNorm((d.objeto||'')+' '+(d.numero||'')+' '+nomeTipo(d.tipo)).indexOf(nq)>=0; });
+  var docs=(DB.docs||[]).filter(function(d){ return podeVerDoc(d) && pncpNorm((d.objeto||'')+' '+(d.numero||'')+' '+nomeTipo(d.tipo)).indexOf(nq)>=0; });
   var contr=(CONTRATOS||[]).filter(function(c){ return pncpNorm((c.obj||'')+' '+(c.n||'')+' '+(c.sec||'')).indexOf(nq)>=0; });
   var h='';
   if(docs.length){ h+='<div class="modal-cat">Documentos</div>'+docs.slice(0,12).map(function(d){ return '<div class="modal-row" onclick="fecharModal();abrirDocSalvo(\''+d.id+'\')"><b>'+esc(nomeTipo(d.tipo))+(d.numero?' '+esc(d.numero):'')+'</b><span>'+esc(d.objeto)+'</span></div>'; }).join(''); }
@@ -6252,8 +6347,8 @@ function buscaGlobal(){
   abrirModal('Busca: "'+esc(q)+'"', h);
 }
 function abrirAlertas(){
-  var pz=(CONTRATOS||[]).filter(function(c){return c.status!=='ativo';});
-  var h = pz.length? pz.map(function(c){ var venc=c.status==='vencido'; return '<div class="alertbar '+(venc?'red':'amb')+'" style="margin-bottom:9px"><div class="ab"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg></div><div><b>Contrato '+esc(c.n)+' '+(venc?'vencido em '+esc(c.venc):'vence em '+esc(c.venc))+'</b><span>'+esc(c.obj)+'</span></div></div>'; }).join('') : '<div class="emptybox" style="margin:0">Sem alertas no momento.</div>';
+  var pz=(CONTRATOS||[]).filter(function(c){return stC(c)!=='ativo';});
+  var h = pz.length? pz.map(function(c){ var venc=stC(c)==='vencido'; return '<div class="alertbar '+(venc?'red':'amb')+'" style="margin-bottom:9px"><div class="ab"><svg class="ic" style="width:18px;height:18px;stroke:#fff"><use href="#'+(venc?'i-alert':'i-clock')+'"/></svg></div><div><b>Contrato '+esc(c.n)+' '+(venc?'vencido em '+esc(c.venc):'vence em '+esc(c.venc))+'</b><span>'+esc(c.obj)+'</span></div></div>'; }).join('') : '<div class="emptybox" style="margin:0">Sem alertas no momento.</div>';
   abrirModal('Alertas do mês', h);
 }
 function abrirModal(titulo, html){
@@ -6571,7 +6666,7 @@ function camNovaSessao(){
   abrirModal('Nova sessão plenária', h);
 }
 function camFmtData(iso){ if(!iso) return ''; var p=iso.split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso; }
-function camSalvarNovaSessao(){ function gv(id){ var e=document.getElementById(id); return e?e.value:''; } var num=(gv('cs-num')||'').trim(); if(!num){ toast('Informe o número da sessão.'); return; } var s={ id:'cs'+Date.now(), numero:num, tipo:gv('cs-tipo'), data:camFmtData(gv('cs-data')), hora:gv('cs-hora'), expediente:[], ordemDia:[], presencas:{}, aberta:true, cloud:false }; CAM.sessoes.unshift(s); camBumpNum('sessao', num); camSaveLocal(); camPersistConfig(); camPersistSessao(s); fecharModal(); CAM_SESS=s.id; camRender(); }
+function camSalvarNovaSessao(){ function gv(id){ var e=document.getElementById(id); return e?e.value:''; } var num=(gv('cs-num')||'').trim(); if(!num){ toast('Informe o número da sessão.'); return; } if(!gv('cs-data')){ toast('Informe uma data válida para a sessão.'); return; } var s={ id:'cs'+Date.now(), numero:num, tipo:gv('cs-tipo'), data:camFmtData(gv('cs-data')), hora:gv('cs-hora'), expediente:[], ordemDia:[], presencas:{}, aberta:true, cloud:false }; CAM.sessoes.unshift(s); camBumpNum('sessao', num); camSaveLocal(); camPersistConfig(); camPersistSessao(s); fecharModal(); CAM_SESS=s.id; camRender(); }
 function camSessaoAtual(){ for(var i=0;i<CAM.sessoes.length;i++){ if(CAM.sessoes[i].id===CAM_SESS){ return CAM.sessoes[i]; } } return null; }
 function camAbrirSessao(id){ CAM_SESS=id; CAM_TAB='sessao'; camRender(); }
 function camRenderSessaoDetalhe(){
