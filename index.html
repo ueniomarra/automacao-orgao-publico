@@ -3765,7 +3765,7 @@ var ANALISE={procs:[],curId:null};
 // ("158 itens ausentes" de pedaço de CNPJ) mesmo com o código novo já no ar.
 // Contador de versão do motor (formato AAAAMMDD, sempre CRESCENTE; bumpar a cada mudança de motor,
 // senão o resultado gravado pela versão anterior do MESMO dia nunca é recalculado ao abrir).
-var AN_MOTOR_VER=20260717;
+var AN_MOTOR_VER=20260718;
 // Recalcula, ao abrir o processo, todo licitante cujo resultado veio de um motor anterior (e que
 // ainda tem os documentos para reprocessar). Regenera a minuta se ela também for de motor antigo.
 // Não toca em decisão da comissão, valor confirmado, diligência nem responsável (o que é humano).
@@ -4647,7 +4647,7 @@ function anReguaLance(estimado, obra, gAtual){
     else r.faixa='ok';
   }
   return r; }
-function anAnaliseObra(p,l){
+function anAnaliseObra(p,l,propValor){
   // BDI, encargos e cronograma saem só de documento com leitura BOA. Varrer a pilha picotada faz o sistema pescar
   // "lucro" de uma declaração e um "3%" de qualquer certidão, e depois acusar o BDI de não fechar (aconteceu, real).
   var bom=function(d){ return d && d.texto && !d.textoCortado && !anTextoPicotado(d.texto); };
@@ -4819,12 +4819,14 @@ function anAnaliseObra(p,l){
     // ===== RÉGUA DO LANCE: até onde a empresa pode baixar, e o que não pode mexer (art. 59) =====
     // O pregoeiro pediu: no lance a empresa reduz o preço para vencer. O sistema mostra os limites
     // legais em REAIS e diz, item a item, o que pode e o que não pode ser alterado no desconto.
-    // ⚠ O valor da proposta para a regua so vale se for CONFIAVEL: confirmado pela comissao
-    // (valorProposta) ou somado de uma planilha lida LIMPA (licOk + soma). Medido no dado real: a
-    // proposta do MSH esta picotada, e anValorGlobal(licTxt) pescava "100.000" do capital social do
-    // contrato, marcando a empresa como inexequivel FALSAMENTE. Sem valor confiavel, a regua mostra
-    // so os limites em reais e pede para confirmar o valor da proposta, sem classificar em faixa.
-    var gLance=(l.valorProposta>0)?l.valorProposta:((licOk&&soma>0)?soma:null);
+    // ⚠ O valor da proposta para a regua so vale se for CONFIAVEL, em ordem: confirmado pela comissao
+    // (valorProposta); somado de uma planilha lida LIMPA (licOk + soma); ou o valor ANCORADO que a tela
+    // "Proposta / planilha" ja leu (propValor, via rotulo/extenso), o mesmo numero, para as duas telas
+    // concordarem. O valor ancorado e confiavel mesmo com texto picotado: a proposta do MSH esta picotada
+    // mas o total 840.140,85 vem confirmado pelo extenso ao lado, e anValorGlobal ja exclui capital social,
+    // entao o "100.000" do contrato nao e mais pescado. Sem NENHUM valor confiavel, a regua mostra so os
+    // limites em reais e pede para confirmar, sem classificar em faixa (caso do capital 100.000 SEM extenso).
+    var gLance=(l.valorProposta>0)?l.valorProposta:((licOk&&soma>0)?soma:((propValor>0)?propValor:null));
     var estEf=anValorEstimadoEfetivo(p);
     var fonteEst=(estEf.fonte==='informado')?'':' (valor derivado automaticamente do orçamento do edital, pois o campo Valor estimado não foi preenchido; confira)';
     var rl=anReguaLance(estEf.v>0?estEf.v:0, true, gLance>0?gLance:null);
@@ -5266,8 +5268,16 @@ function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){retur
   // essa regra, e este item lia o mesmo texto sem o filtro. Foi por aqui que o capital social virou
   // "proposta inexequível" (erro plantado em 16/07 reproduziu). Sem valor confiável, pede confirmação.
   var leituraBoa=!!t && !(ds.length&&ds[0].textoCortado) && !anTextoPicotado(t);
-  var todos=leituraBoa?anValores(t):[]; var g=(manual!=null)?manual:(leituraBoa?anValorGlobal(t):null); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
-  if(!leituraBoa && manual==null){ return {status:'conferir', valor:null, nota:'A leitura da proposta saiu com o texto quebrado ou cortado, e número lido de texto assim não serve de prova nem de acusação. Confirme o valor global da proposta no campo "Valor da proposta" (ou reenvie o arquivo para o sistema ler de novo): com o valor confirmado, o sistema compara com o estimado e aplica os limites do art. 59 da Lei 14.133/2021.'}; }
+  // anValorGlobal só devolve valor ANCORADO (rótulo "valor global: X" ou "R$ X (por extenso)") e já exclui
+  // capital social/patrimônio/garantia. Esse valor é CONFIÁVEL mesmo com o resto do texto picotado: o
+  // extenso ao lado confirma que é o total da proposta. Medido no dado real do MSH: a proposta está
+  // picotada (medida 43) e mesmo assim o 840.140,85 é lido certo, 3x, confirmado pelo extenso. Por isso o
+  // valor NÃO é descartado só por o texto estar picotado; só se pede confirmação quando não dá para isolar
+  // um valor ancorado (o capital social 100.000 SEM extenso continua corretamente rejeitado).
+  var g=(manual!=null)?manual:anValorGlobal(t);
+  var todos=leituraBoa?anValores(t):[]; // scan bruto de valores só em texto limpo (senão a coerência da soma junta número solto)
+  var fonte=(manual!=null)?' (confirmado pela comissão)':((!leituraBoa&&g!=null)?' (lido da proposta; o texto do arquivo saiu com falhas de leitura, confira o valor)':''); var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
+  if(g==null && manual==null && !leituraBoa){ return {status:'conferir', valor:null, nota:'A leitura da proposta saiu com o texto quebrado ou cortado e o sistema não conseguiu isolar o valor global com segurança. Confirme o valor global da proposta no campo "Valor da proposta" (ou reenvie o arquivo para o sistema ler de novo): com o valor confirmado, o sistema compara com o estimado e aplica os limites do art. 59 da Lei 14.133/2021.'}; }
   var obra=(p.obra==='Sim');
   // Valor estimado: usa o informado; se vazio, DERIVA do orçamento do edital (nunca inventa) e avisa.
   var _est=anValorEstimadoEfetivo(p); var est=_est.v; var estNota=(_est.fonte!=='informado'&&est>0)?' (orçado derivado do edital, o campo Valor estimado não foi preenchido)':'';
@@ -5318,7 +5328,7 @@ function anStatusGeral(itens,prop,obra,exig){
 function anConferirLic(p,l){ if(!p||!l) return false; var docs=l.docs||[]; if(!docs.length) return false;
   var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas;
   var itens=anRequeridos().filter(function(r){ return (!r.so_meepp || (l.meepp==='Sim')) && (!r.so_obra || (p.obra==='Sim')); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; });
-  var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l);
+  var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l,prop&&prop.valor);
   if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null;
   var exig=anExigenciasEdital(p,l);
   l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje(), ver:AN_MOTOR_VER};
@@ -5336,7 +5346,7 @@ function anConferirTodos(){ var p=anCur(); if(!p) return; var ls=(p.licitantes||
   var semDoc=ls.length-comDoc.length;
   toast('Conferidos '+n+' licitante(s).'+(semDoc>0?(' '+semDoc+' sem documento enviado ficaram de fora.'):'')+' A decisão de cada um continua sendo da comissão.');
 }
-function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; var exig=anExigenciasEdital(p,l); l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje(), ver:AN_MOTOR_VER}; l.statusSugerido=anStatusGeral(itens,prop,obra,exig); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
+function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l,prop&&prop.valor); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; var exig=anExigenciasEdital(p,l); l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje(), ver:AN_MOTOR_VER}; l.statusSugerido=anStatusGeral(itens,prop,obra,exig); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
 // ---------- Base legal dos apontamentos (artigos ja conferidos em fonte oficial; o texto explica, a comissao decide) ----------
 var AN_LEGAL={
   art59_ii:{t:'Art. 59, inciso II, da Lei 14.133/2021', e:'Manda desclassificar a proposta que não obedece às especificações técnicas do edital. Item da planilha que falta, ou quantitativo diferente do previsto, significa proposta que não cobre exatamente o objeto licitado. Se a comissão entender que é falha formal que não altera a substância da proposta, pode esclarecer o ponto em diligência (art. 64) antes de desclassificar.'},
