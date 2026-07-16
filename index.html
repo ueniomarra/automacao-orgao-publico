@@ -768,7 +768,7 @@ td .modd{font-size:12px;color:var(--slate)}
         <div class="pagehead"><div><div class="hello">Gestão</div><h1>Trilha de Auditoria</h1><p>Cada movimento fica registrado: quem fez, o quê e quando. Ninguém apaga o histórico. É o que protege o órgão numa fiscalização.</p></div></div>
         <div class="panel">
           <div class="ph"><h3>Movimentações</h3><a><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Filtrar</a></div>
-          <table><thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Item</th></tr></thead><tbody id="aud-body"></tbody></table>
+          <table><thead><tr><th>Quando (horário de Brasília)</th><th>Usuário</th><th>Ação</th><th>Item</th></tr></thead><tbody id="aud-body"></tbody></table>
         </div>
       </div>
 
@@ -5667,6 +5667,25 @@ async function registrarAud(acao, item, orgao){
   if(!SB || !CURRENT_USER) return;
   try{ await SB.from('auditoria').insert({orgao_id:orgao||'tur', email:CURRENT_USER.login, acao:acao, item:(item||'').slice(0,200)}); }catch(e){}
 }
+// A trilha de auditoria guarda o timestamp em UTC no banco (created_at). Aqui ele é convertido para o
+// HORÁRIO DE BRASÍLIA (America/Sao_Paulo, UTC-3, o fuso de Goiás), que é o horário real de quem operou.
+// O fuso é FIXADO no código, não pego do relógio do computador do pregoeiro: assim a trilha mostra a
+// mesma hora correta em qualquer máquina, mesmo se o relógio dela estiver configurado em outro fuso.
+// Bug real corrigido (16/07/2026): antes exibia a hora UTC crua, 3 horas ADIANTADA (mostrava 13:26 para
+// uma ação feita às 10:26). Numa fiscalização, hora errada aponta o responsável errado.
+function audQuando(iso){
+  if(!iso) return '';
+  var dt=new Date(iso);
+  if(isNaN(dt.getTime())) return String(iso).slice(0,16).replace('T',' '); // leitura defensiva: nunca quebra a linha
+  try{
+    // 'sv-SE' entrega o formato "AAAA-MM-DD HH:MM"; timeZone força Brasília independente da máquina
+    return dt.toLocaleString('sv-SE', {timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+  }catch(e){
+    // ambiente sem suporte a timeZone: cai para o offset fixo de Brasília (UTC-3), rolando a data se preciso
+    var b=new Date(dt.getTime()-3*3600000); var p=function(n){return String(n).padStart(2,'0');};
+    return b.getUTCFullYear()+'-'+p(b.getUTCMonth()+1)+'-'+p(b.getUTCDate())+' '+p(b.getUTCHours())+':'+p(b.getUTCMinutes());
+  }
+}
 async function renderAuditoria(){
   var body=document.getElementById('aud-body'); if(!body) return;
   body.innerHTML='<tr><td colspan="4" style="color:var(--slate);padding:18px">Carregando a trilha...</td></tr>';
@@ -5675,7 +5694,7 @@ async function renderAuditoria(){
     var r=await SB.from('auditoria').select('email,acao,item,created_at').order('created_at',{ascending:false}).limit(200);
     var rows=(r.data||[]);
     body.innerHTML = rows.length ? rows.map(function(a){
-      var d=a.created_at?String(a.created_at).slice(0,16).replace('T',' '):'';
+      var d=audQuando(a.created_at);
       return '<tr><td>'+esc(d)+'</td><td>'+esc(a.email||'')+'</td><td><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg> '+esc(a.acao||'')+'</span></td><td>'+esc(a.item||'')+'</td></tr>';
     }).join('') : '<tr><td colspan="4" style="color:var(--slate);padding:18px">Ainda sem movimentações. Cada documento gerado entra aqui.</td></tr>';
   }catch(e){ body.innerHTML='<tr><td colspan="4" style="color:var(--slate);padding:18px">Não consegui carregar a trilha agora.</td></tr>'; }
