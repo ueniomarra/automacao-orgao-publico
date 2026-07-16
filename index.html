@@ -4047,7 +4047,7 @@ function anRelatorioBuild(p){ if(!p) return ''; var org=(typeof ORG!=='undefined
       h+='<tr>'
         +'<td style="border:1px solid #444;padding:5px 7px;text-align:center">'+esc(l.ordem||(idx+1))+'º</td>'
         +'<td style="border:1px solid #444;padding:5px 7px">'+esc(l.razao||'(sem nome)')+'<br><span style="font-size:.85em;color:#555">CNPJ '+esc(l.cnpj||'-')+(l.meepp==='Sim'?' · ME/EPP':'')+'</span></td>'
-        +'<td style="border:1px solid #444;padding:5px 7px;text-align:center">'+sitTag(l.situacao,'')+'<br><span style="font-size:.85em">'+esc(l.situacaoTxt||'não analisado')+'</span></td>'
+        +'<td style="border:1px solid #444;padding:5px 7px;text-align:center">'+sitTag(l.situacao,'')+'<br><span style="font-size:.85em">'+esc(l.situacaoTxt||'decisão da comissão ainda não registrada')+'</span></td>'
         +'<td style="border:1px solid #444;padding:5px 7px;text-align:right">'+(l.valorProposta?money(l.valorProposta):'-')+'</td>'
         +'<td style="border:1px solid #444;padding:5px 7px">'+esc(pontos)+'</td></tr>';
     });
@@ -4058,7 +4058,7 @@ function anRelatorioBuild(p){ if(!p) return ''; var org=(typeof ORG!=='undefined
   h+=TIT('II. Análise detalhada por licitante');
   ls.forEach(function(l,idx){ var res=l.resultado;
     h+='<p style="margin:16px 0 2px;font-size:1.03em"><b>'+esc(l.ordem||(idx+1))+'. '+esc(l.razao||'(sem nome)')+'</b>, CNPJ '+esc(l.cnpj||'-')+(l.meepp==='Sim'?', ME/EPP (LC 123/2006)':'')+'</p>';
-    h+='<p style="margin:0 0 8px">Situação sugerida: '+sitTag(l.situacao,l.situacaoTxt||'não analisado')+(l.valorProposta?(' &nbsp;·&nbsp; Proposta: <b>'+money(l.valorProposta)+'</b>'):'')+'</p>';
+    h+='<p style="margin:0 0 8px">Situação sugerida: '+sitTag(l.situacao,l.situacaoTxt||'decisão da comissão ainda não registrada')+(l.valorProposta?(' &nbsp;·&nbsp; Proposta: <b>'+money(l.valorProposta)+'</b>'):'')+'</p>';
     if(!res){ h+='<p style="margin:0 0 12px">Licitante ainda não conferido (documentos não enviados ou conferência não executada).</p>'; return; }
     var auto=res.itens.filter(function(i){return i.modo==='auto';});
     var reg=auto.filter(function(i){return i.status==='conforme';}).map(function(i){return i.cat;});
@@ -4290,7 +4290,12 @@ function anValorGlobal(t){ var s=String(t||'');
   // Gancho inequívoco: um valor em reais seguido do MESMO valor por extenso entre parênteses só aparece
   // no total da proposta ("R$ 840.140,85 (Oitocentos e Quarenta Mil...)"). Extenso confirma que é global.
   var re=/(?:r\$\s*:?\s*)(\d{1,3}(?:\.\d{3})+,\d{2})\s*\(\s*[a-zà-ú]/gi, mm, best=null;
-  while((mm=re.exec(s))!==null){ var v=anNum(mm[1]); if(v!=null && (best==null || v>best)) best=v; }
+  while((mm=re.exec(s))!==null){
+    // "R$ 100.000,00 (cem mil reais)" pode ser o CAPITAL SOCIAL do contrato, a garantia ou o patrimônio,
+    // não o total da proposta. Medido no dado real: era assim que o capital virava "proposta inexequível".
+    var antes=anNormTxt(s.slice(Math.max(0, mm.index-70), mm.index));
+    if(/capital\s+social|patrim[oô]nio|garantia|multa|cau[çc][aã]o/.test(antes)) continue;
+    var v=anNum(mm[1]); if(v!=null && (best==null || v>best)) best=v; }
   return best; }
 // ---------- Leitura das exigências do edital/TR e dos índices do balanço ----------
 function anNumIdx(s){ s=String(s==null?'':s).replace(/[^0-9,.]/g,''); if(s.indexOf(',')>=0){ s=s.replace(/\.(?=\d{3}\b)/g,'').replace(',','.'); } return parseFloat(s); }
@@ -4612,8 +4617,13 @@ function anValorEstimadoEfetivo(p){
 function anObjetoEfetivo(p){
   if(p && p.objeto && String(p.objeto).trim()) return {txt:String(p.objeto).trim(), fonte:'informado'};
   var t=String(anRefTxt(p)||'').replace(/\s+/g,' '); if(!t) return {txt:'', fonte:'nenhum'};
-  var m=/\bobjeto\b[^A-Za-zÀ-ú0-9]{0,25}((?:a\s+)?(?:contrata[çc][aã]o|aquisi[çc][aã]o|execu[çc][aã]o|presta[çc][aã]o|amplia[çc][aã]o|constru[çc][aã]o|reforma|pavimenta[çc][aã]o|fornecimento)[^.]{10,200})/i.exec(t);
-  if(m) return {txt:m[1].trim().slice(0,200), fonte:'derivado'};
+  // O edital repete a palavra "objeto" dezenas de vezes; a cláusula que INTERESSA é a mais completa
+  // ("o objeto da presente licitação é a CONTRATAÇÃO ... DA OBRA DE AMPLIAÇÃO DO HOSPITAL ...").
+  // Medido no edital real do 5103: pegar a primeira ocorrência perdia a parte específica do objeto,
+  // e o confronto do atestado ficava comparando só com palavras genéricas. Pega a MAIS LONGA.
+  var re=/\bobjeto\b[^A-Za-zÀ-ú0-9]{0,25}(?:da\s+presente\s+licita[çc][aã]o\s+[eé]\s+)?((?:a\s+)?(?:contrata[çc][aã]o|aquisi[çc][aã]o|execu[çc][aã]o|presta[çc][aã]o|amplia[çc][aã]o|constru[çc][aã]o|reforma|pavimenta[çc][aã]o|fornecimento)[^.]{10,200})/ig, m, best='';
+  while((m=re.exec(t))!==null){ if(m[1].trim().length>best.length) best=m[1].trim(); }
+  if(best){ var cut=best.slice(0,200); if(best.length>200 && cut.lastIndexOf(' ')>120) cut=cut.slice(0, cut.lastIndexOf(' ')); return {txt:cut, fonte:'derivado'}; }
   return {txt:'', fonte:'nenhum'};
 }
 // Critério de aceitabilidade de preço UNITÁRIO fixado no edital (art. 59, § 3º): quando existe, cada
@@ -4677,7 +4687,7 @@ function anAnaliseObra(p,l){
       // Evidência = FRASE explicativa, não código solto. O pregoeiro tem que entender batendo o olho:
       // qual item, o que o edital pede, o que a empresa cotou, e por que isso é um problema.
       var itNome=function(x){ return 'Item '+x.cod+(x.desc?' ('+x.desc.slice(0,42)+')':''); };
-      var vezes=function(a,b){ if(!(a>0)||!(b>0)) return ''; var f=b/a; return f>=1.5?(' — '+(Math.round(f*10)/10).toString().replace('.',',')+'× o do edital'):(f<=0.66?(' — só '+Math.round(f*100)+'% do edital'):''); };
+      var vezes=function(a,b){ if(!(a>0)||!(b>0)) return ''; var f=b/a; return f>=1.5?(', ou seja, '+(Math.round(f*10)/10).toString().replace('.',',')+'× o do edital'):(f<=0.66?(', ou seja, só '+Math.round(f*100)+'% do edital'):''); };
       var c=byCod[anNormCod(r.cod)]||byDesc[anNormDesc(r.desc)];
       if(!c){ faltando.push(itNome(r)+': a prefeitura pediu preço para este item e a empresa NÃO o cotou na proposta'); return; }
       // especificação: item casado pelo código, mas descrito de outro jeito na proposta
@@ -4689,7 +4699,7 @@ function anAnaliseObra(p,l){
       // Linha 'fim' tem unitário duvidoso (pode ser lixo de leitura), e comparar geraria acusação falsa.
       if(c.layout==='auto'){
         if(r.unit>0 && c.unit>r.unit*1.0001 && (c.unit-r.unit)>0.0051) sobre.push(itNome(r)+': a empresa cotou o unitário a '+money(c.unit)+', acima do preço de referência do edital, que é '+money(r.unit)); // meio centavo de folga: PDF exibe unitário arredondado a 2 casas
-        if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(itNome(r)+': a empresa cotou o unitário a '+money(c.unit)+', abaixo da METADE do preço de referência do edital ('+money(r.unit)+') — preço muito baixo levanta dúvida de exequibilidade');
+        if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(itNome(r)+': a empresa cotou o unitário a '+money(c.unit)+', abaixo da METADE do preço de referência do edital ('+money(r.unit)+'). Preço muito baixo levanta dúvida de exequibilidade');
       }
     });
     // caminho inverso: item que a empresa cotou e o edital não pede (serviço acrescentado, taxa criada, linha inflada)
@@ -4921,16 +4931,25 @@ function anConselhoTipo(txt){ var t=anNormTxt(txt);
 // O edital real do 5103 traz as fórmulas (ILC = AC/PC etc). Balanço é OCR: se a conta sair abaixo do
 // piso, o sistema mostra a conta e manda conferir, NUNCA inabilita sozinho por leitura de scanner.
 function anValorRotulo(txt, re){ var t=anNormTxt(txt);
-  var m=new RegExp('(?:'+re+')[^0-9\\-]{0,40}(\\d{1,3}(?:\\.\\d{3})*,\\d{2})','i').exec(t);
-  return m?anNum(m[1]):null; }
+  // Valor entre parênteses ou com sinal de menos no balanço é NEGATIVO ("PATRIMÔNIO LÍQUIDO (300.000,00)").
+  // Lê-lo como positivo carimbava "conforme" em empresa com patrimônio líquido negativo.
+  var m=new RegExp('(?:'+re+')[^0-9\\-(]{0,40}(\\(\\s*|\\-\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})','i').exec(t);
+  if(!m) return null; var v=anNum(m[2]); return (m[1]&&v!=null)?-v:v; }
 function anIndicesCalculados(bt){
   var ac=anValorRotulo(bt, 'ativo\\s+circulante|circulante\\s+ativo');
   var pc=anValorRotulo(bt, 'passivo\\s+circulante');
   var at=anValorRotulo(bt, 'ativo\\s+total|total\\s+do\\s+ativo');
   var pl=anValorRotulo(bt, 'patrim[oô]nio\\s+l[ií]quido');
+  var pnc=anValorRotulo(bt, 'passivo\\s+n[aã]o\\s+circulante|exig[ií]vel\\s+a\\s+longo\\s+prazo');
+  var rlp=anValorRotulo(bt, 'realiz[aá]vel\\s+a\\s+longo\\s+prazo');
   var out={};
   if(ac!=null && pc!=null && pc>0) out['Liquidez Corrente']={v:ac/pc, conta:'ativo circulante '+money(ac)+' ÷ passivo circulante '+money(pc)};
-  if(at!=null && pc!=null && pc>0) out['Solvência Geral']={v:at/pc, conta:'ativo total '+money(at)+' ÷ passivo circulante '+money(pc)+' (sem o passivo não circulante, que o sistema não isolou)'};
+  // Solvência Geral = ativo total ÷ (passivo circulante + passivo não circulante). Sem o passivo não
+  // circulante a conta só SUPERESTIMA o índice: serve para acusar (se nem assim passa do piso, está
+  // abaixo mesmo), mas NUNCA para tranquilizar. A marca "aprox" impede o "acima do mínimo" falso.
+  if(at!=null && pc!=null && pnc!=null && (pc+pnc)>0) out['Solvência Geral']={v:at/(pc+pnc), conta:'ativo total '+money(at)+' ÷ (passivo circulante '+money(pc)+' + passivo não circulante '+money(pnc)+')'};
+  else if(at!=null && pc!=null && pc>0) out['Solvência Geral']={v:at/pc, aprox:true, conta:'ativo total '+money(at)+' ÷ passivo circulante '+money(pc)+' (o passivo não circulante não foi isolado: a conta real só pode dar MENOS que isso)'};
+  if(ac!=null && rlp!=null && pc!=null && pnc!=null && (pc+pnc)>0) out['Liquidez Geral']={v:(ac+rlp)/(pc+pnc), conta:'(ativo circulante '+money(ac)+' + realizável a longo prazo '+money(rlp)+') ÷ (passivo circulante '+money(pc)+' + passivo não circulante '+money(pnc)+')'};
   out._pl=pl; out._ac=ac; out._pc=pc;
   return out; }
 // ===== CAT x parcelas de maior relevância exigidas no edital (art. 67, §§ 1º e 2º) =====
@@ -5219,7 +5238,10 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
     var calc=(criadaNoExercicio&&/dispensa/.test(anNormTxt(refTxt)))?{}:anIndicesCalculados(bt);
     idxDefs.forEach(function(ix){ var piso=anIndicePiso(refTxt, ix[1]); if(piso==null) return; var decl=anIndiceDecl(licAll, ix[1]);
       if(decl==null && calc[ix[0]]){ var c=calc[ix[0]], v2=Math.round(c.v*100)/100;
-        if(v2 >= piso*0.999){ bNotas.push(ix[0]+' não veio declarado, mas o sistema calculou '+String(v2).replace('.',',')+' pelo balanço ('+c.conta+'), acima do mínimo '+String(piso).replace('.',',')+'; a comissão confere a conta'); }
+        // Conta APROXIMADA (faltou isolar o passivo não circulante) só pode dar um teto: se nem o teto
+        // passa do piso, está abaixo mesmo; se passa, NÃO se afirma "acima do mínimo" (seria conforme falso).
+        if(c.aprox && v2 >= piso*0.999){ pior('conferir'); bProbl.push('o edital exige '+ix[0]+' >= '+String(piso).replace('.',',')+', o índice não veio declarado e o sistema não conseguiu isolar o passivo não circulante no balanço; a conta parcial ('+c.conta+') dá '+String(v2).replace('.',',')+', mas ela é só um TETO (a conta completa dá menos). Calcular o índice no próprio balanço antes de decidir'); }
+        else if(v2 >= piso*0.999){ bNotas.push(ix[0]+' não veio declarado, mas o sistema calculou '+String(v2).replace('.',',')+' pelo balanço ('+c.conta+'), acima do mínimo '+String(piso).replace('.',',')+'; a comissão confere a conta'); }
         else { pior('conferir'); bProbl.push('o edital exige '+ix[0]+' >= '+String(piso).replace('.',',')+', o índice não veio declarado e a conta feita pelo sistema com os valores lidos no balanço ('+c.conta+') dá '+String(v2).replace('.',',')+', ABAIXO do mínimo. Como o balanço é lido por digitalização, CONFERIR os valores no documento antes de qualquer decisão'); }
         return; }
       if(decl==null){ pior('conferir'); bProbl.push('o edital exige '+ix[0]+' >= '+String(piso).replace('.',',')+' e o índice não foi localizado nos documentos do licitante, nem foi possível calculá-lo pelo balanço; calcular/conferir'); }
@@ -5237,7 +5259,13 @@ function anAvaliaReq(req, docs, p, l, secoes, secPags){
   }
   return {status:'conforme', nota:'Documento presente.'};
 }
-function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){return d.categoria==='Proposta / planilha';}); if(!ds.length && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; if(ds.length && ds[0].pags && ds[0].pags.length>6 && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; var manual=(l&&l.valorProposta>0)?l.valorProposta:null; if(!ds.length && manual==null) return null; var t=ds.length?ds[0].texto:''; var todos=anValores(t); var g=(manual!=null)?manual:anValorGlobal(t); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
+function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){return d.categoria==='Proposta / planilha';}); if(!ds.length && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; if(ds.length && ds[0].pags && ds[0].pags.length>6 && secoes && secoes['Proposta / planilha']) ds=[{texto:secoes['Proposta / planilha']}]; var manual=(l&&l.valorProposta>0)?l.valorProposta:null; if(!ds.length && manual==null) return null; var t=ds.length?ds[0].texto:'';
+  // Leitura ruim (picotada ou cortada) NÃO serve para ler o valor global: a régua do lance já segue
+  // essa regra, e este item lia o mesmo texto sem o filtro. Foi por aqui que o capital social virou
+  // "proposta inexequível" (erro plantado em 16/07 reproduziu). Sem valor confiável, pede confirmação.
+  var leituraBoa=!!t && !(ds.length&&ds[0].textoCortado) && !anTextoPicotado(t);
+  var todos=leituraBoa?anValores(t):[]; var g=(manual!=null)?manual:(leituraBoa?anValorGlobal(t):null); var fonte=(manual!=null)?' (confirmado pela comissão)':''; var notas=[]; var st='conforme'; var pior=function(n){ var r={conforme:0,conferir:1,atencao:2}; if(r[n]>r[st]) st=n; };
+  if(!leituraBoa && manual==null){ return {status:'conferir', valor:null, nota:'A leitura da proposta saiu com o texto quebrado ou cortado, e número lido de texto assim não serve de prova nem de acusação. Confirme o valor global da proposta no campo "Valor da proposta" (ou reenvie o arquivo para o sistema ler de novo): com o valor confirmado, o sistema compara com o estimado e aplica os limites do art. 59 da Lei 14.133/2021.'}; }
   var obra=(p.obra==='Sim');
   // Valor estimado: usa o informado; se vazio, DERIVA do orçamento do edital (nunca inventa) e avisa.
   var _est=anValorEstimadoEfetivo(p); var est=_est.v; var estNota=(_est.fonte!=='informado'&&est>0)?' (orçado derivado do edital, o campo Valor estimado não foi preenchido)':'';
@@ -5257,7 +5285,13 @@ function anAvaliaProposta(docs,p,l,secoes){ var ds=docs.filter(function(d){retur
 function anObjKeywords(s){ var stop={de:1,da:1,do:1,das:1,dos:1,para:1,com:1,sem:1,por:1,em:1,no:1,na:1,nos:1,nas:1,ao:1,aos:1,que:1,uma:1,uns:1,ou:1,servico:1,servicos:1,contratacao:1,aquisicao:1,prestacao:1,fornecimento:1,empresa:1,especializada:1,municipio:1,municipal:1,futura:1,eventual:1,execucao:1,referente:1}; var t=String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' '); var w=t.split(/\s+/).filter(function(x){return x.length>=4 && !stop[x];}); var seen={},out=[]; w.forEach(function(x){ if(!seen[x]){seen[x]=1; out.push(x);} }); return out.slice(0,10); }
 function anNormTxt(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function anCompatAtestado(txt,p){ var _obj=anObjetoEfetivo(p); var kws=anObjKeywords(_obj.txt||''); var objNota=(_obj.fonte==='derivado')?' (objeto lido automaticamente do edital, pois o campo Objeto não foi preenchido)':''; if(!kws.length) return {status:'conferir', nota:'Atestado presente. Informe o objeto do certame (ou suba o edital) para o sistema comparar; a compatibilidade final é da comissão (art. 67).'}; var nt=anNormTxt(txt); var achou=kws.filter(function(k){return nt.indexOf(k)>=0;}); var faltou=kws.filter(function(k){return nt.indexOf(k)<0;}); var cob=achou.length/kws.length;
-  if(cob>=0.5) return {status:'conforme', nota:'Atestado aparentemente compatível com o objeto'+objNota+': encontrados os termos ('+achou.join(', ')+'). A comissão confirma a compatibilidade (art. 67).'};
+  // Termo genérico não prova compatibilidade: "engenharia" e "obra" aparecem em QUALQUER atestado de
+  // construção. Conforme só quando o atestado repete termo ESPECÍFICO do objeto (ex.: hospital,
+  // ampliação, pavimentação). Só genérico = a comissão confere (era o "conforme frouxo" apontado em 16/07).
+  var GEN={engenharia:1,obra:1,obras:1,construcao:1,construcoes:1,edificacao:1,edificacoes:1,servico:1,servicos:1,tecnica:1,tecnicos:1,regime:1,empreitada:1,global:1,preco:1,precos:1,limpeza:1,gerais:1,geral:1};
+  var especificos=achou.filter(function(k){return !GEN[k];});
+  if(cob>=0.5 && especificos.length) return {status:'conforme', nota:'Atestado aparentemente compatível com o objeto'+objNota+': encontrados os termos ('+achou.join(', ')+'), inclusive termo específico do objeto ('+especificos.join(', ')+'). A comissão confirma a compatibilidade (art. 67).'};
+  if(cob>=0.5) return {status:'conferir', nota:'O atestado menciona apenas termos GENÉRICOS do objeto ('+achou.join(', ')+'), que aparecem em qualquer atestado do ramo, e não repete a parte específica'+(faltou.length?' ('+faltou.join(', ')+')':'')+objNota+'. Isso não quer dizer que é incompatível: a comissão compara o que o atestado descreve com o objeto do certame e decide (art. 67).'};
   if(cob>0) return {status:'atencao', nota:'Baixa aderência ao objeto'+objNota+': encontrados ('+achou.join(', ')+'), NÃO encontrados ('+faltou.join(', ')+'). Verifique se o atestado é compatível (art. 67).'};
   return {status:'atencao', nota:'Não foram encontrados no atestado os termos do objeto do certame'+objNota+' ('+faltou.join(', ')+'). Verifique a compatibilidade (art. 67).'};
 }
@@ -5274,7 +5308,10 @@ function anOnUploadCertame(input){ var files=input.files; if(!files||!files.leng
   })(0);
 }
 function anDelDocCert(i){ var p=anCur(); if(!p||!p.docsCertame) return; var nm=(p.docsCertame[i]&&p.docsCertame[i].nome)||'este arquivo'; if(!confirm('Remover o documento da licitação "'+nm+'"? Ele é a régua da comparação.')) return; p.docsCertame.splice(i,1); p.textoCertame=(p.docsCertame||[]).map(function(d){return d.texto;}).join('\n'); p.valoresRef=anValores(p.textoCertame); anSave(); renderAnalise(); }
-function anStatusGeral(itens,prop,obra,exig){ if(prop&&prop.status==='atencao'&&/ACIMA do estimado|INEXEQU/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); var extra=[].concat((obra&&obra.checks)||[],exig||[]); var xAt=extra.some(function(c){return c.status==='atencao';}); var xCf=extra.some(function(c){return c.status==='conferir';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')||xAt) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})||xCf) return 'ressalvas'; return 'habilitado'; }
+function anStatusGeral(itens,prop,obra,exig){
+  // "Desclassificável" só por EXCESSO (art. 59, III). Inexequível é presunção RELATIVA (art. 59, § 4º):
+  // a lei manda abrir diligência antes, então o status sugerido fica "pendente", coerente com a nota.
+  if(prop&&prop.status==='atencao'&&/ACIMA do estimado/i.test(prop.nota||'')) return 'desclassificavel'; var auto=itens.filter(function(i){return i.modo==='auto';}); var extra=[].concat((obra&&obra.checks)||[],exig||[]); var xAt=extra.some(function(c){return c.status==='atencao';}); var xCf=extra.some(function(c){return c.status==='conferir';}); if(auto.some(function(i){return i.status==='ausente'||i.status==='atencao';})||(prop&&prop.status==='atencao')||xAt) return 'pendente'; if(itens.some(function(i){return i.status==='conferir';})||(prop&&prop.status==='conferir')||itens.some(function(i){return i.modo==='humano';})||xCf) return 'ressalvas'; return 'habilitado'; }
 // Confere UM licitante (o motor). anConferir é o clique na tela; anConferirTodos roda a fila inteira.
 function anConferirLic(p,l){ if(!p||!l) return false; var docs=l.docs||[]; if(!docs.length) return false;
   var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas;
@@ -5334,6 +5371,13 @@ function anFrases(s){ s=String(s||''); var M='@@D@@';
   // troca o ponto de abreviacao por um marcador, para ele nao virar quebra de clausula
   s=s.replace(/\b(art|arts|inc|incs|par|n|no|nos|p|pp|pag|ex|obs|cf|fl|fls|al|Sr|Sra|Srs|Dr|Dra|Lei|LC|Dec|EC|MP|CF)\.(?=\s)/gi, function(m){ return m.slice(0,-1)+M; });
   var parts=s.split(/(?:;\s+|\.\s+)/).map(function(x){ return x.split(M).join('.').trim(); }).filter(Boolean);
+  // A quebra pode partir um grupo entre parênteses ("(CNPJ conferido; exercício 2025)"): a cláusula
+  // que fica com parêntese sem par ganha a limpeza, senão o pregoeiro lê "(CNPJ conferido" solto.
+  parts=parts.map(function(x){
+    var abre=(x.match(/\(/g)||[]).length, fecha=(x.match(/\)/g)||[]).length;
+    if(abre>fecha && x.charAt(0)==='(') x=x.slice(1).trim();
+    else if(fecha>abre && x.charAt(x.length-1)===')') x=x.slice(0,-1).trim();
+    return x; }).filter(Boolean);
   return parts;
 }
 // Nota longa vira lista com respiro (só formatação; o texto do apontamento não muda)
@@ -5398,6 +5442,13 @@ function anRenderResultado(l){
   var sec=function(ico,titulo,rows,extra){ if(!rows) return ''; return '<div class="an-sec"><div class="sh"><svg><use href="#'+ico+'"/></svg> '+titulo+(extra||'')+'</div>'+rows+'</div>'; };
   var row=function(nome,st,nota,o){ var leg=(st!=='conforme')?anLegalHtml(anLegalRefs(nota+' '+((o&&o.resumo)||''))):''; return '<div class="an-row"><div class="rn">'+esc(nome)+'</div><div class="rb">'+anTag(st)+'</div><div class="rt">'+anCorpo({nota:nota,resumo:(o&&o.resumo)||'',evid:(o&&o.evid)||null,status:st},false)+leg+'</div></div>'; };
   var h='<div class="panel"><div class="ph"><h3>Resultado da conferência</h3></div><div style="padding:16px 22px">';
+  // Resultado calculado por versão ANTIGA do motor que não pôde ser recalculado (os documentos não estão
+  // mais anexados): avisa em vez de exibir como se fosse atual. Resultado velho calado já enganou uma vez.
+  if((+r.ver||0) < AN_MOTOR_VER){
+    h+='<div style="display:flex;gap:10px;align-items:flex-start;background:#FFF8E6;border:2px solid #E8A020;border-left:7px solid #E8A020;border-radius:10px;padding:11px 14px;margin:0 0 12px">'
+      +'<svg class="ic" style="width:18px;height:18px;flex:none;stroke:#0A2342;margin-top:1px"><use href="#i-alert"/></svg>'
+      +'<span style="font-size:13px;color:#0A2342;line-height:1.5"><b>Este resultado foi calculado por uma versão anterior do sistema</b> e não pôde ser recalculado porque os documentos do licitante não estão mais anexados. Reenvie os documentos e clique em <b>Conferir</b> antes de usar este resultado em parecer ou relatório.</span></div>';
+  }
   h+='<div class="an-hero"><div class="hicon"><svg><use href="#'+(stIco[l.statusSugerido]||'i-shield')+'"/></svg></div><div><div class="ttl">Situação sugerida pelo sistema</div><div class="big">'+esc(stg[l.statusSugerido]||'-')+'</div><div class="sub">'+esc(l.razao||'')+(l.cnpj?(' | CNPJ '+l.cnpj):'')+' | conferido em '+esc(r.quando||'')+'. O sistema aponta; a decisão final e a assinatura são sempre da comissão.</div></div></div>';
   h+='<div class="an-tiles">'
     +tile('i-check','#0A2342','#C9A961',cnt.conforme,'Conforme')
@@ -5467,7 +5518,7 @@ function anParecerBuild(p,l){
   h+='<table style="width:100%;border-collapse:collapse;margin:0 0 14px;font-size:.95em">'
     +'<tr><td style="border:1px solid #444;padding:5px 9px;width:32%"><b>Processo administrativo</b></td><td style="border:1px solid #444;padding:5px 9px">'+esc(p.processo||'-')+'</td></tr>'
     +'<tr><td style="border:1px solid #444;padding:5px 9px"><b>Modalidade</b></td><td style="border:1px solid #444;padding:5px 9px">'+esc(p.modalidade)+'</td></tr>'
-    +'<tr><td style="border:1px solid #444;padding:5px 9px"><b>Objeto</b></td><td style="border:1px solid #444;padding:5px 9px">'+esc(p.objeto||'-')+'</td></tr>'
+    +(function(){ var oE=anObjetoEfetivo(p); return '<tr><td style="border:1px solid #444;padding:5px 9px"><b>Objeto</b></td><td style="border:1px solid #444;padding:5px 9px">'+(oE.txt?(esc(oE.txt)+(oE.fonte==='derivado'?' <i style="font-size:.9em">(lido do edital)</i>':'')):'-')+'</td></tr>'; })()
     +'<tr><td style="border:1px solid #444;padding:5px 9px"><b>Licitante</b></td><td style="border:1px solid #444;padding:5px 9px">'+esc(l.razao||'-')+'</td></tr>'
     +'<tr><td style="border:1px solid #444;padding:5px 9px"><b>CNPJ</b></td><td style="border:1px solid #444;padding:5px 9px">'+esc(l.cnpj||'-')+'</td></tr>'
     +(l.meepp==='Sim'?'<tr><td style="border:1px solid #444;padding:5px 9px"><b>Enquadramento</b></td><td style="border:1px solid #444;padding:5px 9px">ME/EPP (LC 123/2006)</td></tr>':'')
