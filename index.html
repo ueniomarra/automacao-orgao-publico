@@ -3758,6 +3758,27 @@ function dataHoje(){ var d=new Date(); return String(d.getDate()).padStart(2,'0'
 // a minuta; a comissão decide e assina. Bloco 1: certame, licitantes e exigências.
 var ANMODS=['Pregão Eletrônico','Concorrência Eletrônica','Pregão Presencial','Concorrência Presencial','Diálogo Competitivo','Chamamento / Credenciamento','Dispensa','Inexigibilidade'];
 var ANALISE={procs:[],curId:null};
+// Versão do motor de análise. Sobe quando o cálculo do resultado muda (correção de leitura, de
+// confronto, de habilitação). Resultado gravado com versão menor é de motor antigo e o sistema
+// recalcula sozinho ao abrir o processo, para o pregoeiro nunca ver parecer velho nem precisar
+// clicar Conferir de novo. Foi assim que o dossiê do 5103 ficou com o lixo do parser antigo
+// ("158 itens ausentes" de pedaço de CNPJ) mesmo com o código novo já no ar.
+var AN_MOTOR_VER=20260716;
+// Recalcula, ao abrir o processo, todo licitante cujo resultado veio de um motor anterior (e que
+// ainda tem os documentos para reprocessar). Regenera a minuta se ela também for de motor antigo.
+// Não toca em decisão da comissão, valor confirmado, diligência nem responsável (o que é humano).
+function anRevalidarMotor(p){ if(!p) return false; var mudou=false;
+  (p.licitantes||[]).forEach(function(l){
+    if(!l||!l.resultado) return;
+    if((+l.resultado.ver||0) >= AN_MOTOR_VER) return;      // já está no motor atual
+    if(!(l.docs&&l.docs.length)) return;                    // sem os documentos não dá para reprocessar; mantém o que há
+    if(anConferirLic(p,l)){ mudou=true;
+      if(l.parecerHtml && (+l.parecerVer||0) < AN_MOTOR_VER){ try{ anParecerBuild(p,l); }catch(e){} } // minuta antiga: refaz com a análise corrigida
+    }
+  });
+  if(mudou){ try{ anSave(); }catch(e){} }
+  return mudou;
+}
 function anLoad(){ try{ var s=localStorage.getItem('aop_analise_v1'); if(s){ ANALISE.procs=(JSON.parse(s).procs)||[]; } }catch(e){} }
 function anSave(){ try{ localStorage.setItem('aop_analise_v1', JSON.stringify({procs:ANALISE.procs})); }catch(e){} var c=anCur(); if(c) anPersist(c); }
 function anOrg(){ return (typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; }
@@ -3871,7 +3892,7 @@ function anRenderLista(root){
     h+='<div style="display:flex;flex-direction:column;gap:10px">';
     ANALISE.procs.forEach(function(p){ var nlic=(p.licitantes||[]).length; h+='<div style="border:1px solid #e6e9ef;border-left:5px solid #0A2342;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;background:#fff;transition:box-shadow .15s" onmouseover="this.style.boxShadow=&#39;0 4px 14px rgba(10,35,66,.10)&#39;" onmouseout="this.style.boxShadow=&#39;none&#39;">'
       +'<div style="min-width:0">'
-      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="background:#0A2342;color:#C9A961;font-weight:700;font-size:11px;padding:3px 11px;border-radius:20px">'+esc(p.modalidade)+'</span>'+(p.processo?'<span style="font-size:12px;color:#64748b">Processo '+esc(p.processo)+'</span>':'')+'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="background:#0A2342;color:#C9A961;font-weight:700;font-size:11px;padding:3px 11px;border-radius:20px">'+esc(p.modalidade)+'</span>'+(p.processo?'<span style="font-size:12px;color:#64748b">Processo '+esc(p.processo)+'</span>':'')+(anProcNumRepetido(p)?'<span title="Número de processo repetido neste órgão" style="display:inline-flex;gap:4px;align-items:center;background:#FFF8E6;border:1.5px solid #E8A020;color:#0A2342;font-weight:700;font-size:10.5px;padding:2px 8px;border-radius:20px"><svg class="ic" style="width:12px;height:12px;stroke:#0A2342"><use href="#i-alert"/></svg>número repetido</span>':'')+'</div>'
       +'<div style="margin-top:7px;font-weight:600;color:#0f172a;font-size:14.5px;overflow:hidden;text-overflow:ellipsis">'+esc(p.objeto||'(sem objeto definido)')+'</div>'
       +'<div style="margin-top:4px;font-size:12.5px;color:#64748b">'+nlic+' licitante'+(nlic===1?'':'s')+' cadastrado'+(nlic===1?'':'s')+'</div>'
       +'</div>'
@@ -3883,7 +3904,7 @@ function anRenderLista(root){
   root.innerHTML=h;
 }
 function anNovo(){ var p={id:anGid('p'),modalidade:'Pregão Eletrônico',criterio:'Menor preço',objeto:'',processo:'',valorEstimado:0,dataBase:dataHoje(),inversao:'Não',obra:'Não',licitantes:[],criado:dataHoje()}; /* licitante.meepp definido ao adicionar */ ANALISE.procs.unshift(p); ANALISE.curId=p.id; anSave(); try{ if(typeof registrarAud==='function' && typeof SB!=='undefined' && SB && CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Abriu processo de análise', p.id, org); } }catch(e){} renderAnalise(); }
-function anAbrir(id){ anFlush(); ANALISE.curId=id; ANALISE.curLic=null; renderAnalise(); }
+function anAbrir(id){ anFlush(); ANALISE.curId=id; ANALISE.curLic=null; try{ anRevalidarMotor(anCur()); }catch(e){} renderAnalise(); }
 function anExcluir(id){ if(!confirm('Excluir este processo de análise e todos os licitantes e documentos dele? Essa ação não pode ser desfeita.')) return; try{ if(typeof SB!=='undefined'&&SB&&typeof CURRENT_USER!=='undefined'&&CURRENT_USER) SB.from('an_processos').delete().eq('orgao_id',anOrg()).eq('proc_id',id).then(function(){},function(){}); }catch(e){} ANALISE.procs=ANALISE.procs.filter(function(p){return p.id!==id;}); if(ANALISE.curId===id) ANALISE.curId=null; anSave(); renderAnalise(); }
 function anVoltar(){ anFlush(); ANALISE.curId=null; renderAnalise(); }
 // Faixa de alerta quando a gravação na nuvem falhou: o pregoeiro precisa VER, não descobrir depois que sumiu.
@@ -3897,6 +3918,16 @@ function anAvisoNaoSalvo(p){
     +'<button class="btn-ghost" type="button" style="margin-top:8px" onclick="anTentarSalvar()">Tentar agora</button></div></div>';
 }
 function anTentarSalvar(){ var p=anCur(); if(!p) return; toast('Tentando salvar na nuvem...'); anPersist(p); }
+// Conta quantos OUTROS processos do órgão têm o mesmo número (não vazio). O sistema deixava criar
+// número repetido em silêncio, e foi assim que surgiram 5 processos "5103/2026" misturando dossiês.
+function anProcNumRepetido(p){ if(!p) return 0; var n=String(p.processo||'').trim().toLowerCase(); if(!n) return 0;
+  return (ANALISE.procs||[]).filter(function(x){ return x && x.id!==p.id && String(x.processo||'').trim().toLowerCase()===n; }).length;
+}
+function anAvisoNumRepetido(p){ var q=anProcNumRepetido(p); if(!q) return '';
+  return '<div style="display:flex;gap:10px;align-items:flex-start;background:#FFF8E6;border:2px solid #E8A020;border-left:7px solid #E8A020;border-radius:10px;padding:11px 14px;margin:10px 0">'
+    +'<svg class="ic" style="width:18px;height:18px;flex:none;stroke:#0A2342;margin-top:1px"><use href="#i-alert"/></svg>'
+    +'<span style="font-size:13px;color:#0A2342;line-height:1.5"><b>Atenção: número de processo repetido.</b> Já existe '+q+' outro'+(q===1?'':'s')+' processo'+(q===1?'':'s')+' com o número <b>'+esc(p.processo)+'</b> neste órgão. Confira se não é duplicidade: número repetido mistura dossiês de licitações diferentes e dificulta achar o processo certo. Use um número único por processo, ou apague o duplicado.</span></div>';
+}
 function anRenderProc(root){
   var p=anCur(); if(!p){ anRenderLista(root); return; }
   var modo=anModo(p.modalidade);
@@ -3905,6 +3936,7 @@ function anRenderProc(root){
   h+=anLeg('<b>O que é o Certame:</b> aqui você descreve a licitação (o objeto, a modalidade, o valor que a prefeitura estima gastar) e sobe o edital, o termo de referência e a planilha. Isso vira a régua: o sistema compara os documentos das empresas com o que está aqui.');
   h+='<div class="field" style="margin-bottom:12px"><label>Modalidade</label>'+pills('anmod',ANMODS,p.modalidade)+'</div>';
   h+='<div class="frow c2"><div class="field"><label>Nº do processo administrativo</label><input id="an-proc" value="'+esc(p.processo)+'" placeholder="ex.: 2859/2026"></div><div class="field"><label>Objeto é obra ou serviço de engenharia?</label>'+pills('anobra',['Não','Sim'],p.obra)+'</div></div>';
+  h+=anAvisoNumRepetido(p);
   if(p.obra==='Sim'){
     h+='<div class="field"><label>Tipo de obra (para comparar o BDI com a faixa do TCU)</label><select id="an-tipoobra" onchange="anSetTipoObra(this.value)">'
       +'<option value="">selecione o tipo de obra</option>'
@@ -5193,7 +5225,7 @@ function anConferirLic(p,l){ if(!p||!l) return false; var docs=l.docs||[]; if(!d
   var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l);
   if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null;
   var exig=anExigenciasEdital(p,l);
-  l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje()};
+  l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje(), ver:AN_MOTOR_VER};
   l.statusSugerido=anStatusGeral(itens,prop,obra,exig);
   return true;
 }
@@ -5208,7 +5240,7 @@ function anConferirTodos(){ var p=anCur(); if(!p) return; var ls=(p.licitantes||
   var semDoc=ls.length-comDoc.length;
   toast('Conferidos '+n+' licitante(s).'+(semDoc>0?(' '+semDoc+' sem documento enviado ficaram de fora.'):'')+' A decisão de cada um continua sendo da comissão.');
 }
-function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; var exig=anExigenciasEdital(p,l); l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje()}; l.statusSugerido=anStatusGeral(itens,prop,obra,exig); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
+function anConferir(){ var p=anCur(), l=anLic(); if(!l) return; var docs=l.docs||[]; var vp=document.getElementById('an-valprop'); if(vp) l.valorProposta=anNum(vp.value); var _sec=anSecoesDossie(docs); var secoes=_sec.texto, secPags=_sec.paginas; var itens=anRequeridos().filter(function(r){ return !r.so_meepp || (l.meepp==='Sim'); }).map(function(r){ var av=anAvaliaReq(r,docs,p,l,secoes,secPags); return {cat:r.cat, modo:r.modo, status:av.status, nota:av.nota}; }); var prop=anAvaliaProposta(docs,p,l,secoes); var obra=anAnaliseObra(p,l); if(p.obra!=='Sim' && obra.refItens<3 && obra.licItens<3) obra=null; var exig=anExigenciasEdital(p,l); l.resultado={itens:itens, proposta:prop, obra:obra, exig:exig, quando:dataHoje(), ver:AN_MOTOR_VER}; l.statusSugerido=anStatusGeral(itens,prop,obra,exig); anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var org=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Conferiu habilitação do licitante', (l.razao||l.id), org); } }catch(e){} renderAnalise(); }
 // ---------- Base legal dos apontamentos (artigos ja conferidos em fonte oficial; o texto explica, a comissao decide) ----------
 var AN_LEGAL={
   art59_ii:{t:'Art. 59, inciso II, da Lei 14.133/2021', e:'Manda desclassificar a proposta que não obedece às especificações técnicas do edital. Item da planilha que falta, ou quantitativo diferente do previsto, significa proposta que não cobre exatamente o objeto licitado. Se a comissão entender que é falha formal que não altera a substância da proposta, pode esclarecer o ponto em diligência (art. 64) antes de desclassificar.'},
@@ -5237,14 +5269,24 @@ function anLegalRefs(txt){ var s=String(txt||''); var out=[]; var add=function(k
   if(/vencid/i.test(s)||/validade/i.test(s)) add('validade');
   return out;
 }
+// Quebra o texto do apontamento em cláusulas para não sair tudo grudado numa linha (o pregoeiro
+// reclamou do confronto correndo junto na minuta). Divide em "; " E em fim de frase (". "), mas
+// PROTEGE abreviações jurídicas ("art. 59", "§ 5º", "Lei 14.133", "inc. II") e valores em reais
+// ("R$ 840.140,85", "13.918.209,74"), que têm ponto sem ser fim de frase. Só formatação: o texto não muda.
+function anFrases(s){ s=String(s||''); var M='@@D@@';
+  // troca o ponto de abreviacao por um marcador, para ele nao virar quebra de clausula
+  s=s.replace(/\b(art|arts|inc|incs|par|n|no|nos|p|pp|pag|ex|obs|cf|fl|fls|al|Sr|Sra|Srs|Dr|Dra|Lei|LC|Dec|EC|MP|CF)\.(?=\s)/gi, function(m){ return m.slice(0,-1)+M; });
+  var parts=s.split(/(?:;\s+|\.\s+)/).map(function(x){ return x.split(M).join('.').trim(); }).filter(Boolean);
+  return parts;
+}
 // Nota longa vira lista com respiro (só formatação; o texto do apontamento não muda)
-function anNotaFmt(nota){ var s=String(nota||''); var parts=s.split('; ');
-  if(parts.length<3 || s.length<110) return esc(s);
+function anNotaFmt(nota){ var s=String(nota||''); var parts=anFrases(s);
+  if(parts.length<2 || s.length<90) return esc(s);
   return '<ul class="nlist">'+parts.map(function(x){ return '<li>'+esc(x.replace(/\.$/,''))+'</li>'; }).join('')+'</ul>';
 }
 // Mesma formatação da nota longa, na folha do documento (minuta e relatório)
-function anNotaDoc(nota){ var s=String(nota||''); var parts=s.split('; ');
-  if(parts.length<3 || s.length<110) return esc(s);
+function anNotaDoc(nota){ var s=String(nota||''); var parts=anFrases(s);
+  if(parts.length<2 || s.length<90) return esc(s);
   return '<ul style="margin:4px 0 6px 20px;padding:0">'+parts.map(function(x){ return '<li style="margin:0 0 4px">'+esc(x.replace(/\.$/,''))+'</li>'; }).join('')+'</ul>';
 }
 // Corpo do apontamento em 2 camadas: primeiro O QUE está divergente, depois ONDE (as linhas de prova).
@@ -5346,6 +5388,12 @@ function anRenderParecerBox(l){
 }
 function anGerarParecer(){
   var p=anCur(), l=anLic(); if(!l) return; l.decisao=pillVal('andec')||l.decisao; var resp=document.getElementById('an-resp'); if(resp) l.responsavel=resp.value;
+  anParecerBuild(p,l);
+  anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var o=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Gerou parecer de habilitação', (l.razao||l.id)+' - '+(l.decisao||''), o); } }catch(e){} renderAnalise(); toast('Minuta do parecer gerada. Situação registrada no processo.');
+}
+// Monta a minuta do parecer a partir do resultado JÁ calculado. Puro: não lê a tela. Serve tanto
+// para o clique (anGerarParecer) quanto para a regeneração automática quando o motor é atualizado.
+function anParecerBuild(p,l){
   var r=l.resultado||{itens:[],proposta:null};
   var confs=r.itens.filter(function(i){return i.status==='conforme';}).map(function(i){return i.cat;});
   var conf=r.itens.filter(function(i){return i.status==='conferir'||i.modo==='humano';}).map(function(i){return i.cat;});
@@ -5394,7 +5442,7 @@ function anGerarParecer(){
   h+='<p style="margin-top:14px">'+esc((org.nome||'Prefeitura Municipal'))+', '+esc(dataHoje())+'.</p>';
   h+='<p style="margin-top:34px;text-align:center">_______________________________________<br><b>'+esc(l.responsavel||'Pregoeiro(a) ou Comissão de Contratação')+'</b><br>Pregoeiro(a) / Comissão de Contratação</p>';
   l.situacao=({'Habilitado':'habilitado','Habilitado com ressalvas':'habilitado','Pendente (diligência)':'pendente','Inabilitado':'inabilitado','Desclassificado (proposta)':'desclassificado'})[l.decisao]||'pendente'; l.situacaoTxt=l.decisao;
-  l.parecerHtml=h; anSave(); try{ if(typeof registrarAud==='function'&&typeof SB!=='undefined'&&SB&&CURRENT_USER){ var o=(CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur'; registrarAud('Gerou parecer de habilitação', (l.razao||l.id)+' - '+(l.decisao||''), o); } }catch(e){} renderAnalise(); toast('Minuta do parecer gerada. Situação registrada no processo.');
+  l.parecerHtml=h; l.parecerVer=AN_MOTOR_VER; return h;
 }
 // Word no padrão ABNT de trabalho oficial: A4, margens 3cm (sup/esq) e 2cm (inf/dir), Times New Roman 12, espaçamento 1,5, texto justificado
 function anWordAbnt(inner, arquivo){
