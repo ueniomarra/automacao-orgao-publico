@@ -4585,18 +4585,22 @@ function anAnaliseObra(p,l){
     licIt.forEach(function(it){ var k=anNormCod(it.cod); byCod[k]=byCod[k]||it; byDesc[anNormDesc(it.desc)]=byDesc[anNormDesc(it.desc)]||it; });
     var faltando=[], qtdDiv=[], sobre=[], baixo=[], conta=[], unDiv=[], espec=[];
     refIt.forEach(function(r){
+      // Evidência = FRASE explicativa, não código solto. O pregoeiro tem que entender batendo o olho:
+      // qual item, o que o edital pede, o que a empresa cotou, e por que isso é um problema.
+      var itNome=function(x){ return 'Item '+x.cod+(x.desc?' ('+x.desc.slice(0,42)+')':''); };
+      var vezes=function(a,b){ if(!(a>0)||!(b>0)) return ''; var f=b/a; return f>=1.5?(' — '+(Math.round(f*10)/10).toString().replace('.',',')+'× o do edital'):(f<=0.66?(' — só '+Math.round(f*100)+'% do edital'):''); };
       var c=byCod[anNormCod(r.cod)]||byDesc[anNormDesc(r.desc)];
-      if(!c){ faltando.push(r.cod+' '+r.desc.slice(0,40)); return; }
+      if(!c){ faltando.push(itNome(r)+': a prefeitura pediu preço para este item e a empresa NÃO o cotou na proposta'); return; }
       // especificação: item casado pelo código, mas descrito de outro jeito na proposta
-      if(byCod[anNormCod(r.cod)]){ var d=anEspecDiff(r.desc, c.desc); if(d) espec.push(r.cod+' (o edital especifica "'+r.desc.slice(0,45)+'" e a proposta não repete: '+d+')'); }
-      if(r.qtd!=null && c.qtd!=null && Math.abs(r.qtd-c.qtd)>0.011) qtdDiv.push(r.cod+' ('+r.qtd+' no edital, '+c.qtd+' na proposta)');
+      if(byCod[anNormCod(r.cod)]){ var d=anEspecDiff(r.desc, c.desc); if(d) espec.push(itNome(r)+': o edital especifica "'+r.desc.slice(0,45)+'" e a descrição da proposta não repete o termo "'+d+'"; conferir se o produto ofertado atende à especificação'); }
+      if(r.qtd!=null && c.qtd!=null && Math.abs(r.qtd-c.qtd)>0.011) qtdDiv.push(itNome(r)+': o edital pede '+r.qtd+' '+(r.un||'unid.')+' e a empresa cotou '+c.qtd+' '+(c.un||'')+vezes(r.qtd,c.qtd));
       // coluna da unidade: preço por M2 não é preço por M3, e o parser já lia a unidade sem nunca compará-la
-      if(r.un && c.un && anNormUn(r.un)!==anNormUn(c.un)) unDiv.push(r.cod+' '+r.desc.slice(0,30)+' ('+r.un+' no edital, '+c.un+' na proposta)');
+      if(r.un && c.un && anNormUn(r.un)!==anNormUn(c.un)) unDiv.push(itNome(r)+': o edital mede em '+r.un+' e a empresa cotou em '+c.un+' (preço por unidades diferentes não é comparável)');
       // Só compara unitário quando a linha da proposta foi lida com as colunas certas (layout 'auto').
       // Linha 'fim' tem unitário duvidoso (pode ser lixo de leitura), e comparar geraria acusação falsa.
       if(c.layout==='auto'){
-        if(r.unit>0 && c.unit>r.unit*1.0001 && (c.unit-r.unit)>0.0051) sobre.push(r.cod+' (unitário '+money(c.unit)+' acima da referência '+money(r.unit)+')'); // meio centavo de folga: PDF exibe unitário arredondado a 2 casas
-        if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(r.cod+' (unitário '+money(c.unit)+' abaixo de 50% da referência '+money(r.unit)+')');
+        if(r.unit>0 && c.unit>r.unit*1.0001 && (c.unit-r.unit)>0.0051) sobre.push(itNome(r)+': a empresa cotou o unitário a '+money(c.unit)+', acima do preço de referência do edital, que é '+money(r.unit)); // meio centavo de folga: PDF exibe unitário arredondado a 2 casas
+        if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(itNome(r)+': a empresa cotou o unitário a '+money(c.unit)+', abaixo da METADE do preço de referência do edital ('+money(r.unit)+') — preço muito baixo levanta dúvida de exequibilidade');
       }
     });
     // caminho inverso: item que a empresa cotou e o edital não pede (serviço acrescentado, taxa criada, linha inflada)
@@ -4604,14 +4608,14 @@ function anAnaliseObra(p,l){
     refIt.forEach(function(r){ refByCod[anNormCod(r.cod)]=1; refByDesc[anNormDesc(r.desc)]=1; });
     var extraIt=licIt.filter(function(c){ return !refByCod[anNormCod(c.cod)] && !refByDesc[anNormDesc(c.desc)]; });
     var extraSoma=extraIt.reduce(function(a,b){ return a+(b.total||0); },0);
-    var extra=extraIt.map(function(c){ return c.cod+' '+c.desc.slice(0,40)+' ('+money(c.total)+')'; });
+    var extra=extraIt.map(function(c){ return 'Item '+c.cod+(c.desc?' ('+c.desc.slice(0,42)+')':'')+': a empresa incluiu este item na proposta, somando '+money(c.total)+', mas ele NÃO está na planilha do edital'; });
     // só aponta erro de conta quando as colunas foram identificadas com segurança (layout auto); no chute, não se acusa
-    licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001, c.qtd*0.0051)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
+    licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001, c.qtd*0.0051)) conta.push('Item '+c.cod+(c.desc?' ('+c.desc.slice(0,40)+')':'')+': '+c.qtd+' × '+money(c.unit)+' deveria dar '+money(c.qtd*c.unit)+', mas a planilha traz '+money(c.total)+' no total da linha (diferença de '+money(Math.abs(c.qtd*c.unit-c.total))+')'); });
     // Sem preço = valor zerado/em branco OU linha cujas colunas não foram lidas com segurança (layout
     // 'fim' num planilha que é majoritariamente 'auto'): nesse caso o "preço" que sobrou é lixo de
     // leitura (ex.: "TIJOLO 8 FUROS UN 1000" lê o 8 de "8 FUROS" como unitário). Item sem preço lido
     // como se tivesse preço mascara proposta incompleta, então a linha mallida entra como sem preço.
-    var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0) || c.layout!=='auto'; }).map(function(c){ return c.cod+' '+c.desc.slice(0,35)+(c.layout!=='auto'?' (colunas não lidas com segurança)':''); });
+    var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0) || c.layout!=='auto'; }).map(function(c){ return 'Item '+c.cod+(c.desc?' ('+c.desc.slice(0,38)+')':'')+': '+(c.layout!=='auto'?'a linha veio com as colunas partidas no PDF e o sistema não conseguiu isolar o preço com segurança':'sem preço unitário ou total (valor zerado ou em branco)'); });
     if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado, em branco ou com as colunas de preço não lidas com segurança: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão, recusa de cotar ou leitura imperfeita do PDF.',
       'O edital exige preço para todos os itens da planilha. Em '+semPreco.length+' item(ns) a empresa não deu preço, deu valor zero, ou a linha veio com as colunas partidas no PDF e o sistema não conseguiu isolar o preço unitário com segurança. Nos dois casos o item fica sem preço confiável: conferir no original se foi omissão de cotar ou só leitura imperfeita, reenviando o arquivo se for o caso.', semPreco);
     var semPrecoRef=refIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod; });
