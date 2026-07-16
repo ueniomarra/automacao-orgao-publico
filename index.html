@@ -4193,7 +4193,16 @@ function anValidade(t){ t=String(t||'');
   return null; }
 function anEhNegativa(t){ var n=String(t||'').toLowerCase(); if(/positiva\s+com\s+efeito/.test(n)) return true; if(/certificado de regularidade|situa[çc][aã]o regular|regularidade do fgts/.test(n)) return true; if(/n[aã]o consta d[eé]bito|nada consta|inexist[eê]ncia de d[eé]bito/.test(n)) return true; if(/negativa/.test(n)) return true; if(/\bpositiva\b/.test(n)) return false; return null; }
 function anValores(t){ var re=/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/ig,m,v=[]; while(m=re.exec(String(t||''))) v.push(anNum(m[1])); return v; }
-function anValorGlobal(t){ var m=/(valor\s+global|valor\s+total\s+geral|total\s+geral|pre[çc]o\s+total\s+global|valor\s+total\s+da\s+proposta)[^0-9]{0,40}(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/i.exec(String(t||'')); return m?anNum(m[2]):null; }
+function anValorGlobal(t){ var s=String(t||'');
+  // Rótulos padrão de valor global. ⚠ Faltava "valor total global" e "preço global" (o mais comum em
+  // obra), medido no dado real: a proposta do MSH declara o total como "valor de R$ 840.140,85 (...)".
+  var m=/(valor\s+total\s+global|valor\s+global|pre[çc]o\s+global|valor\s+total\s+geral|total\s+geral|pre[çc]o\s+total\s+global|valor\s+total\s+da\s+proposta|valor\s+global\s+da\s+proposta)[^0-9]{0,40}(?:r\$\s*:?\s*)?(\d{1,3}(?:\.\d{3})+,\d{2})/i.exec(s);
+  if(m) return anNum(m[2]);
+  // Gancho inequívoco: um valor em reais seguido do MESMO valor por extenso entre parênteses só aparece
+  // no total da proposta ("R$ 840.140,85 (Oitocentos e Quarenta Mil...)"). Extenso confirma que é global.
+  var re=/(?:r\$\s*:?\s*)(\d{1,3}(?:\.\d{3})+,\d{2})\s*\(\s*[a-zà-ú]/gi, mm, best=null;
+  while((mm=re.exec(s))!==null){ var v=anNum(mm[1]); if(v!=null && (best==null || v>best)) best=v; }
+  return best; }
 // ---------- Leitura das exigências do edital/TR e dos índices do balanço ----------
 function anNumIdx(s){ s=String(s==null?'':s).replace(/[^0-9,.]/g,''); if(s.indexOf(',')>=0){ s=s.replace(/\.(?=\d{3}\b)/g,'').replace(',','.'); } return parseFloat(s); }
 // Quantos exercícios de balanço o edital exige
@@ -4350,15 +4359,31 @@ function anExtraiBDI(txt){
 // Percentual que vem logo depois de um rótulo (composição de BDI, encargos). Só o 1º casamento, sem varrer o documento.
 function anPctRot(txt, rot){ var re=new RegExp('(?:'+rot+')[^0-9%\\n]{0,70}?(\\d{1,3}(?:[.,]\\d{1,4})?)\\s*%','i'); var m=re.exec(String(txt||'')); return m?anNum(m[1]):null; }
 // Parcelas da composição do BDI. Sem todas as parcelas não se recompõe a fórmula, e aí o sistema não opina.
+// Tributos do BDI: vão no DENOMINADOR (1 - I) e quase sempre vêm DISCRIMINADOS em várias linhas.
+// ⚠ Medido no BDI real da MSH: "CP 3,65% ... ISS 5,00% ... CPRB 0,00%", total 8,65%. anPctRot('tributos')
+// pegava o primeiro percentual (3% do COFINS) e a fórmula não fechava, acusando FALSAMENTE o BDI. Aqui
+// somam-se as parcelas tributárias (CP/COFINS+PIS, ISS, CPRB); só se não achar nada usa o valor único.
+// Leitor APERTADO de sigla numa TABELA de composição de BDI: a parcela vem "SIGLA valor%", separada
+// só por ESPAÇO. ⚠ Medido no BDI real da MSH: o documento traz "ISS: 100,00%" (a base de cálculo do
+// ISS, com dois-pontos) ANTES de "ISS 5,00%" (a alíquota, com espaço). Aceitar dois-pontos lia a base
+// de cálculo (100) no lugar da alíquota (5). Dois-pontos é prosa; a célula da tabela usa espaço.
+function anPctSigla(s, sigla){ var re=new RegExp('\\b'+sigla+'\\b[ \\t]{1,4}(\\d{1,3}(?:[.,]\\d{1,4})?)\\s*%','i'); var m=re.exec(String(s||'')); return m?anNum(m[1]):null; }
+function anTributosBDI(s){
+  var cp=anPctSigla(s,'CP'), iss=anPctSigla(s,'ISS'), cprb=anPctSigla(s,'C[PR]{2}B');
+  if(cp!=null || iss!=null){ return (cp||0)+(iss||0)+(cprb||0); }
+  var cofins=anPctSigla(s,'cofins'), pis=anPctSigla(s,'pis');
+  if(cofins!=null || pis!=null || iss!=null){ return (cofins||0)+(pis||0)+(iss||0)+(cprb||0); }
+  return anPctRot(s,'tributos?|\\bimpostos?\\b'); // último recurso: valor único rotulado
+}
 function anExtraiBDIComp(txt){
   var s=String(txt||'').replace(/[ \t]+/g,' ');
   var c={
-    ac: anPctRot(s,'administra[çc][ãa]o\\s+central|\\bA\\.?C\\.?\\b'),
-    sg: anPctRot(s,'seguros?\\s*(?:e|\\+)\\s*garantias?|\\bS\\s*\\+\\s*G\\b'),
+    ac: anPctSigla(s,'AC') || anPctRot(s,'administra[çc][ãa]o\\s+central'),
+    sg: anPctSigla(s,'SG') || anPctRot(s,'seguros?\\s*(?:e|\\+)\\s*garantias?|\\bS\\s*\\+\\s*G\\b'),
     r:  anPctRot(s,'\\briscos?\\b'),
-    df: anPctRot(s,'despesas?\\s+financeiras?|\\bD\\.?F\\.?\\b'),
+    df: anPctSigla(s,'DF') || anPctRot(s,'despesas?\\s+financeiras?'),
     l:  anPctRot(s,'\\blucros?\\b'),
-    i:  anPctRot(s,'tributos?|\\bimpostos?\\b')
+    i:  anTributosBDI(s)
   };
   if(c.sg==null){ var se=anPctRot(s,'\\bseguros?\\b'), ga=anPctRot(s,'\\bgarantias?\\b'); if(se!=null&&ga!=null) c.sg=se+ga; }
   c.completa=['ac','sg','r','df','l','i'].every(function(k){ return c[k]!=null; });
@@ -4484,6 +4509,25 @@ function anMelhorPlanilha(docs){
   if(!best && picotado) return {picotado:picotado};
   return best;
 }
+// Critério de aceitabilidade de preço UNITÁRIO fixado no edital (art. 59, § 3º): quando existe, cada
+// item tem teto unitário e o licitante não pode ultrapassá-lo mesmo dando desconto no global.
+function anCriterioUnitario(refTxt){ var t=anNormTxt(refTxt);
+  return /crit[eé]rio\s+de\s+aceitabilidade[^.]{0,40}unit[aá]ri|pre[çc]o\s+unit[aá]rio\s+m[aá]ximo|aceitabilidade\s+de\s+pre[çc]os?\s+unit|valor\s+unit[aá]rio\s+m[aá]ximo|sobrepre[çc]o\s+unit[aá]rio/.test(t); }
+// A régua do lance: quanto o licitante pode baixar e a partir de que ponto a lei presume inexequível.
+// art. 59, III (teto = orçado), § 4º (< 75% = inexequível), § 5º (75%-85% = garantia adicional).
+function anReguaLance(estimado, obra, gAtual){
+  if(!(estimado>0)) return null;
+  var teto=estimado, p85=estimado*0.85, p75=estimado*0.75;
+  var r={teto:teto, p85:p85, p75:p75, obra:obra};
+  if(gAtual!=null && gAtual>0){
+    var pct=gAtual/estimado*100; r.gAtual=gAtual; r.pct=Math.round(pct*100)/100;
+    if(gAtual>teto*1.0001) r.faixa='acima';           // desclassifica (art. 59, III)
+    else if(!obra) r.faixa='ok';                      // fora de obra não há piso de 75/85%
+    else if(gAtual < p75*0.9999) r.faixa='inexeq';    // art. 59, § 4º
+    else if(gAtual < p85*0.9999) r.faixa='garantia';  // art. 59, § 5º
+    else r.faixa='ok';
+  }
+  return r; }
 function anAnaliseObra(p,l){
   // BDI, encargos e cronograma saem só de documento com leitura BOA. Varrer a pilha picotada faz o sistema pescar
   // "lucro" de uma declaração e um "3%" de qualquer certidão, e depois acusar o BDI de não fechar (aconteceu, real).
@@ -4530,8 +4574,12 @@ function anAnaliseObra(p,l){
       if(r.qtd!=null && c.qtd!=null && Math.abs(r.qtd-c.qtd)>0.011) qtdDiv.push(r.cod+' ('+r.qtd+' no edital, '+c.qtd+' na proposta)');
       // coluna da unidade: preço por M2 não é preço por M3, e o parser já lia a unidade sem nunca compará-la
       if(r.un && c.un && anNormUn(r.un)!==anNormUn(c.un)) unDiv.push(r.cod+' '+r.desc.slice(0,30)+' ('+r.un+' no edital, '+c.un+' na proposta)');
-      if(r.unit>0 && c.unit>r.unit*1.0001 && (c.unit-r.unit)>0.0051) sobre.push(r.cod+' (unitário '+money(c.unit)+' acima da referência '+money(r.unit)+')'); // meio centavo de folga: PDF exibe unitário arredondado a 2 casas
-      if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(r.cod+' (unitário '+money(c.unit)+' abaixo de 50% da referência '+money(r.unit)+')');
+      // Só compara unitário quando a linha da proposta foi lida com as colunas certas (layout 'auto').
+      // Linha 'fim' tem unitário duvidoso (pode ser lixo de leitura), e comparar geraria acusação falsa.
+      if(c.layout==='auto'){
+        if(r.unit>0 && c.unit>r.unit*1.0001 && (c.unit-r.unit)>0.0051) sobre.push(r.cod+' (unitário '+money(c.unit)+' acima da referência '+money(r.unit)+')'); // meio centavo de folga: PDF exibe unitário arredondado a 2 casas
+        if(r.unit>0 && c.unit>0 && c.unit<r.unit*0.5) baixo.push(r.cod+' (unitário '+money(c.unit)+' abaixo de 50% da referência '+money(r.unit)+')');
+      }
     });
     // caminho inverso: item que a empresa cotou e o edital não pede (serviço acrescentado, taxa criada, linha inflada)
     var refByCod={}, refByDesc={};
@@ -4541,9 +4589,13 @@ function anAnaliseObra(p,l){
     var extra=extraIt.map(function(c){ return c.cod+' '+c.desc.slice(0,40)+' ('+money(c.total)+')'; });
     // só aponta erro de conta quando as colunas foram identificadas com segurança (layout auto); no chute, não se acusa
     licIt.forEach(function(c){ if(c.layout==='auto' && c.qtd!=null && c.unit>0 && Math.abs(c.qtd*c.unit-c.total)>Math.max(0.03, c.total*0.001, c.qtd*0.0051)) conta.push(c.cod+' ('+c.qtd+' x '+money(c.unit)+' = '+money(c.qtd*c.unit)+', mas consta '+money(c.total)+')'); });
-    var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod+' '+c.desc.slice(0,35); });
-    if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado ou sem preço: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão ou recusa de cotar.',
-      'O edital exige preço para todos os itens da planilha. A empresa entregou '+semPreco.length+' item(ns) zerados ou em branco, ou seja, deixou de dar preço a parte do que a prefeitura vai contratar. Conferir se foi omissão de digitação ou recusa de cotar o item.', semPreco);
+    // Sem preço = valor zerado/em branco OU linha cujas colunas não foram lidas com segurança (layout
+    // 'fim' num planilha que é majoritariamente 'auto'): nesse caso o "preço" que sobrou é lixo de
+    // leitura (ex.: "TIJOLO 8 FUROS UN 1000" lê o 8 de "8 FUROS" como unitário). Item sem preço lido
+    // como se tivesse preço mascara proposta incompleta, então a linha mallida entra como sem preço.
+    var semPreco=licIt.filter(function(c){ return !(c.unit>0) || !(c.total>0) || c.layout!=='auto'; }).map(function(c){ return c.cod+' '+c.desc.slice(0,35)+(c.layout!=='auto'?' (colunas não lidas com segurança)':''); });
+    if(semPreco.length) push('Itens sem preço na proposta','atencao', semPreco.length+' item(ns) com valor zerado, em branco ou com as colunas de preço não lidas com segurança: '+semPreco.slice(0,8).join('; ')+(semPreco.length>8?' e mais '+(semPreco.length-8):'')+'. Item não cotado torna a proposta incompleta para aquele item (art. 59, II); conferir se foi omissão, recusa de cotar ou leitura imperfeita do PDF.',
+      'O edital exige preço para todos os itens da planilha. Em '+semPreco.length+' item(ns) a empresa não deu preço, deu valor zero, ou a linha veio com as colunas partidas no PDF e o sistema não conseguiu isolar o preço unitário com segurança. Nos dois casos o item fica sem preço confiável: conferir no original se foi omissão de cotar ou só leitura imperfeita, reenviando o arquivo se for o caso.', semPreco);
     var semPrecoRef=refIt.filter(function(c){ return !(c.unit>0) || !(c.total>0); }).map(function(c){ return c.cod; });
     if(semPrecoRef.length) push('Itens sem preço na planilha do edital','conferir', semPrecoRef.length+' item(ns) da referência estão com valor zerado ('+semPrecoRef.slice(0,8).join(', ')+(semPrecoRef.length>8?'...':'')+'). Sem preço de referência não há como comparar esses itens; conferir a planilha do edital.',
       'A divergência aqui é da planilha da PREFEITURA, não da empresa: '+semPrecoRef.length+' item(ns) da planilha de referência do edital estão sem preço. Sem preço de referência não existe parâmetro para dizer se a proposta está cara ou barata nesses itens, e eles ficaram fora da comparação.', semPrecoRef);
@@ -4623,6 +4675,42 @@ function anAnaliseObra(p,l){
     else push('Cronograma físico-financeiro','conferir','Cronograma não localizado nos documentos do licitante. Conferir se o edital o exige junto com a proposta.',
       'O sistema não achou cronograma físico-financeiro nos arquivos desta empresa. Em obra, é ele que amarra o desembolso da prefeitura ao andamento do serviço. Conferir se o edital o exige junto com a proposta: exigindo e não vindo, é documento faltando.');
     if(!/memorial\s+descritivo|memorial\s+de\s+c[aá]lculo/i.test(anNormTxt(refTxt))) push('Memorial no edital','conferir','Memorial descritivo não localizado nos documentos da licitação. Se houver, suba na aba Certame para enriquecer o confronto.');
+    // ===== CURVA ABC: os poucos itens que concentram o valor da obra (foco da análise) =====
+    // Onde a fiscalização e o jogo de planilha se concentram: em regra ~20% dos itens fazem ~80% do
+    // custo (classe A). O sistema aponta a classe A da planilha do edital, para a comissão olhar de perto
+    // o preço e o quantitativo desses itens (é neles que sobrepreço e inexequibilidade pesam de verdade).
+    if(refOk && refIt.length>=5){
+      var comV=refIt.filter(function(x){return (x.total||0)>0;}).slice().sort(function(a,b){return (b.total||0)-(a.total||0);});
+      var totRef=comV.reduce(function(s,x){return s+(x.total||0);},0);
+      if(totRef>0){
+        var acc=0, A=[], B=[], C=[];
+        comV.forEach(function(x){ var antes=acc/totRef; acc+=(x.total||0); var cl=(antes<0.80)?'A':(antes<0.95?'B':'C'); (cl==='A'?A:cl==='B'?B:C).push(x); });
+        var pctA=Math.round(A.reduce(function(s,x){return s+(x.total||0);},0)/totRef*1000)/10;
+        var lista=A.slice(0,10).map(function(x){ return x.cod+' '+x.desc.slice(0,42)+' ('+money(x.total)+', '+(Math.round((x.total/totRef)*1000)/10)+'%)'; });
+        push('Curva ABC: itens que concentram o valor (classe A)','conferir',
+          A.length+' item(ns) de '+comV.length+' concentram '+pctA+'% do valor da obra (classe A): '+lista.join('; ')+(A.length>10?' e mais '+(A.length-10):'')+'. É onde o preço e o quantitativo devem ser olhados de perto.',
+          'A curva ABC ordena os itens do maior para o menor valor: a classe A são os poucos itens que somam a maior parte do custo (aqui '+A.length+' itens = '+pctA+'% do valor). É neles que mora o risco: sobrepreço nesses itens infla a obra inteira, e é aí que costuma haver jogo de planilha (preço alto no que se mede primeiro). A comissão deve conferir com atenção o preço unitário e o quantitativo de cada item da classe A. Classe B: '+B.length+' itens (até 95% do valor); classe C: '+C.length+' itens (a cauda de baixo valor).',
+          lista);
+      }
+    }
+    // ===== RÉGUA DO LANCE: até onde a empresa pode baixar, e o que não pode mexer (art. 59) =====
+    // O pregoeiro pediu: no lance a empresa reduz o preço para vencer. O sistema mostra os limites
+    // legais em REAIS e diz, item a item, o que pode e o que não pode ser alterado no desconto.
+    var gLance=(l.valorProposta>0)?l.valorProposta:anValorGlobal(licTxt); if(!(gLance>0) && soma>0) gLance=soma;
+    var rl=anReguaLance(p.valorEstimado, true, gLance>0?gLance:null);
+    var citaInexeq=/inexequ[ií]veis?\s+as\s+propostas|75\s*%[^.]{0,40}or[çc]ad|acord[aã]o\s+2198\/2023/i.test(anNormTxt(refTxt));
+    var critUnit=anCriterioUnitario(refTxt);
+    var regraItens='No lance, o desconto se dá REDUZINDO preços unitários dos itens, nunca alterando quantitativos: mudar quantidade da planilha descaracteriza o objeto e desclassifica (art. 59, II). '+(critUnit?'Este edital fixou critério de aceitabilidade de preço UNITÁRIO: mesmo baixando o global, nenhum item pode ficar ACIMA do unitário de referência (o sistema já aponta isso em "Preço unitário acima da referência").':'Este edital NÃO fixou critério de aceitabilidade de preço unitário; o controle é o preço GLOBAL, mas item cotado a valor irrisório ainda pode ser questionado em diligência de exequibilidade (art. 59, §§ 2º e 3º).');
+    if(!rl){
+      push('Régua do lance (limites legais do desconto)','conferir','Informe o valor estimado do certame (aba Certame) para o sistema calcular, em reais, até onde a empresa pode baixar antes de a proposta virar inexequível (art. 59, § 4º) ou exigir garantia adicional (art. 59, § 5º).',
+        'Sem o valor orçado pela Administração não dá para traçar a régua do lance. Preencha o valor estimado do certame: o sistema passa a mostrar o teto (art. 59, III), o piso de 85% que exige garantia adicional (art. 59, § 5º) e o piso de 75% abaixo do qual a proposta é presumida inexequível (art. 59, § 4º). '+regraItens);
+    } else {
+      var base='Sobre o valor orçado de '+money(rl.teto)+': TETO '+money(rl.teto)+' (acima disso a proposta é desclassificada, art. 59, III); de '+money(rl.p85)+' a '+money(rl.teto)+' a empresa pode baixar livremente; de '+money(rl.p75)+' a '+money(rl.p85)+' a proposta é aceita mas o vencedor presta GARANTIA ADICIONAL igual à diferença até '+money(rl.p85)+' (art. 59, § 5º); abaixo de '+money(rl.p75)+' (75%) a proposta é presumida INEXEQUÍVEL (art. 59, § 4º'+(citaInexeq?', regra que este edital repete':'')+'), e só segue se a empresa comprovar exequibilidade em diligência (art. 59, § 2º). '+regraItens;
+      if(rl.faixa==='acima') push('Régua do lance: proposta ACIMA do orçado','atencao','A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está ACIMA do valor estimado de '+money(rl.teto)+': desclassificável por excesso (art. 59, III). '+base, base);
+      else if(rl.faixa==='inexeq') push('Régua do lance: proposta INEXEQUÍVEL (abaixo de 75%)','atencao','A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está ABAIXO de 75% do valor orçado ('+money(rl.p75)+'): presumida INEXEQUÍVEL (art. 59, § 4º). Não se desclassifica de imediato: abrir diligência para a empresa demonstrar exequibilidade (art. 59, § 2º). '+base, base);
+      else if(rl.faixa==='garantia') push('Régua do lance: exige garantia adicional (75% a 85%)','conferir','A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está entre 75% e 85% do orçado: exequível, mas o vencedor deve prestar GARANTIA ADICIONAL de '+money(rl.p85-rl.gAtual)+' (diferença até 85% de '+money(rl.p85)+'), art. 59, § 5º. '+base, base);
+      else push('Régua do lance (limites legais do desconto)','conforme',(rl.gAtual!=null?'A proposta ('+money(rl.gAtual)+', '+rl.pct+'% do orçado) está na faixa livre, entre 85% e 100% do orçado. ':'')+base, base);
+    }
   }
   return {checks:checks, det:det, refItens:refIt.length, licItens:licIt.length};
 }
@@ -4812,12 +4900,32 @@ function anRequeridos(){ return [
   {cat:'Declaração de não emprega menor', regra:'decl_menor', modo:'auto'},
   {cat:'Declaração de reserva de cargos (PCD)', regra:'decl_pcd', modo:'auto'},
   {cat:'Declaração de custos trabalhistas na proposta', regra:'decl_trab', modo:'auto'},
+  {cat:'Enquadramento ME/EPP (documento x marcação)', regra:'meepp_confere', modo:'auto'},
   {cat:'Declaração de enquadramento ME/EPP', regra:'meepp_decl', modo:'auto', so_meepp:1},
   {cat:'Consulta CEIS/CNEP (impedimentos)', regra:'ceis', modo:'humano'}
 ]; }
 function anAvaliaReq(req, docs, p, l, secoes, secPags){
   // Checagens que não dependem de arquivo enviado
   if(req.regra==='ceis') return {status:'conferir', nota:'Consulta obrigatória a sanções vigentes (CEIS e CNEP, no Portal da Transparência, e cadastros do TCU/TCE) antes da habilitação. A comissão consulta pelo CNPJ e anexa o comprovante ao processo (art. 14 da Lei 14.133/2021).'};
+  // Enquadramento ME/EPP conforme o DOCUMENTO x a marcação da tela. A Junta Comercial (certidão
+  // simplificada) traz o porte real: "ME (Microempresa)" ou "EPP". ⚠ Medido no dado real: a MSH está
+  // marcada meepp='Não' e a Junta diz "ME (Microempresa)". Marcada errada, ela perde os benefícios da
+  // LC 123 (prazo de 5 dias para regularizar fiscal, desempate ficto), o que muda o resultado.
+  if(req.regra==='meepp_confere'){
+    var portes=(docs||[]).map(function(d){ var t=anNormTxt((d&&d.texto)||''); if(!t) return null;
+      // só de documento oficial de registro, não de menção solta
+      if(/junta\s+comercial|certid[aã]o\s+simplificada|cadastro\s+nacional|comprova[çc][aã]o\s+de\s+enquadramento/.test(t)){
+        if(/\bepp\b|empresa\s+de\s+pequeno\s+porte/.test(t)) return {p:'EPP', doc:anNomeDoc(d)};
+        if(/\bme\b|\bmicroempresa\b/.test(t)) return {p:'ME', doc:anNomeDoc(d)};
+      }
+      return null; }).filter(Boolean);
+    var doc=portes[0], marcado=(l&&l.meepp==='Sim');
+    if(!doc){ return marcado
+      ? {status:'conferir', nota:'O licitante está marcado como ME/EPP, mas o sistema não confirmou o porte num documento de registro (certidão da Junta Comercial ou comprovação de enquadramento). Conferir o documento que embasa o enquadramento.'}
+      : {status:'conforme', nota:'Licitante não marcado como ME/EPP e nenhum documento de registro indica esse porte. Nada a ajustar.'}; }
+    if(marcado) return {status:'conforme', nota:'Enquadramento ME/EPP confirmado: "'+doc.doc+'" indica '+doc.p+' e o licitante está marcado como ME/EPP. Benefícios da LC 123/2006 aplicáveis.'};
+    return {status:'atencao', nota:'DIVERGÊNCIA de enquadramento: "'+doc.doc+'" indica '+doc.p+' ('+(doc.p==='ME'?'Microempresa':'Empresa de Pequeno Porte')+'), mas o licitante NÃO está marcado como ME/EPP no sistema. Se for realmente ME/EPP, marcar na tela: sem isso a empresa perde os direitos da LC 123/2006 (prazo de 5 dias úteis para regularizar a fiscal, arts. 42-43, e o desempate ficto, art. 44). Conferir a certidão da Junta e corrigir a marcação.'};
+  }
   if(req.regra==='meepp_decl'){ var achouD=(docs||[]).some(function(d){ return /microempresa|empresa de pequeno porte|\bme\b|\bepp\b|simples nacional/i.test(String(d.texto||'')); }); return achouD?{status:'conforme', nota:'Localizada menção ao enquadramento ME/EPP nos documentos enviados; a comissão confirma a declaração formal.'}:{status:'conferir', nota:'Licitante marcado como ME/EPP, mas a declaração de enquadramento não foi localizada nos documentos. Solicitar ou conferir manualmente.'}; }
   // Comprovante de inscrição no CNPJ: é do art. 68, I (fiscal), não da habilitação jurídica.
   if(req.regra==='cartao_cnpj') return anPresencaReq(docs, p, {
@@ -5105,10 +5213,13 @@ function anNotaDoc(nota){ var s=String(nota||''); var parts=s.split('; ');
 // Corpo do apontamento em 2 camadas: primeiro O QUE está divergente, depois ONDE (as linhas de prova).
 // A base legal entra depois, por fora, em anLegalHtml. Sem resumo, cai no formato antigo (notas de habilitação).
 function anCorpo(o,doc){
-  var resumo=String((o&&o.resumo)||''), evid=(o&&o.evid)||null, nota=String((o&&o.nota)||'');
+  var resumo=String((o&&o.resumo)||''), evid=(o&&o.evid)||null, nota=String((o&&o.nota)||''), st=(o&&o.status)||'';
   if(!resumo) return doc?anNotaDoc(nota):anNotaFmt(nota);
-  var h=doc?('<p style="margin:0 0 6px"><b>O que está divergente:</b> '+esc(resumo)+'</p>')
-           :('<div class="rsum"><b>O que está divergente:</b> '+esc(resumo)+'</div>');
+  // O rótulo segue o status: "divergente" mente num item conforme (a régua do lance dentro da faixa
+  // legal é um exemplo). Conforme = "Resumo"; conferir = "O que conferir"; atenção/ausente = "divergente".
+  var lab=(st==='conforme')?'Resumo:':(st==='conferir'?'O que conferir:':'O que está divergente:');
+  var h=doc?('<p style="margin:0 0 6px"><b>'+lab+'</b> '+esc(resumo)+'</p>')
+           :('<div class="rsum"><b>'+lab+'</b> '+esc(resumo)+'</div>');
   if(evid&&evid.length){
     var lim=evid.slice(0,8);
     var li=lim.map(function(x){ return doc?('<li style="margin:0 0 4px">'+esc(x)+'</li>'):('<li>'+esc(x)+'</li>'); }).join('');
@@ -5149,7 +5260,7 @@ function anRenderResultado(l){
   var cnt={conforme:0,atencao:0,conferir:0,ausente:0}; todos.forEach(function(s){ if(cnt[s]!==undefined) cnt[s]++; else if(s==='presente') cnt.conferir++; });
   var tile=function(ico,bg,stroke,n,lab){ return '<div class="an-tile"><div class="ticon" style="background:'+bg+'"><svg style="stroke:'+stroke+'"><use href="#'+ico+'"/></svg></div><div><div class="n">'+n+'</div><div class="l">'+lab+'</div></div></div>'; };
   var sec=function(ico,titulo,rows,extra){ if(!rows) return ''; return '<div class="an-sec"><div class="sh"><svg><use href="#'+ico+'"/></svg> '+titulo+(extra||'')+'</div>'+rows+'</div>'; };
-  var row=function(nome,st,nota,o){ var leg=(st!=='conforme')?anLegalHtml(anLegalRefs(nota+' '+((o&&o.resumo)||''))):''; return '<div class="an-row"><div class="rn">'+esc(nome)+'</div><div class="rb">'+anTag(st)+'</div><div class="rt">'+anCorpo({nota:nota,resumo:(o&&o.resumo)||'',evid:(o&&o.evid)||null},false)+leg+'</div></div>'; };
+  var row=function(nome,st,nota,o){ var leg=(st!=='conforme')?anLegalHtml(anLegalRefs(nota+' '+((o&&o.resumo)||''))):''; return '<div class="an-row"><div class="rn">'+esc(nome)+'</div><div class="rb">'+anTag(st)+'</div><div class="rt">'+anCorpo({nota:nota,resumo:(o&&o.resumo)||'',evid:(o&&o.evid)||null,status:st},false)+leg+'</div></div>'; };
   var h='<div class="panel"><div class="ph"><h3>Resultado da conferência</h3></div><div style="padding:16px 22px">';
   h+='<div class="an-hero"><div class="hicon"><svg><use href="#'+(stIco[l.statusSugerido]||'i-shield')+'"/></svg></div><div><div class="ttl">Situação sugerida pelo sistema</div><div class="big">'+esc(stg[l.statusSugerido]||'-')+'</div><div class="sub">'+esc(l.razao||'')+(l.cnpj?(' | CNPJ '+l.cnpj):'')+' | conferido em '+esc(r.quando||'')+'. O sistema aponta; a decisão final e a assinatura são sempre da comissão.</div></div></div>';
   h+='<div class="an-tiles">'
@@ -5205,7 +5316,7 @@ function anGerarParecer(){
   var TIT=function(t){ return '<h3 style="font-weight:700;text-transform:uppercase;margin:16px 0 8px;font-size:1em">'+t+'</h3>'; };
   var UL=function(arr){ return '<ul style="margin:4px 0 10px 22px;padding:0">'+arr.map(function(x){return '<li style="margin:0 0 5px">'+esc(x)+'</li>';}).join('')+'</ul>'; };
   // Cada apontamento vira um parágrafo próprio: título, o que está divergente, onde. Nada de bloco corrido.
-  var ULrich=function(itens){ return itens.map(function(it){ return '<div style="margin:0 0 12px"><p style="margin:0 0 4px"><b>'+esc(it.t)+'</b></p><div style="margin-left:18px">'+anCorpo({nota:it.n,resumo:it.r,evid:it.e},true)+'</div></div>'; }).join(''); };
+  var ULrich=function(itens){ return itens.map(function(it){ return '<div style="margin:0 0 12px"><p style="margin:0 0 4px"><b>'+esc(it.t)+'</b></p><div style="margin-left:18px">'+anCorpo({nota:it.n,resumo:it.r,evid:it.e,status:it.st},true)+'</div></div>'; }).join(''); };
   var legKeys=[]; var colher=function(txt){ anLegalRefs(txt).forEach(function(k){ if(legKeys.indexOf(k)<0) legKeys.push(k); }); };
   var h='';
   h+='<p style="text-align:center;font-weight:700;margin-bottom:2px">'+esc((org.nome||'').toUpperCase())+'</p>';
@@ -5223,15 +5334,15 @@ function anGerarParecer(){
   h+=TIT('II. ANÁLISE DA DOCUMENTAÇÃO E DA PROPOSTA');
   if(confs.length){ h+='<p style="margin-bottom:4px"><b>Documentos conferidos e considerados regulares:</b></p>'+UL(confs); }
   if(conf.length){ h+='<p style="margin-bottom:4px"><b>Pontos que requerem conferência da Comissão:</b></p>'+UL(conf); }
-  if(pend.length){ h+='<p style="margin-bottom:4px"><b>Pendências apontadas:</b></p>'+ULrich(pend.map(function(i){ colher(i.nota+' '+(i.resumo||'')); return {t:i.cat, n:i.nota, r:i.resumo, e:i.evid}; })); }
+  if(pend.length){ h+='<p style="margin-bottom:4px"><b>Pendências apontadas:</b></p>'+ULrich(pend.map(function(i){ colher(i.nota+' '+(i.resumo||'')); return {t:i.cat, n:i.nota, r:i.resumo, e:i.evid, st:i.status}; })); }
   if(r.proposta){ if(r.proposta.status!=='conforme') colher(r.proposta.nota+' '+(r.proposta.resumo||'')); h+='<p style="margin-bottom:4px"><b>Proposta e planilha orçamentária:</b></p><div style="margin:0 0 10px">'+anCorpo(r.proposta,true)+'</div>'; }
   if(r.exig && r.exig.length){ var xPr=r.exig.filter(function(c){return c.status!=='conforme';});
-    if(xPr.length){ h+='<p style="margin-bottom:4px"><b>Exigências específicas do edital:</b></p>'+ULrich(xPr.map(function(c){ colher(c.nota+' '+(c.resumo||'')); return {t:c.t, n:c.nota, r:c.resumo, e:c.evid}; })); }
+    if(xPr.length){ h+='<p style="margin-bottom:4px"><b>Exigências específicas do edital:</b></p>'+ULrich(xPr.map(function(c){ colher(c.nota+' '+(c.resumo||'')); return {t:c.t, n:c.nota, r:c.resumo, e:c.evid, st:c.status}; })); }
     else h+='<p><b>Exigências específicas do edital:</b> atendidas nos pontos verificados.</p>'; }
   if(r.obra && (r.obra.checks||[]).length){ var oOk=r.obra.checks.filter(function(c){return c.status==='conforme';}), oPr=r.obra.checks.filter(function(c){return c.status!=='conforme';});
     h+='<p style="margin:14px 0 4px"><b>Confronto da planilha do edital com a planilha da proposta:</b></p>';
     if(oOk.length) h+='<p style="margin-bottom:8px">Pontos conferidos e regulares: '+esc(oOk.map(function(c){return c.t;}).join('; '))+'.</p>';
-    h+=oPr.length?ULrich(oPr.map(function(c){ colher(c.nota+' '+(c.resumo||'')); return {t:c.t, n:c.nota, r:c.resumo, e:c.evid}; })):'<p>Sem apontamentos.</p>'; }
+    h+=oPr.length?ULrich(oPr.map(function(c){ colher(c.nota+' '+(c.resumo||'')); return {t:c.t, n:c.nota, r:c.resumo, e:c.evid, st:c.status}; })):'<p>Sem apontamentos.</p>'; }
   if(legKeys.length){
     h+='<p style="margin:12px 0 4px"><b>Fundamentação legal dos apontamentos:</b></p>';
     legKeys.forEach(function(k){ var L=AN_LEGAL[k]; if(L) h+='<p style="margin:0 0 8px"><b>'+esc(L.t)+'.</b> '+esc(L.e)+'</p>'; });
