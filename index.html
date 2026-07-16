@@ -3763,7 +3763,9 @@ var ANALISE={procs:[],curId:null};
 // recalcula sozinho ao abrir o processo, para o pregoeiro nunca ver parecer velho nem precisar
 // clicar Conferir de novo. Foi assim que o dossiê do 5103 ficou com o lixo do parser antigo
 // ("158 itens ausentes" de pedaço de CNPJ) mesmo com o código novo já no ar.
-var AN_MOTOR_VER=20260716;
+// Contador de versão do motor (formato AAAAMMDD, sempre CRESCENTE; bumpar a cada mudança de motor,
+// senão o resultado gravado pela versão anterior do MESMO dia nunca é recalculado ao abrir).
+var AN_MOTOR_VER=20260717;
 // Recalcula, ao abrir o processo, todo licitante cujo resultado veio de um motor anterior (e que
 // ainda tem os documentos para reprocessar). Regenera a minuta se ela também for de motor antigo.
 // Não toca em decisão da comissão, valor confirmado, diligência nem responsável (o que é humano).
