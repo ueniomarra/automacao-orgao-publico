@@ -6226,7 +6226,7 @@ function renderAdmin(){
     var podeRenomear = euSuper || podeEditar;
     var lk='cursor:pointer;color:var(--royal);font-size:11px;font-weight:700;margin-left:9px';
     var nmJs=esc((u.nome||'').replace(/'/g,'&#39;'));
-    var acoes = (podeRenomear ? '<span style="'+lk+'" onclick="renomearUsuario(\''+esc(u.login)+'\',\''+nmJs+'\')">renomear</span><span style="'+lk+'" onclick="trocarLoginUsuario(\''+esc(u.login)+'\')">trocar login</span>' : '') + (podeEditar ? '<span style="'+lk+'" onclick="liberarUsuario(\''+esc(u.login)+'\')">permissão</span><span style="'+lk+';color:'+(u.ativo?'#C62D45':'#1f7a33')+'" onclick="toggleAtivoUsuario(\''+esc(u.login)+'\','+(u.ativo?'false':'true')+')">'+(u.ativo?'desativar':'ativar')+'</span>' : '');
+    var acoes = (podeRenomear ? '<span style="'+lk+'" onclick="renomearUsuario(\''+esc(u.login)+'\',\''+nmJs+'\')">renomear</span><span style="'+lk+'" onclick="trocarLoginUsuario(\''+esc(u.login)+'\')">trocar login</span>' : '') + (podeEditar ? '<span style="'+lk+'" onclick="liberarUsuario(\''+esc(u.login)+'\')">permissão</span><span style="'+lk+'" onclick="redefinirSenhaUsuario(\''+esc(u.login)+'\')">trocar senha</span><span style="'+lk+';color:'+(u.ativo?'#C62D45':'#1f7a33')+'" onclick="toggleAtivoUsuario(\''+esc(u.login)+'\','+(u.ativo?'false':'true')+')">'+(u.ativo?'desativar':'ativar')+'</span>' : '');
     var stbadge = u.ativo?'<span class="st st-a"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Ativo</span>':'<span class="st st-b"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Inativo</span>';
     return '<tr><td><div class="obj">'+esc((u.login||'').replace(/@queirozmarra\.com$/i,''))+eu+'</div><div class="modd">'+esc(u.nome||'')+oculto+(euSuper?'':'<br><span style="font-size:11px;color:var(--slate)">'+esc(u.perm||'')+'</span>')+'</div></td>'+
       '<td><span class="st '+pcls+'">'+papelLabel(u.papel)+'</span></td><td>'+col4+'</td>'+
@@ -6321,6 +6321,20 @@ async function toggleAtivoUsuario(email, ativar){
   var r=await chamarAdmin({acao:'set_ativo', email:email, ativo:ativar});
   if(r.error){ toast('Erro: '+r.error); return; }
   await carregarDoSupabase(); renderAdmin(); toast(email+(ativar?' ativado':' desativado')+'.');
+}
+// Admin/superadmin redefine a senha de um usuario. A senha NUNCA trafega no codigo do navegador de forma insegura:
+// vai para a funcao de servidor admin-users (chave mestra no servidor), que confere que quem chama e admin do orgao
+// (ou superadmin) e troca no Supabase Auth. A senha nao e gravada em log nem no perfil.
+async function redefinirSenhaUsuario(email){
+  var nome=(email||'').replace(/@queirozmarra\.com$/i,'');
+  var nova=prompt('Nova senha para '+nome+' (mínimo 6 caracteres).\n\nA pessoa passa a entrar com esta senha. Anote e entregue a ela:');
+  if(nova===null) return; nova=String(nova);
+  if(nova.length<6){ toast('A senha precisa ter pelo menos 6 caracteres.'); return; }
+  if(!confirm('Redefinir a senha de "'+nome+'"?\nA senha antiga deixa de valer na hora.')) return;
+  toast('Redefinindo a senha...');
+  var r=await chamarAdmin({acao:'set_senha', email:email, senha:nova});
+  if(r.error){ toast('Erro: '+r.error); return; }
+  toast('Senha de '+nome+' redefinida. Entregue a nova senha à pessoa.');
 }
 function openModelos(tipo){
   var dentroDoGerador = !!(DOC && DOC.tipo && document.getElementById('ws-preview'));
