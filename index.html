@@ -3824,10 +3824,12 @@ function renderFormMinuta(){
 }
 
 // ===================== BANCO LOCAL (conecta dashboard, central e contratos) =====================
+// Lista apenas de demonstracao/offline: NAO autentica (o login e 100% no Supabase Auth) e e sobrescrita
+// pelos perfis reais do banco apos o login. Emails genericos de proposito: nao expor usuario real no view-source.
 var USERS_SEED=[
-  {login:'ueniomarra@queirozmarra.com',nome:'Administrador (Queiroz Marra)',papel:'superadmin',perm:'Acesso total (oculto)',ativo:true,orgao:'*'},
-  {login:'admin@tur.gov.br',nome:'Administrador de Turvelândia',papel:'admin',perm:'Acesso total',ativo:true,orgao:'tur'},
-  {login:'staff@tur.gov.br',nome:'Operador de Turvelândia',papel:'staff',perm:'Nenhuma (aguardando liberação)',ativo:true,orgao:'tur'}
+  {login:'administrador@exemplo.local',nome:'Administrador',papel:'superadmin',perm:'Acesso total (oculto)',ativo:true,orgao:'*'},
+  {login:'gestor@exemplo.local',nome:'Administrador do órgão',papel:'admin',perm:'Acesso total',ativo:true,orgao:'tur'},
+  {login:'operador@exemplo.local',nome:'Operador',papel:'staff',perm:'Nenhuma (aguardando liberação)',ativo:true,orgao:'tur'}
 ];
 // Órgãos atendidos (cada um é uma "caixa" isolada). Turvelândia é o piloto.
 var ORGAOS_SEED=[
