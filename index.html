@@ -6459,7 +6459,8 @@ async function novoUsuario(){
   var superA = CURRENT_USER && CURRENT_USER.papel==='superadmin';
   var orgSel='';
   if(superA){
-    var ops=(ORGAOS||[]).map(function(o){ return '<option value="'+esc(o.id)+'">'+esc(o.nome)+'</option>'; }).join('');
+    // nome + codigo no rotulo: ha orgaos com o MESMO nome no banco, e escolher o errado poe o usuario numa caixa vazia
+    var ops=(ORGAOS||[]).map(function(o){ return '<option value="'+esc(o.id)+'">'+esc(o.nome)+' ['+esc(o.id)+']</option>'; }).join('');
     orgSel='<div class="field" style="margin-bottom:12px"><label>Órgão do usuário</label><select id="nu-orgao">'+ops+'</select><div class="hint">O usuário nasce dentro deste órgão e só enxerga os documentos dele. Para implantar um órgão NOVO, use o botão "Novo órgão" no painel de órgãos.</div></div>';
   }
   var h='<div class="field" style="margin-bottom:12px"><label>Email do servidor (será o login)</label><input id="nu-email" type="email" placeholder="nome@exemplo.com"></div>'
