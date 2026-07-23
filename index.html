@@ -863,6 +863,7 @@ var TOOLS = {
     {tp:'ocorrencia', ic:'i-file', cls:'', t:'Registro de Ocorrências', d:'Diário do fiscal sobre a execução (art. 117, §1º).'},
     {tp:'oficio', ic:'i-doc',  cls:'',     t:'Ofícios e Documentos', d:'Geração de ofícios e documentos no timbre do órgão.'},
     {tp:'processo', ic:'i-folder', cls:'navy', t:'Processos', d:'Agrupa o fluxo de uma mesma contratação.'},
+    {tp:'credenciamento', ic:'i-users', cls:'gold', t:'Credenciamento e Chamamento Público', d:'Edital de chamamento que credencia todos os aptos (arts. 78, I e 79). Contratação por inexigibilidade (art. 74, IV).'},
   ],
   compras:[
     {tp:'dispensa', ic:'i-cart', cls:'',     t:'Dispensa', d:'Art. 75. Limite 2026 já travado: R$ 65.492,11 (inciso II).', lock:1},
@@ -889,7 +890,7 @@ function fillGrid(id,key){ document.getElementById(id).innerHTML = TOOLS[key].ma
 fillGrid('grid-licitacao','licitacao'); fillGrid('grid-compras','compras'); fillGrid('grid-ambiente','ambiente');
 
 // ---- abas da central de documentos (ligadas ao banco) ----
-var DOCTABS=[{l:'Solicitações',t:'solicitacao'},{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Justificativas de escolha',t:'justvencedor'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Ocorrências',t:'ocorrencia'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
+var DOCTABS=[{l:'Solicitações',t:'solicitacao'},{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Justificativas de escolha',t:'justvencedor'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Credenciamentos',t:'credenciamento'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Ocorrências',t:'ocorrencia'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
 var docTabAtual='edital';
 document.getElementById('doc-tabs').innerHTML = DOCTABS.map(function(d,i){
   return '<span class="secpill'+(i===0?' on':'')+'" data-t="'+d.t+'" onclick="docTab(this)">'+d.l+'</span>';
@@ -1142,6 +1143,7 @@ var DOCMETA = {
   precos:{mod:'Licitações e Contratos',t:'Pesquisa de Preços',d:'Cada preço com fonte real e rastreável (art. 23 e IN SEGES 65/2021). O sistema nunca inventa preço.'},
   oficio:{mod:'Licitações e Contratos',t:'Ofícios e Documentos',d:'Geração de ofícios no timbre do órgão.'},
   processo:{mod:'Licitações e Contratos',t:'Processos',d:'Agrupa o fluxo de uma mesma contratação.'},
+  credenciamento:{mod:'Licitações e Contratos',t:'Credenciamento e Chamamento Público',d:'Edital de chamamento aberto e contínuo: credencia todos os interessados aptos (arts. 78, I e 79 da Lei nº 14.133/2021); a contratação sai por inexigibilidade (art. 74, IV).'},
   dispensa:{mod:'Compras',t:'Dispensa de Licitação',d:'Contratação direta (art. 75). Limite 2026: R$ 65.492,11 (inciso II).'},
   justvencedor:{mod:'Compras',t:'Justificativa da escolha do vencedor',d:'Razão da escolha do fornecedor e justificativa de preço na contratação direta (art. 72, VI e VII).'},
   inexigibilidade:{mod:'Compras',t:'Inexigibilidade',d:'Contratação direta quando a competição é inviável (art. 74).'},
@@ -1209,6 +1211,7 @@ function abrirDoc(tipo, consulta){
   else if(tipo==='minuta'){ renderFormMinuta(); }
   else if(tipo==='aditivo'){ renderFormAditivo(); }
   else if(tipo==='dispensa'){ renderFormDispensa(); }
+  else if(tipo==='credenciamento'){ renderFormCredenciamento(); }
   else if(tipo==='justvencedor'){ renderFormJustVencedor(); }
   else if(tipo==='inexigibilidade'){ renderFormInexig(); }
   else if(tipo==='oficio'){ renderFormOficio(); }
@@ -1237,6 +1240,7 @@ var GUIAS = {
   dispensa:'Use para <b>compra direta</b> dentro do limite da lei. Preencha o <b>objeto</b>, o <b>motivo da dispensa</b> e os <b>itens com valor</b>. O sistema monta o ato.',
   justvencedor:'Use na <b>dispensa</b> depois de coletar os preços. Diga <b>por que essa empresa foi escolhida</b> (menor preço, exclusividade, melhor técnica) e <b>por que o preço é compatível</b> com o mercado. O sistema monta a justificativa no padrão do art. 72, VI e VII.',
   inexigibilidade:'Use quando <b>só existe um fornecedor possível</b>. Preencha o <b>objeto</b>, a <b>justificativa</b> e os <b>dados do fornecedor</b>.',
+  credenciamento:'Use quando o órgão quer <b>credenciar todos os interessados aptos</b> (saúde, leilão, serviços contínuos), sem disputa de preço: o valor é o da tabela do edital. Preencha o <b>objeto</b>, os <b>serviços com o valor de referência</b> e as <b>datas</b>. O sistema monta o <b>edital de chamamento completo</b>, com a documentação de habilitação (pessoa física, jurídica e cooperativa) e os <b>anexos prontos</b> (requerimento e declarações). Cada contratação depois sai por <b>inexigibilidade (art. 74, IV)</b>, no card Inexigibilidade do módulo Compras.',
   aditivo:'Use para <b>alterar um contrato que já existe</b>. Informe o <b>contrato</b>, o que muda (<b>prazo, valor ou quantidade</b>) e o <b>motivo</b>.'
 };
 function injetarGuia(tipo){
@@ -1286,7 +1290,7 @@ function sairModoModelo(){
 // Link discreto: troca o modelo pelo formulário automático do mesmo tipo, sem sair da tela.
 function voltarFormAuto(){ if(DOC && DOC.tipo){ var t=DOC.tipo; abrirDoc(t,false); toast('Formulário automático. Preencha e clique em Gerar documento.'); } }
 // ===== RASCUNHO AUTOMÁTICO do formulário (não perder o que está digitando) =====
-var RASC_TIPOS={tr:1,etp:1,edital:1,contrato:1,dispensa:1,inexigibilidade:1,oficio:1,precos:1};
+var RASC_TIPOS={tr:1,etp:1,edital:1,contrato:1,dispensa:1,inexigibilidade:1,oficio:1,precos:1,credenciamento:1};
 function rascKey(t){ return 'aop_rasc_'+((CURRENT_USER&&CURRENT_USER.orgao)||'tur')+'_'+t; }
 function _rascRows(sel,cls){ var a=[]; document.querySelectorAll(sel+' tr').forEach(function(tr){ var first=tr.querySelector('.'+cls[0]); if(!first || !first.value.trim()) return; var o={}; cls.forEach(function(c){ var i=tr.querySelector('.'+c); o[c]=i?i.value:''; }); a.push(o); }); return a; }
 function salvarRascunho(){
@@ -2131,6 +2135,7 @@ async function gerarDoc(){
     else if(DOC.tipo==='minuta') html=gerarMinuta();
     else if(DOC.tipo==='aditivo') html=gerarAditivo();
     else if(DOC.tipo==='dispensa') html=gerarDispensa();
+    else if(DOC.tipo==='credenciamento') html=gerarCredenciamento();
     else if(DOC.tipo==='inexigibilidade') html=gerarInexig();
     else if(DOC.tipo==='oficio') html=gerarOficio();
     else if(DOC.tipo==='precos') html=gerarMapaPrecos();
@@ -2329,7 +2334,7 @@ var ESTEIRA_FASES=[
 ];
 // Tipos que entram no card Processos. Alem da esteira A-F, a CONTRATACAO DIRETA (dispensa/inexigibilidade),
 // que nao segue a esteira mas e um processo e precisa aparecer e poder ser baixada.
-function esteiraTipos(){ var t={dispensa:1, inexigibilidade:1}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
+function esteiraTipos(){ var t={dispensa:1, inexigibilidade:1, credenciamento:1}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
 function renderFormProcesso(){
   var ff=document.getElementById('ws-fields'); if(!ff) return;
   var validos=esteiraTipos();
@@ -2344,9 +2349,9 @@ function renderFormProcesso(){
     var feitas=Object.keys(byTipo).length;
     var sec=(docs[0]&&docs[0].secretaria)||'';
     // contratacao direta (dispensa/inexigibilidade) nao segue a esteira A-F: bloco proprio
-    var direta = byTipo['dispensa'] || byTipo['inexigibilidade'];
-    var fasesH = direta ? ('<div style="border-left:3px solid var(--gold);padding:2px 0 2px 12px;margin:8px 0"><div style="font-weight:700;color:var(--navy);font-size:12.5px;letter-spacing:.3px;margin-bottom:2px">Contratação direta (Lei nº 14.133/2021, arts. 74 e 75)</div>'+
-      ['dispensa','inexigibilidade'].map(function(t){ var ds=byTipo[t]; if(!ds||!ds.length) return ''; return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0"><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg> Concluído</span> <b style="font-size:13px;color:var(--ink)">'+esc(nomeTipo(t))+'</b>'+ds.map(function(d){return ' <span style="cursor:pointer;color:var(--royal);font-size:12.5px;font-weight:600" onclick="abrirDocSalvo(\''+d.id+'\')">'+(d.numero?esc(d.numero):'abrir')+'</span>';}).join('')+'</div>'; }).join('')+
+    var direta = byTipo['dispensa'] || byTipo['inexigibilidade'] || byTipo['credenciamento'];
+    var fasesH = direta ? ('<div style="border-left:3px solid var(--gold);padding:2px 0 2px 12px;margin:8px 0"><div style="font-weight:700;color:var(--navy);font-size:12.5px;letter-spacing:.3px;margin-bottom:2px">Contratação direta e credenciamento (Lei nº 14.133/2021, arts. 74, 75, 78 e 79)</div>'+
+      ['dispensa','inexigibilidade','credenciamento'].map(function(t){ var ds=byTipo[t]; if(!ds||!ds.length) return ''; return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0"><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg> Concluído</span> <b style="font-size:13px;color:var(--ink)">'+esc(nomeTipo(t))+'</b>'+ds.map(function(d){return ' <span style="cursor:pointer;color:var(--royal);font-size:12.5px;font-weight:600" onclick="abrirDocSalvo(\''+d.id+'\')">'+(d.numero?esc(d.numero):'abrir')+'</span>';}).join('')+'</div>'; }).join('')+
       '</div>') : ESTEIRA_FASES.map(function(f){
       var linhas;
       if(!f.tipos.length){
@@ -2397,8 +2402,8 @@ function exportarProcesso(objArg){
   var obj=objArg || (PROC&&PROC.objeto)|| (document.getElementById('f-objeto')&&document.getElementById('f-objeto').value) || '';
   obj=(obj||'').trim();
   if(!obj){ toast('Gere ao menos um documento do processo primeiro (ETP ou TR).'); return; }
-  var ordem={solicitacao:0.5,dfd:1,etp:2,riscos:3,precos:4,tr:5,declaracao:6,despacho:7,edital:8,minuta:9,contrato:10,aditivo:11,dispensa:12,inexigibilidade:13};
-  var rotulo={solicitacao:'SOLICITAÇÃO DA SECRETARIA',dfd:'DOCUMENTO DE FORMALIZAÇÃO DA DEMANDA',etp:'ESTUDO TÉCNICO PRELIMINAR',riscos:'MAPA DE ANÁLISE DE RISCOS',precos:'PESQUISA DE PREÇOS',tr:'TERMO DE REFERÊNCIA',declaracao:'DECLARAÇÃO DE ADEQUAÇÃO ORÇAMENTÁRIA',despacho:'DESPACHO',edital:'EDITAL',minuta:'MINUTA DE CONTRATO',contrato:'CONTRATO',aditivo:'TERMO ADITIVO',dispensa:'DISPENSA',inexigibilidade:'INEXIGIBILIDADE'};
+  var ordem={solicitacao:0.5,dfd:1,etp:2,riscos:3,precos:4,tr:5,declaracao:6,despacho:7,edital:8,minuta:9,contrato:10,aditivo:11,dispensa:12,inexigibilidade:13,credenciamento:13.5};
+  var rotulo={solicitacao:'SOLICITAÇÃO DA SECRETARIA',dfd:'DOCUMENTO DE FORMALIZAÇÃO DA DEMANDA',etp:'ESTUDO TÉCNICO PRELIMINAR',riscos:'MAPA DE ANÁLISE DE RISCOS',precos:'PESQUISA DE PREÇOS',tr:'TERMO DE REFERÊNCIA',declaracao:'DECLARAÇÃO DE ADEQUAÇÃO ORÇAMENTÁRIA',despacho:'DESPACHO',edital:'EDITAL',minuta:'MINUTA DE CONTRATO',contrato:'CONTRATO',aditivo:'TERMO ADITIVO',dispensa:'DISPENSA',inexigibilidade:'INEXIGIBILIDADE',credenciamento:'EDITAL DE CHAMAMENTO PÚBLICO (CREDENCIAMENTO)'};
   var bundle=(DB.docs||[]).filter(function(d){ return ordem[d.tipo] && (d.objeto||'').trim()===obj; });
   if(!bundle.length){ toast('Não encontrei documentos deste processo. Gere o ETP, o TR e o edital primeiro.'); return; }
   bundle.sort(function(a,b){ return (ordem[a.tipo]||9)-(ordem[b.tipo]||9); });
@@ -2893,6 +2898,186 @@ function gerarJustVencedor(){
   return H;
 }
 
+// ---------- CREDENCIAMENTO E CHAMAMENTO PÚBLICO (arts. 78, I e 79 da Lei 14.133/2021; contratação por inexigibilidade, art. 74, IV) ----------
+// Modelo base: Edital de Credenciamento 006/2026 do FMS de Turvelândia (chamamento contínuo, sem limite de vagas).
+function renderFormCredenciamento(){
+  var secs=SECRETARIAS.map(function(s){return '<option>'+esc(s)+'</option>';}).join('');
+  var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'credenciamento\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o Credenciamento</button></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-users"/></svg> Identificação do chamamento</div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Secretaria / setor interessado</label><select id="cr-sec">'+secs+'</select></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Interessado no preâmbulo (fundo ou unidade; vazio = a própria secretaria)</label><input id="cr-fundo" placeholder="ex.: Fundo Municipal de Saúde"></div>';
+  h+='<div class="frow c2"><div class="field"><label>Processo administrativo nº</label><input id="cr-proc"></div><div class="field"><label>Edital de credenciamento nº</label><input id="cr-num"></div></div>';
+  h+='<div class="field" style="margin:12px 0"><label>Objeto do credenciamento</label><textarea id="cr-obj" rows="3" placeholder="ex.: credenciamento de pessoas físicas e jurídicas para prestação de serviços especializados de fisioterapia, fonoaudiologia e psicologia aos usuários do SUS"></textarea></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Área do serviço</label>'+pills('crarea',['Saúde (SUS)','Outra área'],'Saúde (SUS)')+'<div class="hint">Na área da saúde o edital já sai com CNES, regulação do SUS e as instruções do TCM-GO para credenciamento de saúde.</div></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Hipótese do credenciamento (art. 79)</label>'+pills('crhip',['I, paralela e não excludente','II, seleção a critério de terceiros','III, mercados fluidos'],'I, paralela e não excludente')+'<div class="hint">Na hipótese I (a mais comum: saúde, serviços contínuos) todos os credenciados podem ser contratados em condições padronizadas, com o valor fixado no edital.</div></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Quem pode se credenciar</label>'+pills('crpart',['Pessoas físicas e jurídicas','Somente pessoas jurídicas','Somente pessoas físicas'],'Pessoas físicas e jurídicas')+'</div>';
+  h+='<div class="field"><label>Admite cooperativas de trabalho?</label>'+pills('crcoop',['Sim','Não'],'Sim')+'</div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Serviços e valores de referência (vira o Anexo I)</div>';
+  h+='<div class="hint" style="margin-bottom:8px">Liste cada serviço/procedimento com o valor unitário da tabela do órgão. No credenciamento não há disputa de preço: o valor do edital vale igual para todos (art. 79, § 1º, III).</div>';
+  h+='<table class="itab"><thead><tr><th style="width:40%">Serviço / procedimento</th><th>Unid.</th><th>Qtd estimada</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar serviço</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
+  h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
+  h+='<div class="field" style="margin-top:10px"><label>Norma que aprovou a tabela de valores (se houver)</label><input id="cr-tab" placeholder="ex.: Resolução CMS nº 008/2026"></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-clock"/></svg> Prazos e inscrição</div>';
+  h+='<div class="frow c2"><div class="field"><label>Início do credenciamento (data)</label><input id="cr-inicio" placeholder="ex.: 18/06/2026"></div><div class="field"><label>Vigência do edital até</label><input id="cr-vig" value="31/12/2026"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>1ª sessão de análise (dias úteis após a publicação)</label><input id="cr-sessao" type="number" value="10"></div><div class="field"><label>Vigência de cada contrato (meses)</label><input id="cr-vigcont" type="number" value="12"></div></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Local de protocolo dos documentos</label><input id="cr-local" placeholder="vazio = sede do órgão"></div>';
+  h+='<div class="field" style="margin-top:12px"><label>Horário de atendimento</label><input id="cr-horario" value="das 08h00 às 11h30 e das 13h30 às 17h00"></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-money"/></svg> Orçamento e publicidade</div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Dotação orçamentária / fonte (vazio = a informar pelo setor)</label><input id="cr-dot" placeholder="ex.: 15.22.10.302.0210.2.092-3.3.90.34, ficha 465, fonte 107"></div>';
+  h+='<div class="frow c2"><div class="field"><label>Sítio eletrônico oficial</label><input id="cr-site" placeholder="ex.: www.municipio.go.gov.br"></div><div class="field"><label>Foro da comarca</label><input id="cr-foro" placeholder="ex.: Comarca de Maurilândia/GO"></div></div></div>';
+  document.getElementById('ws-fields').innerHTML=h;
+  addLinha();
+}
+function gerarCredenciamento(){
+  var gv=function(id){var e=document.getElementById(id);return e?(e.value||'').trim():'';};
+  var sec=gv('cr-sec'), fundo=gv('cr-fundo')||sec, proc=gv('cr-proc')||'____/2026', num=gv('cr-num')||'____/2026';
+  var obj=gv('cr-obj')||'[objeto do credenciamento]';
+  var saude=pillVal('crarea')==='Saúde (SUS)';
+  var hip=pillVal('crhip')||'I, paralela e não excludente'; var hipInc=hip.split(',')[0].trim();
+  var part=pillVal('crpart')||'Pessoas físicas e jurídicas'; var coop=pillVal('crcoop')==='Sim';
+  var temPF=/físicas/i.test(part), temPJ=/jurídicas/i.test(part);
+  var inicio=gv('cr-inicio')||'[data de início]', vig=gv('cr-vig')||'31/12/2026';
+  var sessao=gv('cr-sessao')||'10', vigcont=gv('cr-vigcont')||'12';
+  var local=gv('cr-local')||((ORG.endereco?ORG.endereco+', ':'')+'sede do órgão, setor de protocolo');
+  var horario=gv('cr-horario')||'das 08h00 às 11h30 e das 13h30 às 17h00';
+  var dot=gv('cr-dot'), site=gv('cr-site')||'sítio eletrônico oficial do órgão', foro=gv('cr-foro')||'[foro da comarca]';
+  var tab=gv('cr-tab');
+  var itens=(typeof coletaItens==='function')?coletaItens():[]; var tot=(typeof calcTotal==='function')?calcTotal():0;
+  var quem = (temPF&&temPJ?'pessoas físicas e jurídicas':(temPJ?'pessoas jurídicas':'pessoas físicas'))+(coop?' e cooperativas de trabalho':'');
+  // concordância por contexto: "às" (atender às INs), "das" (nos termos das INs), "nas" (com base nas INs)
+  var inTCM = saude?' e às Instruções Normativas TCM/GO nº 08/2023 e nº 10/2024':'';
+  var inTCMde = saude?', das Instruções Normativas TCM/GO nº 08/2023 e nº 10/2024':'';
+  var inTCMem = saude?' e nas Instruções Normativas TCM/GO nº 08/2023 e nº 10/2024':'';
+
+  var H=docHeader('EDITAL DE CHAMAMENTO PÚBLICO<br>CREDENCIAMENTO Nº '+esc(num), esc(ORG.nome.toUpperCase())+'/'+ORG.uf+', CNPJ '+ORG.cnpj+'<br>PROCESSO ADMINISTRATIVO Nº '+esc(proc)+'<br>'+esc(fundo.toUpperCase()));
+  H+='<h2>PREÂMBULO</h2>';
+  H+='<table><tbody>';
+  H+='<tr><td><b>PROCESSO ADMINISTRATIVO</b></td><td>'+esc(proc)+'</td></tr>';
+  H+='<tr><td><b>INTERESSADO</b></td><td>'+esc(fundo)+'</td></tr>';
+  H+='<tr><td><b>OBJETO</b></td><td>'+esc(obj)+'</td></tr>';
+  H+='<tr><td><b>ABERTURA DO CREDENCIAMENTO</b></td><td>A partir de '+esc(inicio)+', em caráter contínuo, durante a vigência do edital</td></tr>';
+  H+='<tr><td><b>LOCAL DE PROTOCOLO</b></td><td>'+esc(local)+', '+esc(horario)+'</td></tr>';
+  H+='<tr><td><b>VIGÊNCIA DO EDITAL</b></td><td>Da publicação até '+esc(vig)+'</td></tr>';
+  H+='<tr><td><b>PUBLICIDADE</b></td><td>PNCP (pncp.gov.br) e '+esc(site)+'</td></tr>';
+  H+='</tbody></table>';
+  H+='<p>O(A) '+esc(ORG.nome)+'/'+ORG.uf+', por intermédio do(a) '+esc(fundo)+', torna público o presente EDITAL DE CHAMAMENTO PÚBLICO, destinado ao credenciamento de '+quem+' para '+esc(obj)+', nos termos dos arts. 78, inciso I, e 79 da Lei nº 14.133/2021 (credenciamento como procedimento auxiliar), do art. 74, inciso IV, da mesma Lei (contratação por inexigibilidade)'+inTCMde+(saude?', da Lei nº 8.080/1990 e do art. 199, § 1º, da Constituição Federal':'')+'.</p>';
+
+  H+='<h2>1. DISPOSIÇÕES PRELIMINARES</h2>';
+  H+='<p>1.1. O credenciamento adotado corresponde à hipótese do art. 79, inciso '+esc(hipInc)+', da Lei nº 14.133/2021 ('+esc(hip.replace(/^[IVX]+,\s*/,''))+'). O edital de chamamento fica divulgado em sítio eletrônico oficial, permitindo o cadastramento permanente de novos interessados (art. 79, § 1º, I).</p>';
+  H+='<p>1.2. Não há limite de vagas: será credenciado todo interessado que atenda integralmente às condições deste edital, durante toda a sua vigência.</p>';
+  H+='<p>1.3. A primeira sessão de análise dos documentos protocolados ocorrerá em até '+esc(sessao)+' dias úteis contados da publicação deste edital; os protocolos posteriores serão analisados em fluxo contínuo, na ordem cronológica de recebimento.</p>';
+  H+='<p>1.4. Quando o objeto não permitir a contratação imediata e simultânea de todos os credenciados, serão adotados critérios objetivos de distribuição da demanda (art. 79, § 1º, II), definidos neste edital e em seus anexos.</p>';
+  H+='<p>1.5. A gestão do chamamento caberá à Comissão designada por portaria, responsável pela análise documental, julgamentos e esclarecimentos.</p>';
+  H+=(dot?'<p>1.6. As despesas das contratações decorrentes correrão à conta da dotação orçamentária: '+esc(dot)+'.</p>':'<p>1.6. As despesas das contratações decorrentes correrão à conta de dotação orçamentária a indicar pelo setor competente no processo.</p>');
+
+  H+='<h2>2. DO OBJETO</h2>';
+  H+='<p>2.1. O presente chamamento público tem por objeto o credenciamento de '+quem+' para '+esc(obj)+', conforme condições deste edital e de seus anexos.</p>';
+  H+='<p>2.2. A relação de serviços, os valores de referência e as condições de execução constam do Anexo I deste edital.</p>';
+  H+=(saude?'<p>2.3. Os serviços serão prestados conforme as normas do SUS e as diretrizes da Secretaria Municipal de Saúde, exclusivamente mediante autorização prévia e formal da regulação municipal, vedado o atendimento fora da regulação.</p>':'');
+  H+='<p>2.'+(saude?'4':'3')+'. O credenciamento não garante volume mínimo de demanda nem exclusividade: constitui condição para futura contratação, conforme a necessidade da Administração.</p>';
+
+  H+='<h2>3. DO CREDENCIAMENTO E DA VIGÊNCIA DO EDITAL</h2>';
+  H+='<p>3.1. O credenciamento é não exclusivo, contínuo e aberto, admitindo a habilitação de todos os interessados que atendam às condições deste edital, sem limitação de vagas, ressalvadas a necessidade, a capacidade de gestão e a disponibilidade orçamentária e financeira.</p>';
+  H+='<p>3.2. Este edital entra em vigor na data de sua publicação e vigorará até '+esc(vig)+'.</p>';
+  H+='<p>3.3. A contratação dos credenciados será formalizada por inexigibilidade de licitação (art. 74, IV, da Lei nº 14.133/2021), mediante termo/contrato específico, conforme necessidade e demanda do órgão.</p>';
+
+  H+='<h2>4. CONDIÇÕES DE PARTICIPAÇÃO</h2>';
+  H+='<p>4.1. Poderão participar '+quem+', desde que atendam integralmente às exigências deste edital'+inTCM+'.</p>';
+  H+='<p>4.2. Não poderão participar interessados: a) cumprindo sanção de impedimento de licitar ou contratar, suspensão ou declaração de inidoneidade (arts. 155 a 163 da Lei nº 14.133/2021); b) com impedimentos legais, judiciais'+(saude?', éticos ou sanitários':' ou éticos')+' que inviabilizem a execução; c) em situação de conflito de interesses com agentes públicos do órgão; d) cujos dirigentes sejam servidores ou agentes públicos do próprio órgão em situação de vedação legal.</p>';
+  if(coop){ H+='<p>4.3. As cooperativas de trabalho deverão: ser formadas exclusivamente por profissionais da área do serviço ofertado; garantir a prestação direta e pessoal pelos cooperados; não atuar como intermediadoras de mão de obra; e possuir estatuto compatível com o objeto.</p>'; }
+  H+='<p>4.'+(coop?'4':'3')+'. A participação implica aceitação integral e irretratável das condições deste edital e de seus anexos.</p>';
+  H+='<p>4.'+(coop?'5':'4')+'. O credenciamento não gera direito adquirido à contratação.</p>';
+
+  H+='<h2>5. DOCUMENTAÇÃO DE HABILITAÇÃO</h2>';
+  H+='<p>5.1. A ausência de documento obrigatório acarreta inabilitação, sem prejuízo de nova apresentação a qualquer tempo, dado o caráter contínuo do credenciamento. Toda a documentação deve estar válida no ato do protocolo, e o credenciado deve mantê-la vigente durante todo o período.</p>';
+  H+='<p>5.2. Os documentos podem ser apresentados em original ou cópia simples, dispensada autenticação; documentos eletrônicos com assinatura digital, QR Code ou código de verificação são válidos. A Comissão pode, motivadamente, exigir originais e diligenciar.</p>';
+  var n5=2; // numeração sequencial do item 5 (PF/PJ/coop são condicionais)
+  if(temPF){
+    n5++;
+    H+='<p>5.'+n5+'. PESSOA FÍSICA: a) requerimento de credenciamento (Anexo II); b) documento oficial de identificação com foto e CPF; c) comprovante de residência atualizado; d) registro profissional ativo no conselho de classe competente, quando exigido para a atividade; e) certidão de regularidade ou nada consta do conselho, quando aplicável; f) diplomas e títulos exigidos para o serviço, quando aplicável; g) declaração de atendimento aos requisitos do edital (Anexo III); h) declaração de inexistência de fatos impeditivos (Anexo IV); i) declaração sobre vínculo com a administração pública (Anexo '+(temPJ?'VI':'V')+'); j) Certidão Negativa de Débitos Trabalhistas (CNDT); k) certidão conjunta de débitos federais e dívida ativa da União; l) certidão de regularidade fiscal estadual; m) certidão de regularidade fiscal municipal.</p>';
+  }
+  if(temPJ){
+    n5++;
+    H+='<p>5.'+n5+'. PESSOA JURÍDICA: a) requerimento de credenciamento (Anexo II); b) ato constitutivo, estatuto ou contrato social atualizado e registrado, com objeto compatível; c) documento de identificação dos representantes legais; d) comprovante de CNPJ ativo; e) certidão conjunta de débitos federais e dívida ativa da União; f) certificado de regularidade do FGTS; g) certidão de regularidade fiscal estadual; h) certidão de regularidade fiscal municipal; i) Certidão Negativa de Débitos Trabalhistas (CNDT); '+(saude?'j) alvará sanitário vigente; k) licença de funcionamento atualizada; l) comprovante de inscrição e regularidade no CNES; m)':'j) licença de funcionamento atualizada, quando exigível; k)')+' declaração de atendimento aos requisitos do edital (Anexo III); '+(saude?'n)':'l)')+' declaração de inexistência de fatos impeditivos (Anexo IV); '+(saude?'o)':'m)')+' declaração de cumprimento do art. 7º, XXXIII, da Constituição Federal (Anexo V); '+(saude?'p)':'n)')+' declaração de que sócios e diretores não têm vínculo impeditivo com a administração pública (Anexo VI).</p>';
+  }
+  if(coop){ n5++; H+='<p>5.'+n5+'. COOPERATIVAS: além dos documentos de pessoa jurídica: a) estatuto social atualizado com objeto compatível; b) ata de eleição da diretoria vigente; c) relação nominal dos cooperados que executarão os serviços, com registro profissional ativo; d) indicação do responsável técnico.</p>'; }
+  H+='<p>5.'+(n5+1)+'. A Comissão poderá solicitar esclarecimentos e complementação de documentos para comprovação da capacidade operacional.</p>';
+
+  H+='<h2>6. INSCRIÇÃO, ANÁLISE E RESULTADO</h2>';
+  H+='<p>6.1. A partir de '+esc(inicio)+', em dias úteis, '+esc(horario)+', os interessados poderão protocolar o requerimento e a documentação em: '+esc(local)+'. A inscrição será formalizada por protocolo, com data e hora do recebimento.</p>';
+  H+='<p>6.2. Não serão aceitos protocolos de solicitação de certidões: os documentos devem estar efetivamente emitidos e válidos na data do protocolo.</p>';
+  H+='<p>6.3. Recebida a documentação, a Comissão analisará a habilitação'+(saude?' (jurídica, fiscal, trabalhista, técnica e sanitária)':' (jurídica, fiscal, trabalhista e técnica)')+', na ordem cronológica de protocolo, podendo realizar diligências. As diligências não admitem documento inexistente à época do protocolo.</p>';
+  H+='<p>6.4. Concluída a análise, a Comissão emitirá decisão formal de habilitação (credenciamento) ou inabilitação (indeferimento), com motivação objetiva. As decisões e o rol atualizado de credenciados serão publicados em '+esc(site)+' e nos meios oficiais.</p>';
+  H+='<p>6.5. O interessado habilitado será convocado para assinatura do termo/contrato conforme a necessidade da Administração. O credenciamento poderá ser suspenso ou cancelado a qualquer tempo, mediante processo administrativo, assegurados contraditório e ampla defesa.</p>';
+
+  H+='<h2>7. IMPUGNAÇÃO E ESCLARECIMENTOS</h2>';
+  H+='<p>7.1. Qualquer pessoa é parte legítima para impugnar este edital por irregularidade ou para solicitar esclarecimento sobre os seus termos, protocolando o pedido até 3 (três) dias úteis antes da data da primeira sessão de análise (art. 164 da Lei nº 14.133/2021); novos interessados poderão impugnar a qualquer tempo durante a vigência, desde que antes do protocolo do próprio requerimento.</p>';
+  H+='<p>7.2. A resposta será divulgada nos meios oficiais em até 3 (três) dias úteis (art. 164, parágrafo único). Havendo retificação material, o edital será divulgado novamente e os prazos ajustados.</p>';
+
+  H+='<h2>8. RECURSOS ADMINISTRATIVOS</h2>';
+  H+='<p>8.1. Da decisão que indeferir a inscrição ou a habilitação cabe recurso no prazo de 3 (três) dias úteis, contado da intimação ou da lavratura da ata (art. 165, I, da Lei nº 14.133/2021), dirigido à autoridade que praticou o ato, que poderá reconsiderar ou encaminhar à autoridade superior, com decisão final motivada.</p>';
+  H+='<p>8.2. Os demais interessados afetados serão cientificados para contrarrazões em igual prazo, assegurada vista dos autos. O recurso tem efeito suspensivo do ato recorrido.</p>';
+  H+='<p>8.3. Contra sanções administrativas aplicam-se os prazos do art. 166 da Lei nº 14.133/2021 e, quanto às sanções em espécie, o art. 156.</p>';
+
+  H+='<h2>9. FORMALIZAÇÃO DA CONTRATAÇÃO</h2>';
+  H+='<p>9.1. A contratação será formalizada por termo/contrato de credenciamento, por inexigibilidade (art. 74, IV), observado o interesse público, a necessidade, '+(saude?'a regulação do acesso, ':'')+'a disponibilidade orçamentária e as condições deste edital.</p>';
+  H+='<p>9.2. Cada contrato terá vigência de '+esc(vigcont)+' meses, contados da assinatura, prorrogável no interesse da Administração, observados os limites da Lei nº 14.133/2021.</p>';
+  H+='<p>9.3. Convocado, o credenciado deverá assinar o termo/contrato em até 10 (dez) dias úteis, prorrogáveis por igual período mediante justificativa aceita. A execução inicia após a ordem de início, no prazo máximo de 5 (cinco) dias úteis da notificação.</p>';
+  H+='<p>9.4. A recusa injustificada em assinar, ou o não atendimento das exigências documentais, poderá ensejar a perda da convocação, o chamamento de outros credenciados e a suspensão ou cancelamento do credenciamento, sem prejuízo das sanções cabíveis.</p>';
+  H+='<p>9.5. O credenciado deverá manter, durante toda a vigência, as condições de habilitação exigidas, atualizando documentos vencidos sempre que solicitado.</p>';
+  H+='<p>9.6. Não será permitido o cometimento a terceiros do objeto contratado sem autorização expressa da Administração (art. 79, § 1º, V). Será admitida a denúncia por qualquer das partes nos prazos fixados neste edital (art. 79, § 1º, VI), observada a antecedência mínima de 30 (trinta) dias para o descredenciamento voluntário.</p>';
+
+  H+='<h2>10. EXECUÇÃO, FATURAMENTO E PAGAMENTO</h2>';
+  H+='<p>10.1. O credenciado responde integralmente pelos encargos trabalhistas, previdenciários, fiscais e comerciais da execução e por danos a terceiros, sem vínculo empregatício com a Administração.</p>';
+  H+=(saude?'<p>10.2. Somente serão faturados os serviços autorizados pela regulação municipal e efetivamente executados. É vedada qualquer cobrança ao usuário do SUS.</p>':'<p>10.2. Somente serão faturados os serviços autorizados pela Administração e efetivamente executados.</p>');
+  H+='<p>10.3. As faturas/notas fiscais serão apresentadas mensalmente, até o 5º (quinto) dia útil do mês subsequente, com os comprovantes de execução, e o pagamento será realizado por produção, após conferência, atesto e liquidação, podendo a Administração exigir a comprovação da manutenção das condições de habilitação.</p>';
+  H+='<p>10.4. Os valores de referência são os do Anexo I'+(tab?', aprovados pela '+esc(tab):'')+', aplicáveis de forma isonômica a todos os credenciados, vedada negociação individual de preço (art. 79, § 1º, III). O reequilíbrio econômico-financeiro poderá ser reconhecido quando configurados os pressupostos legais, mediante pedido fundamentado e decisão motivada.</p>';
+  H+='<p>10.5. A execução será acompanhada e fiscalizada por gestor e fiscal designados por ato formal (arts. 117 e 118 da Lei nº 14.133/2021).</p>';
+  H+=(saude?'<p>10.6. O credenciado tratará dados pessoais sensíveis de saúde e deverá observar integralmente a Lei nº 13.709/2018 (LGPD), o sigilo assistencial e as normas ético-profissionais.</p>':'<p>10.6. O credenciado deverá observar a Lei nº 13.709/2018 (LGPD) no tratamento de dados pessoais a que tiver acesso.</p>');
+
+  H+='<h2>11. SANÇÕES, DESCREDENCIAMENTO E DISPOSIÇÕES FINAIS</h2>';
+  H+='<p>11.1. O descumprimento das obrigações sujeita o credenciado às sanções do art. 156 da Lei nº 14.133/2021 (advertência, multa, impedimento de licitar e contratar, declaração de inidoneidade), observado o devido processo, o contraditório e a ampla defesa.</p>';
+  H+='<p>11.2. O credenciamento poderá ser suspenso ou cancelado quando constatado descumprimento das condições do edital, irregularidade documental superveniente ou inexecução, mediante processo administrativo. O credenciado poderá pedir o descredenciamento voluntário com antecedência mínima de 30 (trinta) dias.</p>';
+  H+='<p>11.3. Este edital poderá ser revogado por interesse público superveniente ou anulado por ilegalidade, sem direito a indenização (aplicação do art. 71 da Lei nº 14.133/2021, no que couber).</p>';
+  H+='<p>11.4. Os casos omissos serão resolvidos pela Comissão e pela autoridade competente, com base na Lei nº 14.133/2021'+inTCMem+(saude?' e nas normas do SUS':'')+'.</p>';
+  H+='<p>11.5. Fica eleito o foro da '+esc(foro)+' para dirimir controvérsias não resolvidas na via administrativa.</p>';
+
+  H+='<h2>ANEXO I. RELAÇÃO DE SERVIÇOS E VALORES DE REFERÊNCIA</h2>';
+  if(itens.length){
+    H+='<table><thead><tr><th>Item</th><th>Serviço / procedimento</th><th>Unid.</th><th>Qtd estimada</th><th>Valor unit.</th><th>Valor total</th></tr></thead><tbody>'+itens.map(function(it,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(it.d)+'</td><td>'+esc(it.u)+'</td><td>'+it.q+'</td><td>'+money(it.v)+'</td><td>'+money(it.t)+'</td></tr>';}).join('')+'<tr><td colspan="5" style="text-align:right"><b>TOTAL ESTIMADO</b></td><td><b>'+money(tot)+'</b></td></tr></tbody></table>';
+    H+='<p>Os quantitativos são estimativas para fins orçamentários e não obrigam a Administração à contratação integral, nem asseguram volume mínimo a cada credenciado.</p>';
+  } else {
+    H+='<p>Relação de serviços e valores de referência a detalhar pelo setor (inclua os serviços na tabela do formulário para o Anexo I sair pronto).</p>';
+  }
+
+  H+='<h2>ANEXO II. REQUERIMENTO DE CREDENCIAMENTO</h2>';
+  H+='<p>Ao(À) '+esc(fundo)+'. O(A) interessado(a) __________________________________________, '+(temPJ?'CNPJ/':'')+'CPF nº ____________________, com '+(temPJ?'sede/':'')+'endereço em ______________________________________________, telefone ____________________, e-mail ____________________, vem requerer o seu CREDENCIAMENTO para a prestação dos serviços de ______________________________________________, do Anexo I do Edital de Chamamento Público nº '+esc(num)+', declarando conhecer e aceitar integralmente as condições do edital e de seus anexos, e apresentando, anexa, a documentação de habilitação exigida.</p>';
+  H+='<p>Local e data: ________________________, ____ de __________ de ______.<br><br>____________________________________________<br>Assinatura do(a) requerente ou representante legal</p>';
+
+  H+='<h2>ANEXO III. DECLARAÇÃO DE ATENDIMENTO AOS REQUISITOS DO EDITAL</h2>';
+  H+='<p>Declaro, sob as penas da lei, que atendo integralmente aos requisitos de habilitação e às condições do Edital de Chamamento Público nº '+esc(num)+', que disponho de capacidade técnica e operacional para a execução dos serviços ofertados e que me comprometo a manter as condições de habilitação durante toda a vigência do credenciamento.</p>';
+  H+='<p>Local e data: ________________________. Assinatura: ____________________________________________</p>';
+
+  H+='<h2>ANEXO IV. DECLARAÇÃO DE INEXISTÊNCIA DE FATOS IMPEDITIVOS</h2>';
+  H+='<p>Declaro, sob as penas da lei, que não estou cumprindo sanção de impedimento de licitar ou contratar com a Administração Pública nem declaração de inidoneidade (arts. 155 a 163 da Lei nº 14.133/2021), e que inexistem fatos impeditivos à minha habilitação e contratação, obrigando-me a comunicar qualquer fato superveniente.</p>';
+  H+='<p>Local e data: ________________________. Assinatura: ____________________________________________</p>';
+
+  if(temPJ){
+    H+='<h2>ANEXO V. DECLARAÇÃO DE CUMPRIMENTO DO ART. 7º, XXXIII, DA CONSTITUIÇÃO FEDERAL</h2>';
+    H+='<p>Declaro, para fins do disposto no art. 68, inciso VI, da Lei nº 14.133/2021, que não emprego menor de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, nem menor de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de 14 (quatorze) anos.</p>';
+    H+='<p>Local e data: ________________________. Assinatura: ____________________________________________</p>';
+  }
+  H+='<h2>ANEXO '+(temPJ?'VI':'V')+'. DECLARAÇÃO SOBRE VÍNCULO COM A ADMINISTRAÇÃO PÚBLICA</h2>';
+  H+='<p>Declaro, sob as penas da lei, que '+(temPJ?'o(a) interessado(a), seus sócios e dirigentes não mantêm':'não mantenho')+' vínculo impeditivo com a Administração Pública do órgão credenciante, nos termos da legislação aplicável. Havendo exercício de cargo, emprego ou função pública, informo abaixo o órgão, o cargo e o horário, para verificação de compatibilidade: ______________________________________________.</p>';
+  H+='<p>Local e data: ________________________. Assinatura: ____________________________________________</p>';
+  H+='<p><b>Nota ao setor:</b> a minuta do termo/contrato de credenciamento (anexo final do edital) sai pela ferramenta Minuta de Contrato deste sistema, vinculada a este processo, e a contratação de cada credenciado sai pelo card Inexigibilidade (art. 74, IV) do módulo Compras.</p>';
+
+  H+='<div class="assina">'+esc(ORG.nome)+'/'+ORG.uf+', ____ de __________ de 2026.<br><br>____________________________________________<br>'+esc(ORG.ordenador)+'<br>'+esc(ORG.cargo)+'</div>';
+  H+='<div class="selo"><b>Minuta de edital de chamamento público (credenciamento) gerada pelo sistema</b> com base nos arts. 74, IV, 78, I e 79 da Lei nº 14.133/2021'+inTCMem+'. Documento sujeito à conferência, validação jurídica e assinatura da autoridade competente antes da publicação. As citações legais devem ser confirmadas pelo setor.</div>';
+  return H;
+}
+
 // ---------- ETP (Estudo Técnico Preliminar, art. 18 e IN SEGES 58/2022) ----------
 var ETP_ELEM=[
  {n:'I',t:'Descrição da necessidade da contratação (o problema a resolver)',ob:1},
@@ -3252,7 +3437,7 @@ function puxarDoDFD(){
   var ff=document.getElementById('ws-fields');
   if(ff && !document.getElementById('dfd-puxado')){ var d=document.createElement('div'); d.id='dfd-puxado'; d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px'; d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Objeto, necessidade, secretaria e itens vieram do DFD. Confira e complete o ETP.'; ff.insertBefore(d, ff.firstChild); }
 }
-var DOCFIELDS={portaria:['por-obj','por-sec','por-num'],publicacao:['pub-obj','pub-sec','pub-num'],impugnacao:['imp-obj','imp-sec','imp-num'],homologacao:['hom-obj','hom-sec','hom-num'],convocacao:['cvc-obj','cvc-sec','cvc-num'],ordem:['ord-obj','ord-sec','ord-num'],recebimento:['rec-obj','rec-sec','rec-num'],apostilamento:['apo-obj','apo-sec','apo-num'],sancao:['snc-obj','snc-sec','snc-num'],extincao:['ext-obj','ext-sec','ext-num'],ocorrencia:['oco-obj','oco-sec','oco-num'],aviso:['avs-obj','avs-sec','avs-num'],justvencedor:['jv-obj','jv-sec','jv-num']};
+var DOCFIELDS={portaria:['por-obj','por-sec','por-num'],publicacao:['pub-obj','pub-sec','pub-num'],impugnacao:['imp-obj','imp-sec','imp-num'],homologacao:['hom-obj','hom-sec','hom-num'],convocacao:['cvc-obj','cvc-sec','cvc-num'],ordem:['ord-obj','ord-sec','ord-num'],recebimento:['rec-obj','rec-sec','rec-num'],apostilamento:['apo-obj','apo-sec','apo-num'],sancao:['snc-obj','snc-sec','snc-num'],extincao:['ext-obj','ext-sec','ext-num'],ocorrencia:['oco-obj','oco-sec','oco-num'],aviso:['avs-obj','avs-sec','avs-num'],justvencedor:['jv-obj','jv-sec','jv-num'],credenciamento:['cr-obj','cr-sec','cr-num']};
 // ==================== FATIA 2: ETAPAS C a F (Lei 14.133/2021) ====================
 // Helpers comuns
 function _v(id){ return ((document.getElementById(id)||{}).value||'').trim(); }
@@ -5679,7 +5864,7 @@ function anWordAbnt(inner, arquivo){
 function anExportParecer(){ var l=anLic(); if(!l||!l.parecerHtml) return; anWordAbnt(l.parecerHtml, 'Parecer_'+String(l.razao||'licitante').replace(/[^a-z0-9]+/ig,'_')); toast('Parecer exportado em Word no padrão ABNT (A4, Times 12, espaçamento 1,5, justificado).'); }
 function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
-function nomeTipo(t){ var m={tr:'Termo de Referência',solicitacao:'Solicitação da Secretaria',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',portaria:'Portaria',publicacao:'Extrato de Publicação',impugnacao:'Impugnação',homologacao:'Adjudicação e Homologação',convocacao:'Convocação',ordem:'Ordem de Fornecimento',recebimento:'Termo de Recebimento',apostilamento:'Apostilamento',sancao:'Notificação/Sanção',extincao:'Extinção/Encerramento',ocorrencia:'Registro de Ocorrência',aviso:'Aviso de Dispensa',justvencedor:'Justificativa da escolha do vencedor',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
+function nomeTipo(t){ var m={tr:'Termo de Referência',solicitacao:'Solicitação da Secretaria',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',portaria:'Portaria',publicacao:'Extrato de Publicação',impugnacao:'Impugnação',homologacao:'Adjudicação e Homologação',convocacao:'Convocação',ordem:'Ordem de Fornecimento',recebimento:'Termo de Recebimento',apostilamento:'Apostilamento',sancao:'Notificação/Sanção',extincao:'Extinção/Encerramento',ocorrencia:'Registro de Ocorrência',aviso:'Aviso de Dispensa',justvencedor:'Justificativa da escolha do vencedor',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',credenciamento:'Credenciamento / Chamamento Público',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
 async function registrarDoc(tipo, html){
   // Objeto/secretaria/processo corretos POR TIPO (evita um documento herdar dados de outro)
