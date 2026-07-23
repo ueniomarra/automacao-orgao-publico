@@ -1379,7 +1379,7 @@ function renderFormTR(){
   h += '<div class="fgroup"><div class="frow c2"><button class="btn-ghost" type="button" onclick="buscarPNCP()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-search"/></svg> Buscar modelo no PNCP</button><button class="btn-ghost" type="button" onclick="abrirPrecos()" style="justify-content:center"><svg class="ic" style="width:16px;height:16px"><use href="#i-money"/></svg> Pesquisa de Preços (art. 23)</button></div>';
   h += '<button class="btn-ghost" type="button" style="width:100%;justify-content:center;margin-top:10px" onclick="inserirModeloTipo(\'tr\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o Termo de Referência</button></div>';
   h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Objeto usual (preenche sozinho)</div>';
-  h += '<div class="field"><label>Escolha um objeto e o sistema preenche a justificativa e os itens de referência</label><select id="f-objlib" onchange="aplicarObjeto()"><option value="">Selecione ou preencha manualmente</option>'+objOpts.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select></div></div>';
+  h += campoObjLib('aplicarObjeto','Escolha um objeto e o sistema preenche a justificativa e os itens de referência')+'</div>';
 
   h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
   h += '<div class="field" style="margin-bottom:12px"><label>Secretaria / Interessado</label><select id="f-secretaria">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
@@ -1740,14 +1740,27 @@ async function rodarPNCP(){
   }).join('');
 }
 function usarObjetoPNCP(btn){ var o=btn.getAttribute('data-obj'); var f=document.getElementById('f-objeto'); if(f) f.value=o; var j=document.getElementById('f-justif'); if(j && !j.value) j.value='A contratação tem por objeto '+o.toLowerCase()+', justificada pela necessidade do órgão e pelo interesse público, observada a Lei nº 14.133/2021.'; var m=document.getElementById('pncp-msg'); if(m) m.remove(); }
+// Campo "Escolha um objeto": input com datalist (aceita ESCOLHER da lista OU DIGITAR o próprio objeto).
+// Antes era um <select> puro, que não deixava digitar apesar de o rótulo prometer "preencha manualmente".
+function campoObjLib(handler,label){
+  var objOpts=Object.keys(OBJETOS);
+  return '<div class="field"><label>'+label+'</label>'+
+    '<input id="f-objlib" list="objlib-dl" autocomplete="off" placeholder="Selecione da lista ou digite o objeto" onchange="'+handler+'()">'+
+    '<datalist id="objlib-dl">'+objOpts.map(function(o){return '<option value="'+esc(o)+'"></option>';}).join('')+'</datalist>'+
+    '<div class="hint" style="margin-top:6px">Escolha um da lista para já trazer os itens de referência, ou digite o seu próprio objeto.</div></div>';
+}
 function aplicarObjeto(){
-  var nome=document.getElementById('f-objlib').value; if(!nome||!OBJETOS[nome]) return;
-  var o=OBJETOS[nome];
-  document.getElementById('f-objeto').value = 'Aquisição de '+nome.toLowerCase();
-  document.getElementById('f-justif').value = o.just;
-  document.getElementById('itab-body').innerHTML='';
-  o.itens.forEach(function(it){ addLinha(it[0],it[1],it[2],it[3]); });
-  calcTotal();
+  var el=document.getElementById('f-objlib'); if(!el) return;
+  var nome=(el.value||'').trim();
+  if(nome && OBJETOS[nome]){ // objeto conhecido da lista: preenche objeto, justificativa e itens de referência
+    var o=OBJETOS[nome];
+    var fo=document.getElementById('f-objeto'); if(fo) fo.value='Aquisição de '+nome.toLowerCase();
+    var fj=document.getElementById('f-justif'); if(fj) fj.value=o.just;
+    var tb=document.getElementById('itab-body'); if(tb){ tb.innerHTML=''; o.itens.forEach(function(it){ addLinha(it[0],it[1],it[2],it[3]); }); }
+    calcTotal();
+  } else if(nome){ // texto livre digitado: usa como objeto (sem itens de referência), sem sobrescrever o que já houver
+    var fo2=document.getElementById('f-objeto'); if(fo2 && !fo2.value.trim()) fo2.value=nome;
+  }
 }
 function addLinha(d,u,q,v){
   var tb=document.getElementById('itab-body');
@@ -3599,7 +3612,7 @@ function renderFormSolicitacao(){
   var objOpts=Object.keys(OBJETOS);
   var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'solicitacao\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para a Solicitação</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Objeto usual (preenche itens sozinho)</div>';
-  h+='<div class="field"><label>Escolha um objeto e o sistema preenche os itens de referência</label><select id="f-objlib" onchange="aplicarObjetoSolic()"><option value="">Selecione ou preencha manualmente</option>'+objOpts.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select></div></div>';
+  h+=campoObjLib('aplicarObjetoSolic','Escolha um objeto e o sistema preenche os itens de referência')+'</div>';
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Unidade solicitante</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Secretaria / fundo / setor que solicita</label><select id="sol-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
@@ -3665,7 +3678,7 @@ function renderFormDFD(){
   var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'dfd\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o DFD</button></div>';
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Objeto usual (preenche itens sozinho)</div>';
-  h+='<div class="field"><label>Escolha um objeto e o sistema preenche os itens de referência</label><select id="f-objlib" onchange="aplicarObjetoDFD()"><option value="">Selecione ou preencha manualmente</option>'+objOpts.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select></div></div>';
+  h+=campoObjLib('aplicarObjetoDFD','Escolha um objeto e o sistema preenche os itens de referência')+'</div>';
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação da demanda</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Secretaria / fundo / setor requisitante</label><select id="dfd-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
@@ -4093,7 +4106,7 @@ function renderFormETP(){
   h+='<button class="btn-ghost" type="button" style="width:100%;justify-content:center;margin-top:10px" onclick="inserirModeloTipo(\'etp\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para o ETP</button></div>';
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Objeto usual (preenche itens sozinho)</div>';
-  h+='<div class="field"><label>Escolha um objeto e o sistema preenche os itens de referência</label><select id="f-objlib" onchange="aplicarObjeto()"><option value="">Selecione ou preencha manualmente</option>'+objOpts.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select></div></div>';
+  h+=campoObjLib('aplicarObjeto','Escolha um objeto e o sistema preenche os itens de referência')+'</div>';
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Identificação</div>';
   h+='<div class="field" style="margin-bottom:12px"><label>Secretaria / fundo / setor requerente</label><select id="etp-sec">'+SECRETARIAS.map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></div>';
