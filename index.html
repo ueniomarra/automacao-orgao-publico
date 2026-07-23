@@ -6450,19 +6450,40 @@ async function salvarOrgao(){
   ['o-nome','o-cnpj','o-gestor','o-cargo','o-adm-nome','o-adm-login','o-adm-senha'].forEach(function(x){ var e=document.getElementById(x); if(e) e.value=''; });
   toast('Órgão "'+nome+'" implantado. O admin '+email+' já pode entrar com a senha definida.');
 }
+// Novo usuário em modal, com escolha do PAPEL (staff x admin). Antes o superadmin caía no formulário
+// de ÓRGÃO NOVO e cada servidor virava admin de um órgão vazio (foi assim que 2 servidoras de
+// Turvelândia viraram admin de turvelan3/turvelan4 em 23/07). Órgão novo agora é SÓ pelo botão
+// "Novo órgão" do painel de órgãos.
 async function novoUsuario(){
   if(CURRENT_USER && CURRENT_USER.papel==='staff'){ toast('Só o administrador cria usuários.'); return; }
-  if(CURRENT_USER && CURRENT_USER.papel==='superadmin'){ toggleNovoOrgao(true); return; }
-  var email=prompt('Email do novo servidor (será o login dele):'); if(!email) return; email=email.trim();
+  var superA = CURRENT_USER && CURRENT_USER.papel==='superadmin';
+  var orgSel='';
+  if(superA){
+    var ops=(ORGAOS||[]).map(function(o){ return '<option value="'+esc(o.id)+'">'+esc(o.nome)+'</option>'; }).join('');
+    orgSel='<div class="field" style="margin-bottom:12px"><label>Órgão do usuário</label><select id="nu-orgao">'+ops+'</select><div class="hint">O usuário nasce dentro deste órgão e só enxerga os documentos dele. Para implantar um órgão NOVO, use o botão "Novo órgão" no painel de órgãos.</div></div>';
+  }
+  var h='<div class="field" style="margin-bottom:12px"><label>Email do servidor (será o login)</label><input id="nu-email" type="email" placeholder="nome@exemplo.com"></div>'
+   +'<div class="field" style="margin-bottom:12px"><label>Nome completo</label><input id="nu-nome" placeholder="nome do servidor"></div>'
+   +'<div class="field" style="margin-bottom:12px"><label>Senha provisória (mínimo 6; ele troca no primeiro acesso)</label><input id="nu-senha" type="text"></div>'
+   +orgSel
+   +'<div class="field" style="margin-bottom:12px"><label>Papel (status) do usuário</label>'+pills('nupapel',['Servidor (staff)','Administrador do órgão'],'Servidor (staff)')
+   +'<div class="hint">Servidor (staff): usa só os módulos que o admin liberar. Administrador: gerencia os usuários do órgão e tem acesso total.</div></div>'
+   +'<div style="display:flex;gap:10px;margin-top:16px"><button class="btn-gold" type="button" onclick="criarUsuarioModal()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-check"/></svg> Criar usuário</button><button class="btn-ghost" type="button" onclick="fecharModal()">Cancelar</button></div>';
+  abrirModal('Novo usuário', h);
+}
+async function criarUsuarioModal(){
+  var v=function(id){ return ((document.getElementById(id)||{}).value||'').trim(); };
+  var email=v('nu-email').toLowerCase(), nome=v('nu-nome'), senha=v('nu-senha');
   if(email.indexOf('@')<0){ toast('Informe um email válido.'); return; }
-  var nome=prompt('Nome do servidor:')||email;
-  var senha=prompt('Senha provisória (mínimo 6; ele troca no primeiro acesso):')||'';
-  if(senha.trim().length<6){ toast('A senha precisa de pelo menos 6 caracteres.'); return; }
-  toast('Criando o acesso...');
-  var r=await chamarAdmin({acao:'criar_usuario', email:email, nome:nome.trim(), senha:senha.trim(), papel:'staff'});
+  if(senha.length<6){ toast('A senha precisa de pelo menos 6 caracteres.'); return; }
+  var papel = /Administrador/.test(pillVal('nupapel')) ? 'admin' : 'staff';
+  var body={acao:'criar_usuario', email:email, nome:nome||email, senha:senha, papel:papel};
+  var so=document.getElementById('nu-orgao'); if(so && so.value) body.orgao_id=so.value;
+  fecharModal(); toast('Criando o acesso...');
+  var r=await chamarAdmin(body);
   if(r.error){ toast('Erro: '+r.error); return; }
   await carregarDoSupabase(); renderAdmin();
-  toast('Servidor '+email+' criado no seu órgão. Agora clique em "permissão" para liberar o que ele acessa.');
+  toast(papel==='admin' ? ('Administrador '+email+' criado, com acesso total ao órgão.') : ('Servidor '+email+' criado. Agora clique em "permissão" para liberar o que ele acessa.'));
 }
 function liberarUsuario(email){
   var u=null; for(var i=0;i<DB.users.length;i++){ if(DB.users[i].login===email){ u=DB.users[i]; break; } }
