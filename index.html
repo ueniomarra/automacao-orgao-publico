@@ -356,9 +356,12 @@ td .modd{font-size:12px;color:var(--slate)}
   .doc-sheet{padding:26px 20px}
 }
 .lote-sub{font-family:'Plus Jakarta Sans';font-weight:800;color:var(--navy);white-space:nowrap;font-size:12px}
-.impzone{border:2px dashed var(--royal);background:var(--royal-soft);border-radius:12px;padding:22px;text-align:center;cursor:pointer;transition:.15s}
-.impzone:hover{background:#e4edff}
-.impzone.drag{background:#e4edff;border-color:var(--navy);border-style:solid}
+.impzone{display:block;width:100%;box-sizing:border-box;border:2px dashed var(--royal);background:linear-gradient(180deg,#F5F8FF,#ECF2FE);border-radius:14px;padding:22px 18px;text-align:center;cursor:pointer;transition:.15s}
+.impzone:hover{background:#e4edff;border-color:var(--navy)}
+.impzone.drag{background:#DCE9FF;border-color:var(--navy);border-style:solid;box-shadow:0 0 0 4px rgba(10,35,66,.12)}
+.impzone .ib{font-weight:800;color:var(--navy);font-size:14.5px;margin:8px 0 2px}
+.impbtn{display:inline-flex;align-items:center;gap:7px;background:var(--royal);color:#fff;font-weight:700;font-size:14px;padding:11px 26px;border-radius:11px;margin:10px 0 8px;box-shadow:0 3px 10px rgba(10,35,66,.28)}
+.impzone:hover .impbtn{filter:brightness(1.08)}
 .impzone .ib{font-weight:800;color:var(--navy);font-size:14px}
 .impzone .is{color:var(--slate);font-size:12px;margin-top:4px}
 .imp-tag{display:inline-block;background:var(--navy);color:#fff;font-weight:700;font-size:10.5px;border-radius:6px;padding:3px 8px;margin:0 6px 6px 0}
@@ -1738,7 +1741,7 @@ function itensExcluirTodos(){
 function importarItensPlanilha(){
   window._impParsed=null;
   var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">Suba o arquivo de itens do órgão (o relatório de lotes do pregão, em <b>PDF</b> ou <b>Excel</b>). O sistema lê tudo sozinho, item a item, lote por lote, e monta a tabela. Confira antes de confirmar.</p>'+
-    '<label class="impzone" id="imp-zone" for="imp-file"><input type="file" id="imp-file" accept=".pdf,.xlsx,.xls,.csv" multiple style="display:none" onchange="impArquivo(this)"><div class="ib">Escolher arquivo (PDF ou Excel), ou arrastar para cá</div><div class="is">Relatório de lotes ou orçamento sintético em PDF, ou .xlsx / .xls / .csv. Pode soltar vários arquivos de uma vez.</div></label>'+
+    zonaArquivo('imp-file','.pdf,.xlsx,.xls,.csv',true,'impArquivo(this)','Importar a planilha de itens','Relatório de lotes ou orçamento sintético em PDF, ou .xlsx / .xls / .csv.')+
     '<div id="imp-status" style="margin-top:12px"></div>'+
     '<div id="imp-preview" style="margin-top:12px"></div>'+
     '<div id="imp-confirm" style="margin-top:12px"></div>'+
@@ -1747,7 +1750,17 @@ function importarItensPlanilha(){
     '<textarea id="imp-itens" style="width:100%;height:150px;font-family:monospace;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="LOTE 01 - Gêneros alimentícios&#10;Açúcar cristal 5 kg&#9;UN&#9;640&#9;15,72&#10;Café torrado 500g&#9;UN&#9;1269&#9;41,29"></textarea>'+
     '<button class="btn-ghost" style="width:100%;justify-content:center;margin-top:10px" type="button" onclick="processarImportItens()"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Importar o que foi colado</button></details>';
   abrirModal('Importar itens (PDF ou Excel)', h);
-  dropZoneInit('imp-zone', function(files){ impArquivoFiles(files); });
+  dropZoneInit('imp-file-zone', function(files){ impArquivoFiles(files); });
+}
+// Caixa PADRÃO de anexar arquivo, a mesma em todo o sistema: clique OU arrastar, com o botão
+// "Escolher arquivos" evidente (o input cru do navegador era pequeno demais e o pregoeiro não via).
+function zonaArquivo(inputId, accept, multiple, onchangeAttr, titulo, sub){
+  return '<label class="impzone" id="'+inputId+'-zone" for="'+inputId+'">'
+   +'<input type="file" id="'+inputId+'" accept="'+accept+'" '+(multiple?'multiple ':'')+'style="display:none" onchange="'+onchangeAttr+'">'
+   +'<div><svg class="ic" style="width:26px;height:26px;stroke:var(--royal)"><use href="#i-folder"/></svg></div>'
+   +'<div class="ib">'+titulo+'</div>'
+   +'<span class="impbtn"><svg class="ic" style="width:15px;height:15px;stroke:#fff"><use href="#i-plus"/></svg> Escolher arquivos</span>'
+   +'<div class="is">'+sub+' Ou arraste os arquivos e solte aqui dentro.</div></label>';
 }
 // liga arrastar-e-soltar numa caixa de arquivos (o clique continua funcionando normal)
 function dropZoneInit(id, fn){
@@ -3034,10 +3047,10 @@ function renderFormDispensa(){
   h+='<div class="field" style="margin-top:12px"><label>Justificativa de preço</label><textarea id="d-just" placeholder="por que o preço é compatível com o mercado"></textarea></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentação do processo (sai junto com a dispensa)</div>';
   h+='<div class="hint" style="margin-bottom:8px">Anexe aqui a documentação da contratação direta: ART do engenheiro, planilha orçamentária, orçamentos/cotações, certidões. Cada página vira folha anexa no fim do ato de dispensa e no Word exportado. A planilha importada na tabela de itens entra aqui sozinha.</div>';
-  h+='<label class="impzone" id="anx-zone" for="anx-file"><input type="file" id="anx-file" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls" multiple style="display:none" onchange="anxAddFiles(this.files); this.value=&#39;&#39;"><div class="ib">Inserir documentação (clique ou arraste os arquivos para cá)</div><div class="is">PDF ou imagem sai por inteiro; Excel entra no rol dos anexos.</div></label>';
+  h+=zonaArquivo('anx-file','.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls',true,'anxAddFiles(this.files); this.value=&#39;&#39;','Inserir documentação do processo','PDF ou imagem sai por inteiro no documento; Excel entra no rol dos anexos.');
   h+='<div id="anx-status" style="margin-top:8px"></div><div id="anx-list" style="margin-top:4px"></div></div>';
   document.getElementById('ws-fields').innerHTML=h;
-  dropZoneInit('anx-zone', function(files){ anxAddFiles(files, 'arrastado'); });
+  dropZoneInit('anx-file-zone', function(files){ anxAddFiles(files, 'arrastado'); });
   anxRender();
 }
 function gerarDispensa(){
@@ -4445,7 +4458,7 @@ function anRenderProc(root){
   h+='<div class="hint" style="margin-top:12px;display:flex;gap:8px;align-items:flex-start"><svg class="ic" style="width:14px;height:14px;flex:none;margin-top:2px"><use href="#i-shield"/></svg><span>'+esc(anModoTxt(modo))+'</span></div>';
   h+='<div class="fgroup" style="margin-top:14px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos da licitação (a régua da comparação)</div>';
   h+='<div class="hint" style="margin-bottom:8px">Suba o edital, o termo de referência e a planilha de referência (PDF ou Excel), e em obras também o memorial e o cronograma. O sistema lê tudo e confronta item a item com a planilha, o BDI e o cronograma de cada licitante.</div>';
-  h+='<input id="an-file-cert" type="file" accept=".pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip" multiple onchange="anOnUploadCertame(this)">';
+  h+=zonaArquivo('an-file-cert','.pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip',true,'anOnUploadCertame(this)','Enviar os documentos da licitação','Edital, termo de referência, planilha, memorial e cronograma (PDF, Excel, imagem ou .zip).');
   h+='<div id="an-prog-cert" class="hint" style="margin-top:6px"></div>';
   if((p.docsCertame||[]).length){ h+='<table class="itab" style="margin-top:10px"><tbody>'; p.docsCertame.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td style="width:110px">'+(d.leituraFalhou?'<b>falhou</b>':(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)')+'</td><td style="width:95px">'+anArqCel(d)+'</td><td style="width:90px"><button class="btn-ghost" type="button" onclick="anDelDocCert('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
   h+='</div>';
@@ -4469,6 +4482,7 @@ function anRenderProc(root){
   h+=anRenderRecurso(p);
   h+=anRenderRelatorioPanel(p);
   root.innerHTML=h;
+  dropZoneInit('an-file-cert-zone', function(files){ anOnUploadCertame({files:files, value:''}); });
   anRenderLicRows();
   var _pm=document.getElementById('pill-anmod'); if(_pm) _pm.addEventListener('click',function(){ setTimeout(anCertameChange,0); });
   var _po=document.getElementById('pill-anobra'); if(_po) _po.addEventListener('click',function(){ setTimeout(anCertameChange,0); });
@@ -5925,7 +5939,7 @@ function anRenderConferencia(root){
   h+='<div class="hint"><b>'+esc(l.razao||'(licitante sem nome)')+'</b> | CNPJ: '+esc(l.cnpj||'não informado')+' | Classificação: '+esc(l.ordem||'-')+'</div>';
   h+='<div class="fgroup" style="margin-top:12px"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentos do licitante</div>';
   h+='<div class="hint" style="margin-bottom:8px">Suba tudo que o licitante enviou, do jeito que veio: um PDF único com todos os documentos, vários arquivos soltos (PDF, imagem ou planilha em Excel), ou um arquivo compactado (.zip). Não há limite de quantidade. O sistema lê página por página, faz OCR sozinho das páginas escaneadas, identifica cada documento e confere com o edital. Você não precisa separar nada.</div>';
-  h+='<input id="an-file" type="file" accept=".pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip" multiple onchange="anOnUpload(this)">';
+  h+=zonaArquivo('an-file','.pdf,.zip,.xlsx,.xls,.csv,image/*,application/pdf,application/zip',true,'anOnUpload(this)','Enviar os documentos do licitante','PDF único com tudo, arquivos soltos (PDF, imagem, Excel) ou .zip, sem limite de quantidade.');
   h+='<div id="an-prog" class="hint" style="margin-top:6px"></div>';
   if(docs.length){ h+='<table class="itab" style="margin-top:10px"><thead><tr><th style="width:38%">Arquivo</th><th>Categoria</th><th>Leitura</th><th>Original</th><th></th></tr></thead><tbody>'; docs.forEach(function(d,i){ h+='<tr><td>'+esc(d.nome)+'</td><td><select onchange="anSetDocCat('+i+',this.value)">'+AN_CATS.map(function(c){return '<option'+(c===d.categoria?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td>'+(d.leituraFalhou?'<b>falhou</b>':(d.ocr?'OCR':'texto')+' ('+d.paginas+' pg)')+'</td><td>'+anArqCel(d)+'</td><td><button class="btn-ghost" type="button" onclick="anDelDoc('+i+')">remover</button></td></tr>'; }); h+='</tbody></table>'; }
   if(docs.length){ var _dos=anSecoesDossie(docs).contagem, _dk=Object.keys(_dos); if(_dk.length){ h+='<div style="display:flex;gap:8px;align-items:flex-start;background:#f1f5fb;border-left:4px solid #C9A961;border-radius:8px;padding:9px 12px;margin-top:10px"><svg class="ic" style="width:15px;height:15px;flex:none;margin-top:1px"><use href="#i-folder"/></svg><span style="font-size:13px;color:#0A2342;line-height:1.55"><b>Documentos identificados dentro dos arquivos enviados:</b> '+_dk.map(function(k){return esc(k)+' ('+_dos[k]+' pg)';}).join(', ')+'. Quando o licitante envia tudo num arquivo só, o sistema lê página por página, separa por tipo e confere cada um com o edital. Confira a lista; se faltar algum tipo, o documento não foi localizado.</span></div>'; } }
@@ -5935,6 +5949,7 @@ function anRenderConferencia(root){
   h+='</div></div>';
   if(l.resultado) h+=anRenderResultado(l);
   root.innerHTML=h;
+  dropZoneInit('an-file-zone', function(files){ anOnUpload({files:files, value:''}); });
 }
 function anRenderResultado(l){
   var r=l.resultado, auto=r.itens.filter(function(i){return i.modo==='auto';}), hum=r.itens.filter(function(i){return i.modo==='humano';});
@@ -6923,7 +6938,7 @@ function camRenderCadastro(){
     inp('c-endereco','Endereço',c.endereco,'logradouro, nº, bairro, cidade/UF')+
     '<div style="display:flex;gap:10px"><div style="flex:1">'+inp('c-telefone','Telefone',c.telefone,'(64) 0000-0000')+'</div><div style="flex:1">'+inp('c-email','E-mail',c.email,'contato@camara...')+'</div></div>'+
     '<div style="display:flex;gap:10px"><div style="flex:1">'+inp('c-legislatura','Legislatura',c.legislatura,'ex.: 2025-2028')+'</div><div style="flex:1">'+inp('c-sessaoLeg','Sessão legislativa',c.sessaoLeg,'ex.: 2ª sessão legislativa')+'</div></div>'+
-    '<div class="field" style="margin-bottom:10px"><label>Brasão / logo da Câmara (opcional)</label><input type="file" accept="image/*" id="c-brasao-file" onchange="camBrasaoFile(this)"><div class="hint" id="c-brasao-info" style="font-size:12px;color:var(--slate);margin-top:4px">'+(c.brasao?'Brasão carregado. Envie outro para substituir.':'Sem brasão. O documento sai só com o nome da Câmara.')+'</div></div>'+
+    '<div class="field" style="margin-bottom:10px"><label>Brasão / logo da Câmara (opcional)</label>'+zonaArquivo('c-brasao-file','image/*',false,'camBrasaoFile(this)','Enviar o brasão da Câmara','Imagem PNG ou JPG.')+'<div class="hint" id="c-brasao-info" style="font-size:12px;color:var(--slate);margin-top:4px">'+(c.brasao?'Brasão carregado. Envie outro para substituir.':'Sem brasão. O documento sai só com o nome da Câmara.')+'</div></div>'+
     '<h3 style="color:var(--navy);margin:18px 0 12px">Mesa Diretora</h3>'+
     mesaRow('presidente','Presidente')+mesaRow('vice','Vice-presidente')+mesaRow('sec1','1º Secretário')+mesaRow('sec2','2º Secretário')+
     '<button class="btn-gold" style="margin-top:8px;justify-content:center" onclick="camSalvarConfig()"><svg class="ic" style="width:16px;height:16px;stroke:#3a2c06"><use href="#i-save"/></svg> Salvar cadastro da Câmara</button>'+
@@ -6937,6 +6952,7 @@ function camRenderCadastro(){
   h+= CAM.comissoes.length ? CAM.comissoes.map(function(co,i){ return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px"><div style="display:flex;justify-content:space-between"><b style="color:var(--navy)">'+esc(co.nome||'')+'</b><span style="cursor:pointer;color:#C62D45;font-weight:700;font-size:12px" onclick="camDelComissao('+i+')">excluir</span></div><div style="font-size:12.5px;color:var(--slate);margin-top:4px">'+(co.membros&&co.membros.length? co.membros.map(function(mb){return esc(mb.nome)+' ('+esc(mb.cargo)+')';}).join(', ') : 'sem membros')+'</div></div>'; }).join('') : '<div class="hint" style="color:var(--slate);font-size:13px">Ex.: Comissão de Constituição e Justiça, Comissão de Finanças e Orçamento.</div>';
   h+='</div>';
   b.innerHTML=h;
+  dropZoneInit('c-brasao-file-zone', function(files){ camBrasaoFile({files:files, value:''}); });
 }
 function camBrasaoFile(inp){ var f=inp.files&&inp.files[0]; if(!f) return; var r=new FileReader(); r.onload=function(){ CAM.config=CAM.config||{}; CAM.config.brasao=r.result; var i=document.getElementById('c-brasao-info'); if(i) i.textContent='Brasão carregado. Clique em Salvar cadastro para guardar.'; }; r.readAsDataURL(f); }
 function camSalvarConfig(){
