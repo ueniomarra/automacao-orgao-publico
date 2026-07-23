@@ -535,7 +535,7 @@ td .modd{font-size:12px;color:var(--slate)}
 
     <div class="navlabel">Módulos</div>
     <div class="nav-i" data-pg="licitacao" onclick="nav(this)"><svg class="ic"><use href="#i-gavel"/></svg> Licitações e Contratos</div>
-    <div class="nav-i" data-pg="compras" onclick="nav(this)"><svg class="ic"><use href="#i-cart"/></svg> Compras</div>
+    <div class="nav-i" data-pg="compras" onclick="nav(this)"><svg class="ic"><use href="#i-cart"/></svg> Contratação Direta</div>
     <div class="nav-i" data-pg="ambiente" onclick="nav(this)"><svg class="ic"><use href="#i-leaf"/></svg> Meio Ambiente</div>
     <div class="nav-i" data-pg="analise" onclick="nav(this)"><svg class="ic"><use href="#i-shield"/></svg> Análise de Licitação Online</div>
     <div class="nav-i" data-pg="camara" onclick="nav(this)"><svg class="ic"><use href="#i-scale"/></svg> Câmara Municipal</div>
@@ -648,8 +648,39 @@ td .modd{font-size:12px;color:var(--slate)}
 
       <!-- MODULO COMPRAS -->
       <div class="page" id="pg-compras">
-        <div class="pagehead"><div><div class="hello">Módulo 2</div><h1>Compras</h1><p>Contratação direta, fora do fluxo de edital. Dispensa e Inexigibilidade, com o fundamento legal certo e o valor de 2026 já travado.</p></div></div>
-        <div class="toolgrid" id="grid-compras"></div>
+        <div class="pagehead"><div><div class="hello">Módulo 2</div><h1>Contratação Direta</h1><p>Compra sem edital, com o processo instruído por completo: Solicitação, DFD, ETP, Termo de Referência e Declaração Orçamentária antes do ato. Fundamento legal certo e valores de 2026 já travados.</p></div></div>
+        <div style="margin:0 0 10px;font-weight:800;color:var(--navy);font-size:18px;display:flex;align-items:center;gap:8px"><svg class="ic" style="width:19px;height:19px"><use href="#i-cart"/></svg> Dispensa (art. 75)</div>
+        <div class="flow">
+          <div class="flowstep"><div class="n">1</div><div><b>Solicitação</b><span>da Secretaria</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">2</div><div><b>DFD</b><span>formaliza a demanda</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">3</div><div><b>ETP</b><span>estudo preliminar</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">4</div><div><b>TR</b><span>termo de referência</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">5</div><div><b>Declaração</b><span>orçamentária</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">6</div><div><b>Dispensa</b><span>ato (art. 75)</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">7</div><div><b>Justificativa</b><span>escolha do vencedor</span></div></div>
+        </div>
+        <div class="toolgrid" id="grid-compras-disp"></div>
+        <div style="margin:26px 0 10px;font-weight:800;color:var(--navy);font-size:18px;display:flex;align-items:center;gap:8px"><svg class="ic" style="width:19px;height:19px"><use href="#i-gavel"/></svg> Inexigibilidade (art. 74)</div>
+        <div class="flow">
+          <div class="flowstep"><div class="n">1</div><div><b>Solicitação</b><span>da Secretaria</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">2</div><div><b>DFD</b><span>formaliza a demanda</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">3</div><div><b>ETP</b><span>estudo preliminar</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">4</div><div><b>TR</b><span>termo de referência</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">5</div><div><b>Declaração</b><span>orçamentária</span></div></div>
+          <div class="flowarr"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="flowstep"><div class="n">6</div><div><b>Inexigibilidade</b><span>ato (art. 74)</span></div></div>
+        </div>
+        <div class="toolgrid" id="grid-compras-inex"></div>
       </div>
 
       <!-- MODULO MEIO AMBIENTE -->
@@ -882,16 +913,27 @@ var TOOLS = {
     {tp:'vistoria', ic:'i-shield',cls:'',    t:'Vistoria', d:'Fiscalização e vistoria, competência municipal (LC 140/2011).'},
   ]
 };
-function cardHTML(x){
+function cardHTML(x,ctx){
+  var novo = ctx ? 'abrirDireta(\''+x.tp+'\',\''+ctx+'\')' : 'abrirDoc(\''+x.tp+'\',false)';
   return '<div class="tool '+(x.cls||'')+'">'+
     (x.lock?'<span class="locktag"><svg class="ic" style="width:11px;height:11px;stroke-width:2.4"><use href="#i-lock"/></svg> campos travados</span>':'')+
     '<div class="ti"><svg class="ic" style="width:24px;height:24px"><use href="#'+x.ic+'"/></svg></div>'+
     '<h4>'+x.t+'</h4><p>'+x.d+'</p>'+
     '<div class="toolact"><button class="toolbtn" onclick="consultarTipo(\''+x.tp+'\')"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg> Consultar</button>'+
-    '<button class="toolbtn pri" onclick="abrirDoc(\''+x.tp+'\',false)"><svg class="ic" style="width:14px;height:14px;stroke:#fff"><use href="#i-plus"/></svg> Novo</button></div></div>';
+    '<button class="toolbtn pri" onclick="'+novo+'"><svg class="ic" style="width:14px;height:14px;stroke:#fff"><use href="#i-plus"/></svg> Novo</button></div></div>';
 }
-function fillGrid(id,key){ document.getElementById(id).innerHTML = TOOLS[key].map(cardHTML).join(''); }
-fillGrid('grid-licitacao','licitacao'); fillGrid('grid-compras','compras'); fillGrid('grid-ambiente','ambiente');
+function fillGrid(id,key,ctx){ document.getElementById(id).innerHTML = TOOLS[key].map(function(x){return cardHTML(x,ctx);}).join(''); }
+// Contratação Direta: as etapas de instrução são as MESMAS ferramentas do módulo Licitações (mesmo formulário,
+// mesmo documento na Central); aqui elas entram no fluxo da dispensa/inexigibilidade (o "Gerar próximo" segue
+// TR > Declaração > ato, e não TR > Edital). Fonte única: os cards vêm de TOOLS.licitacao/TOOLS.compras por tp.
+function toolTp(key,tp){ return TOOLS[key].filter(function(x){return x.tp===tp;})[0]; }
+var FLUXO_INSTRUCAO=['solicitacao','dfd','etp','tr','declaracao'].map(function(tp){ return toolTp('licitacao',tp); });
+TOOLS.compras_disp = FLUXO_INSTRUCAO.concat([toolTp('compras','dispensa'), toolTp('compras','justvencedor'), toolTp('compras','aviso')]);
+TOOLS.compras_inex = FLUXO_INSTRUCAO.concat([toolTp('compras','inexigibilidade')]);
+fillGrid('grid-licitacao','licitacao'); fillGrid('grid-compras-disp','compras_disp','dispensa'); fillGrid('grid-compras-inex','compras_inex','inexigibilidade'); fillGrid('grid-ambiente','ambiente');
+// contexto do fluxo direto: marcado quando o documento é aberto pelo módulo Contratação Direta
+var FLUXO_DIRETA_CTX=null;
+function abrirDireta(tp,ctx){ FLUXO_DIRETA_CTX=ctx; abrirDoc(tp,false); }
 
 // ---- abas da central de documentos (ligadas ao banco) ----
 var DOCTABS=[{l:'Solicitações',t:'solicitacao'},{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Justificativas de escolha',t:'justvencedor'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Credenciamentos',t:'credenciamento'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Ocorrências',t:'ocorrencia'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
@@ -924,7 +966,7 @@ function goto(pg){
 // (full) e aparece sozinho no painel de permissões, sem mexer em mais nada.
 var MODULOS=[
   {k:'licitacao', l:'Licitações e Contratos', re:/contrato/},
-  {k:'compras', l:'Compras (Dispensa e Inexigibilidade)', re:/compras/},
+  {k:'compras', l:'Contratação Direta (Dispensa e Inexigibilidade)', re:/compras|direta/},
   {k:'ambiente', l:'Meio Ambiente', re:/ambient|meio/},
   {k:'analise', l:'Análise de Licitação Online', re:/an[aá]lise/},
   {k:'camara', l:'Câmara Municipal', re:/c[aâ]mara|vereador|legislat/}
@@ -1138,7 +1180,7 @@ var DOCMETA = {
   sancao:{mod:'Licitações e Contratos',t:'Notificação / Sanção',d:'Descumprimento contratual, com contraditório (arts. 155 a 158).'},
   extincao:{mod:'Licitações e Contratos',t:'Extinção / Encerramento',d:'Extinção motivada ou encerramento da vigência (arts. 137 a 139).'},
   ocorrencia:{mod:'Licitações e Contratos',t:'Registro de Ocorrência da Fiscalização',d:'Anotação do fiscal sobre a execução do contrato (art. 117, §1º).'},
-  aviso:{mod:'Compras',t:'Aviso de Dispensa Eletrônica',d:'Aviso de contratação direta em sítio oficial (art. 75, §3º).'},
+  aviso:{mod:'Contratação Direta',t:'Aviso de Dispensa Eletrônica',d:'Aviso de contratação direta em sítio oficial (art. 75, §3º).'},
   etp:{mod:'Licitações e Contratos',t:'Estudo Técnico Preliminar (ETP)',d:'Vem antes do TR (art. 18 da Lei 14.133/2021 e IN SEGES 58/2022).'},
   edital:{mod:'Licitações e Contratos',t:'Edital',d:'Nasce do TR, com a Minuta de Contrato como anexo.'},
   minuta:{mod:'Licitações e Contratos',t:'Minuta de Contrato',d:'Anexa ao edital. O nº do pregão entra sozinho em todos os pontos.'},
@@ -1148,9 +1190,9 @@ var DOCMETA = {
   oficio:{mod:'Licitações e Contratos',t:'Ofícios e Documentos',d:'Geração de ofícios no timbre do órgão.'},
   processo:{mod:'Licitações e Contratos',t:'Processos',d:'Agrupa o fluxo de uma mesma contratação.'},
   credenciamento:{mod:'Licitações e Contratos',t:'Credenciamento e Chamamento Público',d:'Edital de chamamento aberto e contínuo: credencia todos os interessados aptos (arts. 78, I e 79 da Lei nº 14.133/2021); a contratação sai por inexigibilidade (art. 74, IV).'},
-  dispensa:{mod:'Compras',t:'Dispensa de Licitação',d:'Contratação direta (art. 75). Limite 2026: R$ 65.492,11 (inciso II).'},
-  justvencedor:{mod:'Compras',t:'Justificativa da escolha do vencedor',d:'Razão da escolha do fornecedor e justificativa de preço na contratação direta (art. 72, VI e VII).'},
-  inexigibilidade:{mod:'Compras',t:'Inexigibilidade',d:'Contratação direta quando a competição é inviável (art. 74).'},
+  dispensa:{mod:'Contratação Direta',t:'Dispensa de Licitação',d:'Contratação direta (art. 75). Limite 2026: R$ 65.492,11 (inciso II).'},
+  justvencedor:{mod:'Contratação Direta',t:'Justificativa da escolha do vencedor',d:'Razão da escolha do fornecedor e justificativa de preço na contratação direta (art. 72, VI e VII).'},
+  inexigibilidade:{mod:'Contratação Direta',t:'Inexigibilidade',d:'Contratação direta quando a competição é inviável (art. 74).'},
   icms:{mod:'Meio Ambiente',t:'ICMS Ecológico',d:'Critérios da LC 177/2022 e Decreto 10.190/2022 (GO).'},
   auto:{mod:'Meio Ambiente',t:'Auto de Infração Ambiental',d:'Base no Decreto 6.514/2008 compilado (alteração do Decreto 12.877/2026).'},
   parecer:{mod:'Meio Ambiente',t:'Parecer Técnico Ambiental',d:'Parecer fundamentado.'},
@@ -1182,6 +1224,7 @@ function renderCriterios(){ var c=document.getElementById('crit-box'); if(!c) re
 // ---- abrir documento ----
 function abrirDoc(tipo, consulta){
   DOC = {tipo:tipo, consulta:!!consulta, itens:[], dot:[]};
+  DOC.fluxoDireta = (!consulta && FLUXO_DIRETA_CTX) || null; FLUXO_DIRETA_CTX=null; // 'dispensa' | 'inexigibilidade' quando aberto pelo módulo Contratação Direta
   sairModoModelo();
   var m = DOCMETA[tipo] || {mod:'',t:tipo,d:''};
   document.getElementById('ws-modulo').textContent = m.mod;
@@ -1241,10 +1284,10 @@ var GUIAS = {
   tr:'O TR <b>já vem preenchido</b> com o que você colocou no ETP. Só <b>confira e complete</b>. Se a prefeitura tiver um modelo próprio, clique em <b>Modelo do órgão</b>. Marque <b>obra de engenharia</b> só se for obra.',
   edital:'O edital <b>puxa do TR</b>. Confira a <b>modalidade</b> e o <b>critério de julgamento</b>. As <b>declarações já saem em anexo</b>. Se for obra de engenharia, ele sai no modelo de obra automaticamente.',
   contrato:'O contrato <b>puxa do edital e do TR</b>. Preencha os <b>dados da empresa vencedora</b> (nome, CNPJ) e o <b>valor</b>. As cláusulas já vêm prontas no padrão da lei.',
-  dispensa:'Use para <b>compra direta</b> dentro do limite da lei. Preencha o <b>objeto</b>, o <b>motivo da dispensa</b> e os <b>itens com valor</b>. O sistema monta o ato.',
+  dispensa:'Use para <b>compra direta</b> dentro do limite da lei. Se você seguiu a esteira do módulo (Solicitação, DFD, ETP, TR e Declaração Orçamentária), o <b>objeto, a secretaria e os itens já vêm preenchidos</b>. Senão, preencha o <b>objeto</b>, o <b>motivo da dispensa</b> e os <b>itens com valor</b>. O sistema monta o ato.',
   justvencedor:'Use na <b>dispensa</b> depois de coletar os preços. Diga <b>por que essa empresa foi escolhida</b> (menor preço, exclusividade, melhor técnica) e <b>por que o preço é compatível</b> com o mercado. O sistema monta a justificativa no padrão do art. 72, VI e VII.',
-  inexigibilidade:'Use quando <b>só existe um fornecedor possível</b>. Preencha o <b>objeto</b>, a <b>justificativa</b> e os <b>dados do fornecedor</b>.',
-  credenciamento:'Use quando o órgão quer <b>credenciar todos os interessados aptos</b> (saúde, leilão, serviços contínuos), sem disputa de preço: o valor é o da tabela do edital. Preencha o <b>objeto</b>, os <b>serviços com o valor de referência</b> e as <b>datas</b>. O sistema monta o <b>edital de chamamento completo</b>, com a documentação de habilitação (pessoa física, jurídica e cooperativa) e os <b>anexos prontos</b> (requerimento e declarações). Cada contratação depois sai por <b>inexigibilidade (art. 74, IV)</b>, no card Inexigibilidade do módulo Compras.',
+  inexigibilidade:'Use quando <b>só existe um fornecedor possível</b>. Se você seguiu a esteira do módulo (Solicitação, DFD, ETP, TR e Declaração Orçamentária), o <b>objeto, a secretaria e o valor já vêm preenchidos</b>. Preencha a <b>justificativa</b> e os <b>dados do fornecedor</b>.',
+  credenciamento:'Use quando o órgão quer <b>credenciar todos os interessados aptos</b> (saúde, leilão, serviços contínuos), sem disputa de preço: o valor é o da tabela do edital. Preencha o <b>objeto</b>, os <b>serviços com o valor de referência</b> e as <b>datas</b>. O sistema monta o <b>edital de chamamento completo</b>, com a documentação de habilitação (pessoa física, jurídica e cooperativa) e os <b>anexos prontos</b> (requerimento e declarações). Cada contratação depois sai por <b>inexigibilidade (art. 74, IV)</b>, no card Inexigibilidade do módulo Contratação Direta.',
   aditivo:'Use para <b>alterar um contrato que já existe</b>. Informe o <b>contrato</b>, o que muda (<b>prazo, valor ou quantidade</b>) e o <b>motivo</b>.'
 };
 function injetarGuia(tipo){
@@ -1265,7 +1308,7 @@ function puxarDoETP(){
   var ff=document.getElementById('ws-fields');
   if(ff && !document.getElementById('etp-puxado')){ var d=document.createElement('div'); d.id='etp-puxado'; d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px'; d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Objeto, secretaria e itens puxados do ETP. Confira e complete o restante do TR.'; ff.insertBefore(d, ff.firstChild); }
 }
-function voltarModulo(){ var m=DOCMETA[DOC.tipo]; var pg = m && m.mod==='Compras' ? 'compras' : (m && m.mod==='Meio Ambiente' ? 'ambiente' : 'licitacao'); goto(pg); }
+function voltarModulo(){ if(DOC&&DOC.fluxoDireta){ goto('compras'); return; } var m=DOCMETA[DOC.tipo]; var pg = m && m.mod==='Contratação Direta' ? 'compras' : (m && m.mod==='Meio Ambiente' ? 'ambiente' : 'licitacao'); goto(pg); }
 function resetPreview(){ var p=document.getElementById('ws-preview'); p.removeAttribute('contenteditable'); p.className='docpaper empty'; p.innerHTML='<svg class="ic"><use href="#i-doc"/></svg><div>Preencha os campos ao lado e clique em <b>Gerar documento</b>.<br>O texto sai pronto, no padrão da lei.</div>'; }
 // PRÉVIA AO VIVO: o miolo do documento já aparece na tela quando você abre o passo, e vai se preenchendo conforme você digita. Não salva (só o botão Gerar salva).
 function renderPreviaAoVivo(){
@@ -2278,25 +2321,59 @@ async function gerarDoc(){
 }
 // Fluxo AUTOMÁTICO da fase interna: ETP > TR > Edital. O CONTRATO NÃO entra aqui: só se faz DEPOIS do certame, com o vencedor, pela Central (botão "Gerar contrato" no edital salvo).
 var PROX_FLUXO={solicitacao:'dfd',dfd:'etp',etp:'tr',tr:'edital'};
+// No fluxo da Contratação Direta a esteira muda depois do TR: TR > Declaração Orçamentária > ato (Dispensa ou Inexigibilidade); Dispensa segue para a Justificativa da escolha.
+function proxFluxoTipo(){
+  if(DOC && DOC.fluxoDireta){
+    var fim=DOC.fluxoDireta;
+    if(DOC.tipo===fim) return (fim==='dispensa') ? 'justvencedor' : null;
+    var m={solicitacao:'dfd',dfd:'etp',etp:'tr',tr:'declaracao',declaracao:fim};
+    return m[DOC.tipo]||null;
+  }
+  return PROX_FLUXO[DOC.tipo]||null;
+}
 function atualizarChain(){
   var b=document.getElementById('ws-chain'); if(!b) return;
-  if(!DOC.consulta && PROX_FLUXO[DOC.tipo]){ b.style.display='flex'; var _art=(DOC.tipo==='solicitacao')?'desta':'deste'; b.innerHTML='<svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-arrow"/></svg> Gerar '+nomeTipo(PROX_FLUXO[DOC.tipo])+' '+_art+' '+nomeTipo(DOC.tipo)+' (puxa tudo)';
+  var prox=proxFluxoTipo();
+  if(!DOC.consulta && prox){ b.style.display='flex'; var _art=(DOC.tipo==='solicitacao')?'desta':'deste'; b.innerHTML='<svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-arrow"/></svg> Gerar '+nomeTipo(prox)+' '+_art+' '+nomeTipo(DOC.tipo)+' (puxa tudo)';
     b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse');
-    toast('Documento gerado. Clique no botão azul para seguir para o '+nomeTipo(PROX_FLUXO[DOC.tipo])+', já preenchido.');
+    toast('Documento gerado. Clique no botão azul para seguir para o '+nomeTipo(prox)+', já preenchido.');
   }
   else { b.style.display='none';
     if(!DOC.consulta && DOC.tipo==='edital'){ toast('Edital pronto (com a minuta de contrato em anexo). O contrato só é feito DEPOIS do certame: quando houver vencedor, gere o contrato na Central de Documentos, no botão "Gerar contrato" do edital.'); }
   }
 }
 function proximoDoFluxo(){
-  var p=PROX_FLUXO[DOC.tipo]; if(!p) return;
+  var p=proxFluxoTipo(); if(!p) return;
   var origem=nomeTipo(DOC.tipo); var num=DOC.numeroGerado||''; var _fem=(DOC.tipo==='solicitacao');
+  var ctx=DOC.fluxoDireta||null;
+  var procAnt=''; try{ var _pe=document.getElementById(DOC.tipo==='dispensa'?'d-proc':'x-proc'); procAnt=(_pe&&_pe.value)||''; }catch(e){}
+  FLUXO_DIRETA_CTX=ctx; // o próximo passo continua dentro do fluxo direto
   abrirDoc(p,false);
+  if(ctx && (p==='dispensa'||p==='inexigibilidade'||p==='justvencedor')) preencherDireta(p,procAnt); // o ato nasce com objeto, secretaria e itens do processo
   // deixa CLARO que o documento anterior foi salvo (o usuário costuma perguntar "para onde foi o TR?")
   var ff=document.getElementById('ws-fields');
   if(ff){ var d=document.createElement('div'); d.className='precos-aviso av-ok'; d.style.cssText='margin:0 0 12px';
     d.innerHTML='<svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> '+esc(origem)+(num?(' nº '+esc(num)):'')+(_fem?' gerada e <b>salva':' gerado e <b>salvo')+' na Central de Documentos</b>. Este '+esc(nomeTipo(p))+' nasce d'+(_fem?'ela':'ele')+' (objeto, itens e valor já vieram): confira e complete.';
     ff.insertBefore(d, ff.firstChild); }
+}
+// Preenche o ato da Contratação Direta (dispensa, inexigibilidade ou justificativa) com o que a esteira já produziu (PROC do TR ou, na falta, ETP/DFD). Nunca sobrescreve o que o usuário digitou.
+function preencherDireta(tp,procAnt){
+  var P=(typeof PROC!=='undefined'&&PROC&&PROC.objeto)?PROC:null;
+  var E=(typeof ETP_DATA!=='undefined'&&ETP_DATA)?ETP_DATA:null;
+  var obj=(P&&P.objeto)||(E&&E.objeto)||(typeof ctxProcObj==='function'?ctxProcObj():'');
+  var sec=(P&&P.secretaria)||(E&&E.sec)||'';
+  var tot=(P&&P.tot)||(E&&E.tot)||0;
+  var setV=function(id,v){ var e=document.getElementById(id); if(e&&!e.value&&v) e.value=v; };
+  var setSel=function(id,v){ var e=document.getElementById(id); if(e&&v){ for(var i=0;i<e.options.length;i++){ if(e.options[i].value===v){ e.selectedIndex=i; break; } } } };
+  if(tp==='dispensa'){
+    setV('d-obj',obj); setSel('d-sec',sec); setV('d-proc',procAnt);
+    var its=(P&&P.itens&&P.itens.length)?P.itens:((E&&E.itens&&E.itens.length)?E.itens:null);
+    if(its && document.getElementById('itab-body') && typeof preencherItens==='function') preencherItens(its);
+  } else if(tp==='inexigibilidade'){
+    setV('x-obj',obj); setSel('x-sec',sec); setV('x-proc',procAnt); if(tot) setV('x-valor',String(tot));
+  } else if(tp==='justvencedor'){
+    setV('jv-obj',obj); setSel('jv-sec',sec); setV('jv-proc',procAnt);
+  }
 }
 function gerarTR(){
   var sec=document.getElementById('f-secretaria').value;
@@ -2742,10 +2819,10 @@ var BASELEGAL=[
   {cat:'Licitações e Contratos',t:'Arts. 117 e 120',s:'Fiscalização do contrato por fiscal designado; a fiscalização não exclui a responsabilidade da contratada.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
   {cat:'Licitações e Contratos',t:'Arts. 124 e 125',s:'Alteração contratual (aditivos). Acréscimos e supressões até 25%; até 50% para acréscimo em reforma.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
   {cat:'Licitações e Contratos',t:'Arts. 155 e seguintes',s:'Infrações e sanções administrativas, assegurados contraditório e ampla defesa.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
-  {cat:'Compras (contratação direta)',t:'Art. 75',s:'Dispensa de licitação (rol taxativo). Limites 2026: I R$ 130.984,20; II R$ 65.492,11.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
-  {cat:'Compras (contratação direta)',t:'Art. 74',s:'Inexigibilidade de licitação, quando a competição é inviável.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
-  {cat:'Compras (contratação direta)',t:'LC nº 123/2006 e 147/2014',s:'Tratamento favorecido a microempresas e empresas de pequeno porte.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm'},
-  {cat:'Compras (contratação direta)',t:'Lei nº 8.078/1990',s:'Código de Defesa do Consumidor, base da garantia de produto.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm'},
+  {cat:'Contratação Direta',t:'Art. 75',s:'Dispensa de licitação (rol taxativo). Limites 2026: I R$ 130.984,20; II R$ 65.492,11.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
+  {cat:'Contratação Direta',t:'Art. 74',s:'Inexigibilidade de licitação, quando a competição é inviável.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'},
+  {cat:'Contratação Direta',t:'LC nº 123/2006 e 147/2014',s:'Tratamento favorecido a microempresas e empresas de pequeno porte.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm'},
+  {cat:'Contratação Direta',t:'Lei nº 8.078/1990',s:'Código de Defesa do Consumidor, base da garantia de produto.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm'},
   {cat:'Meio Ambiente',t:'LC nº 140/2011',s:'Competência municipal de licenciamento e fiscalização (art. 9). Poder de polícia ambiental é dever do município.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp140.htm'},
   {cat:'Meio Ambiente',t:'Decreto nº 6.514/2008',s:'Infrações e sanções administrativas ambientais (auto de infração). Usar versão compilada, com alteração do Decreto 12.877/2026.',st:'vigente',l:'http://www.planalto.gov.br/ccivil_03/_ato2007-2010/2008/decreto/d6514compilado.htm'},
   {cat:'Meio Ambiente',t:'Lei nº 9.605/1998',s:'Lei de Crimes Ambientais. Alterada pela Lei 15.190/2025.',st:'vigente',l:'https://www.planalto.gov.br/ccivil_03/leis/l9605.htm'},
@@ -2970,7 +3047,7 @@ function gerarContrato(){
   return contratoClausulas(v);
 }
 function gerarMinuta(){ return contratoClausulas(null); }
-// ---------- DISPENSA (fluxo direto, módulo Compras) ----------
+// ---------- DISPENSA (fluxo direto, módulo Contratação Direta) ----------
 // ===== DOCUMENTACAO DO PROCESSO (anexos da contratacao direta: ART do engenheiro, orcamentos, certidoes) =====
 // Cada PDF vira imagem por pagina (pdf.js) e SAI JUNTO no ato de dispensa: no fim do documento e no Word
 // exportado. Arquivo que nao da para visualizar (Excel) entra no rol dos anexos mesmo assim.
@@ -3297,7 +3374,7 @@ function gerarCredenciamento(){
   H+='<h2>ANEXO '+(temPJ?'VI':'V')+'. DECLARAÇÃO SOBRE VÍNCULO COM A ADMINISTRAÇÃO PÚBLICA</h2>';
   H+='<p>Declaro, sob as penas da lei, que '+(temPJ?'o(a) interessado(a), seus sócios e dirigentes não mantêm':'não mantenho')+' vínculo impeditivo com a Administração Pública do órgão credenciante, nos termos da legislação aplicável. Havendo exercício de cargo, emprego ou função pública, informo abaixo o órgão, o cargo e o horário, para verificação de compatibilidade: ______________________________________________.</p>';
   H+='<p>Local e data: ________________________. Assinatura: ____________________________________________</p>';
-  H+='<p><b>Nota ao setor:</b> a minuta do termo/contrato de credenciamento (anexo final do edital) sai pela ferramenta Minuta de Contrato deste sistema, vinculada a este processo, e a contratação de cada credenciado sai pelo card Inexigibilidade (art. 74, IV) do módulo Compras.</p>';
+  H+='<p><b>Nota ao setor:</b> a minuta do termo/contrato de credenciamento (anexo final do edital) sai pela ferramenta Minuta de Contrato deste sistema, vinculada a este processo, e a contratação de cada credenciado sai pelo card Inexigibilidade (art. 74, IV) do módulo Contratação Direta.</p>';
 
   H+='<div class="assina">'+esc(ORG.nome)+'/'+ORG.uf+', ____ de __________ de 2026.<br><br>____________________________________________<br>'+esc(ORG.ordenador)+'<br>'+esc(ORG.cargo)+'</div>';
   H+='<div class="selo"><b>Minuta de edital de chamamento público (credenciamento) gerada pelo sistema</b> com base nos arts. 74, IV, 78, I e 79 da Lei nº 14.133/2021'+inTCMem+'. Documento sujeito à conferência, validação jurídica e assinatura da autoridade competente antes da publicação. As citações legais devem ser confirmadas pelo setor.</div>';
@@ -6516,7 +6593,7 @@ function modeloComoReferencia(d){
   var ff=document.getElementById('ws-fields');
   if(ff){ var av='<div class="fgroup" style="background:#FFF9EC;border:1px solid #E8C766;border-radius:10px;padding:12px"><div class="gl" style="color:#9a6a0a"><svg class="ic" style="width:14px;height:14px"><use href="#i-doc"/></svg> Seu modelo em PDF é a referência</div><div class="hint">O PDF fica guardado para consulta. Aqui você preenche os dados e os itens (pode usar <b>Importar planilha PDF ou Excel</b>) e clica em <b>Gerar documento</b>: sai o '+esc(nomeTipo(tipoBase))+' completo no padrão da Lei 14.133, e o sistema segue para o próximo passo.</div></div>'; ff.insertAdjacentHTML('afterbegin', av); }
   goto('workspace');
-  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg=mod==='Compras'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
+  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg=mod==='Contratação Direta'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
   try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
   renderPreviaAoVivo(); // mostra o miolo do documento já na abertura do modelo
   toast('Modelo carregado como referência. O documento já aparece na prévia e vai se completando conforme você preenche.');
@@ -6546,7 +6623,7 @@ function usarModeloComoTemplate(d){
   }
   var p=document.getElementById('ws-preview'); p.className='docpaper'; p.removeAttribute('contenteditable'); p.innerHTML=tplPreencher(d.html, tplValores(DOC.modeloCampos));
   goto('workspace');
-  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg=mod==='Compras'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
+  try{ var mod=(DOCMETA[tipoBase]&&DOCMETA[tipoBase].mod)||''; var navpg=mod==='Contratação Direta'?'compras':(mod==='Meio Ambiente'?'ambiente':'licitacao'); document.querySelectorAll('.nav-i').forEach(function(n){ n.classList.toggle('on', n.getAttribute('data-pg')===navpg); }); }catch(e){}
   try{ window.scrollTo(0,0); var ct=document.querySelector('.content'); if(ct) ct.scrollTop=0; }catch(e){}
   toast('Modelo de '+nomeTipo(tipoBase)+' carregado. Preencha o passo (botões) e clique em Gerar documento.');
 }
