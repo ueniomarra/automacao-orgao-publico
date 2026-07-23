@@ -538,6 +538,7 @@ td .modd{font-size:12px;color:var(--slate)}
     <div class="nav-i" data-pg="compras" onclick="nav(this)"><svg class="ic"><use href="#i-cart"/></svg> Contratação Direta</div>
     <div class="nav-i" data-pg="ambiente" onclick="nav(this)"><svg class="ic"><use href="#i-leaf"/></svg> Meio Ambiente</div>
     <div class="nav-i" data-pg="analise" onclick="nav(this)"><svg class="ic"><use href="#i-shield"/></svg> Análise de Licitação Online</div>
+    <div class="nav-i" data-pg="juridico" onclick="nav(this)"><svg class="ic"><use href="#i-scale"/></svg> Jurídico</div>
     <div class="nav-i" data-pg="camara" onclick="nav(this)"><svg class="ic"><use href="#i-scale"/></svg> Câmara Municipal</div>
 
     <div class="navlabel">Documentos</div>
@@ -723,6 +724,23 @@ td .modd{font-size:12px;color:var(--slate)}
           #pg-camara table.cam-t th{background:#F3F6FB;color:var(--navy);font-size:12px}
         </style>
         <div id="cam-root"></div>
+      </div>
+
+      <!-- MODULO JURIDICO (Procuradoria / Assessoria Juridica) -->
+      <div class="page" id="pg-juridico">
+        <style>
+          #pg-juridico .panel{border-top:3px solid #C9A961;box-shadow:0 2px 10px rgba(10,35,66,.06)}
+          #pg-juridico .jur-proc{border:1.5px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px;background:#fff}
+          #pg-juridico .jur-proc h4{margin:0 0 2px;color:var(--navy);font-size:16px}
+          #pg-juridico .jur-chk{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+          #pg-juridico .jur-badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px}
+          #pg-juridico .jur-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;border:1.4px solid var(--navy);background:#fff;color:var(--navy);border-radius:9px;padding:7px 12px;cursor:pointer;margin:4px 6px 0 0}
+          #pg-juridico .jur-btn:hover{background:#0A2342;color:#fff}
+          #pg-juridico .jur-btn:hover svg{stroke:#C9A961}
+          #pg-juridico input,#pg-juridico select,#pg-juridico textarea{transition:border-color .15s,box-shadow .15s}
+          #pg-juridico input:focus,#pg-juridico select:focus,#pg-juridico textarea:focus{border-color:#0A2342;box-shadow:0 0 0 3px rgba(201,169,97,.25);outline:none}
+        </style>
+        <div id="jur-root"></div>
       </div>
 
       <!-- CENTRAL DE DOCUMENTOS -->
@@ -936,7 +954,7 @@ var FLUXO_DIRETA_CTX=null;
 function abrirDireta(tp,ctx){ FLUXO_DIRETA_CTX=ctx; abrirDoc(tp,false); }
 
 // ---- abas da central de documentos (ligadas ao banco) ----
-var DOCTABS=[{l:'Solicitações',t:'solicitacao'},{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Justificativas de escolha',t:'justvencedor'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Credenciamentos',t:'credenciamento'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Ocorrências',t:'ocorrencia'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
+var DOCTABS=[{l:'Solicitações',t:'solicitacao'},{l:'DFD',t:'dfd'},{l:'Editais',t:'edital'},{l:'Termos de Referência',t:'tr'},{l:'ETP',t:'etp'},{l:'Mapa de Riscos',t:'riscos'},{l:'Declarações',t:'declaracao'},{l:'Despachos',t:'despacho'},{l:'Minutas',t:'minuta'},{l:'Contratos',t:'contrato'},{l:'Aditivos',t:'aditivo'},{l:'Dispensas',t:'dispensa'},{l:'Justificativas de escolha',t:'justvencedor'},{l:'Inexigibilidades',t:'inexigibilidade'},{l:'Credenciamentos',t:'credenciamento'},{l:'Pareceres jurídicos',t:'parecer_juridico'},{l:'Ofícios',t:'oficio'},{l:'Portarias',t:'portaria'},{l:'Publicações',t:'publicacao'},{l:'Impugnações',t:'impugnacao'},{l:'Homologações',t:'homologacao'},{l:'Convocações',t:'convocacao'},{l:'Ordens',t:'ordem'},{l:'Recebimentos',t:'recebimento'},{l:'Apostilamentos',t:'apostilamento'},{l:'Sanções',t:'sancao'},{l:'Extinções',t:'extincao'},{l:'Ocorrências',t:'ocorrencia'},{l:'Avisos de dispensa',t:'aviso'},{l:'Pareceres',t:'parecer'},{l:'Modelos importados',t:'modelo'}];
 var docTabAtual='edital';
 document.getElementById('doc-tabs').innerHTML = DOCTABS.map(function(d,i){
   return '<span class="secpill'+(i===0?' on':'')+'" data-t="'+d.t+'" onclick="docTab(this)">'+d.l+'</span>';
@@ -969,6 +987,7 @@ var MODULOS=[
   {k:'compras', l:'Contratação Direta (Dispensa e Inexigibilidade)', re:/compras|direta/},
   {k:'ambiente', l:'Meio Ambiente', re:/ambient|meio/},
   {k:'analise', l:'Análise de Licitação Online', re:/an[aá]lise/},
+  {k:'juridico', l:'Jurídico (Procuradoria / Assessoria Jurídica)', re:/jur[ií]dic|procurador|assessor/},
   {k:'camara', l:'Câmara Municipal', re:/c[aâ]mara|vereador|legislat/}
 ];
 function modulosPermitidos(){
@@ -985,6 +1004,7 @@ function ehGestor(){ var p=(CURRENT_USER&&CURRENT_USER.papel)||'staff'; return p
 function moduloDoTipo(tipo){
   tipo=String(tipo||'').toLowerCase();
   if(tipo==='dispensa'||tipo==='inexigibilidade') return 'compras';
+  if(tipo==='parecer_juridico') return 'juridico';
   if(/c[aâ]mara|vereador|pauta|ata|mo[çc][aã]o|projeto_lei|requerimento/.test(tipo)) return 'camara';
   if(/an[aá]lise/.test(tipo)) return 'analise';
   if(/ambient|meio/.test(tipo)) return 'ambiente';
@@ -1018,6 +1038,7 @@ function show(pg){
   if(pg==='baselegal') renderBaseLegal();
   if(pg==='secretarias') renderSecretarias();
   if(pg==='analise') anEntrar();
+  if(pg==='juridico') jurEntrar();
   if(pg==='camara') camEntrar();
 }
 // ===== Secretarias / Fundos do órgão (alimentam os campos de seleção dos documentos) =====
@@ -2546,6 +2567,7 @@ function gerarGenerico(){
 var ESTEIRA_FASES=[
   {id:'A', nome:'A. Demanda', tipos:['solicitacao','dfd','portaria']},
   {id:'B', nome:'B. Preparação', tipos:['etp','riscos','precos','tr','declaracao','despacho']},
+  {id:'BJ', nome:'B2. Análise Jurídica (art. 53)', tipos:['parecer_juridico']},
   {id:'C', nome:'C. Publicação', tipos:['edital','minuta','publicacao','impugnacao']},
   {id:'D', nome:'D. Certame', tipos:['homologacao']},
   {id:'E', nome:'E. Contrato', tipos:['contrato','convocacao','ordem']},
@@ -2553,7 +2575,7 @@ var ESTEIRA_FASES=[
 ];
 // Tipos que entram no card Processos. Alem da esteira A-F, a CONTRATACAO DIRETA (dispensa/inexigibilidade),
 // que nao segue a esteira mas e um processo e precisa aparecer e poder ser baixada.
-function esteiraTipos(){ var t={dispensa:1, inexigibilidade:1, credenciamento:1}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
+function esteiraTipos(){ var t={dispensa:1, inexigibilidade:1, credenciamento:1, parecer_juridico:1}; ESTEIRA_FASES.forEach(function(f){ f.tipos.forEach(function(x){ t[x]=1; }); }); return t; }
 function renderFormProcesso(){
   var ff=document.getElementById('ws-fields'); if(!ff) return;
   var validos=esteiraTipos();
@@ -2643,8 +2665,8 @@ function exportarProcesso(objArg){
   var obj=objArg || (PROC&&PROC.objeto)|| (document.getElementById('f-objeto')&&document.getElementById('f-objeto').value) || '';
   obj=(obj||'').trim();
   if(!obj){ toast('Gere ao menos um documento do processo primeiro (ETP ou TR).'); return; }
-  var ordem={solicitacao:0.5,dfd:1,etp:2,riscos:3,precos:4,tr:5,declaracao:6,despacho:7,edital:8,minuta:9,contrato:10,aditivo:11,dispensa:12,inexigibilidade:13,credenciamento:13.5};
-  var rotulo={solicitacao:'SOLICITAÇÃO DA SECRETARIA',dfd:'DOCUMENTO DE FORMALIZAÇÃO DA DEMANDA',etp:'ESTUDO TÉCNICO PRELIMINAR',riscos:'MAPA DE ANÁLISE DE RISCOS',precos:'PESQUISA DE PREÇOS',tr:'TERMO DE REFERÊNCIA',declaracao:'DECLARAÇÃO DE ADEQUAÇÃO ORÇAMENTÁRIA',despacho:'DESPACHO',edital:'EDITAL',minuta:'MINUTA DE CONTRATO',contrato:'CONTRATO',aditivo:'TERMO ADITIVO',dispensa:'DISPENSA',inexigibilidade:'INEXIGIBILIDADE',credenciamento:'EDITAL DE CHAMAMENTO PÚBLICO (CREDENCIAMENTO)'};
+  var ordem={solicitacao:0.5,dfd:1,etp:2,riscos:3,precos:4,tr:5,declaracao:6,despacho:7,parecer_juridico:7.5,edital:8,minuta:9,contrato:10,aditivo:11,dispensa:12,inexigibilidade:13,credenciamento:13.5};
+  var rotulo={solicitacao:'SOLICITAÇÃO DA SECRETARIA',dfd:'DOCUMENTO DE FORMALIZAÇÃO DA DEMANDA',etp:'ESTUDO TÉCNICO PRELIMINAR',riscos:'MAPA DE ANÁLISE DE RISCOS',precos:'PESQUISA DE PREÇOS',tr:'TERMO DE REFERÊNCIA',declaracao:'DECLARAÇÃO DE ADEQUAÇÃO ORÇAMENTÁRIA',despacho:'DESPACHO',parecer_juridico:'PARECER JURÍDICO',edital:'EDITAL',minuta:'MINUTA DE CONTRATO',contrato:'CONTRATO',aditivo:'TERMO ADITIVO',dispensa:'DISPENSA',inexigibilidade:'INEXIGIBILIDADE',credenciamento:'EDITAL DE CHAMAMENTO PÚBLICO (CREDENCIAMENTO)'};
   var bundle=(DB.docs||[]).filter(function(d){ return ordem[d.tipo] && (d.objeto||'').trim()===obj; });
   if(!bundle.length){ toast('Não encontrei documentos deste processo. Gere o ETP, o TR e o edital primeiro.'); return; }
   bundle.sort(function(a,b){ return (ordem[a.tipo]||9)-(ordem[b.tipo]||9); });
@@ -6182,7 +6204,7 @@ function anWordAbnt(inner, arquivo){
 function anExportParecer(){ var l=anLic(); if(!l||!l.parecerHtml) return; anWordAbnt(l.parecerHtml, 'Parecer_'+String(l.razao||'licitante').replace(/[^a-z0-9]+/ig,'_')); toast('Parecer exportado em Word no padrão ABNT (A4, Times 12, espaçamento 1,5, justificado).'); }
 function diasAte(dstr){ try{ var p=String(dstr).split('/'); if(p.length<3) return null; var d=new Date(+p[2],+p[1]-1,+p[0]); var h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }catch(e){ return null; } }
 function setTxt(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; }
-function nomeTipo(t){ var m={tr:'Termo de Referência',solicitacao:'Solicitação da Secretaria',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',portaria:'Portaria',publicacao:'Extrato de Publicação',impugnacao:'Impugnação',homologacao:'Adjudicação e Homologação',convocacao:'Convocação',ordem:'Ordem de Fornecimento',recebimento:'Termo de Recebimento',apostilamento:'Apostilamento',sancao:'Notificação/Sanção',extincao:'Extinção/Encerramento',ocorrencia:'Registro de Ocorrência',aviso:'Aviso de Dispensa',justvencedor:'Justificativa da escolha do vencedor',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',credenciamento:'Credenciamento / Chamamento Público',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
+function nomeTipo(t){ var m={tr:'Termo de Referência',solicitacao:'Solicitação da Secretaria',dfd:'DFD',etp:'ETP',riscos:'Mapa de Riscos',declaracao:'Declaração Orçamentária',despacho:'Despacho',portaria:'Portaria',publicacao:'Extrato de Publicação',impugnacao:'Impugnação',homologacao:'Adjudicação e Homologação',convocacao:'Convocação',ordem:'Ordem de Fornecimento',recebimento:'Termo de Recebimento',apostilamento:'Apostilamento',sancao:'Notificação/Sanção',extincao:'Extinção/Encerramento',ocorrencia:'Registro de Ocorrência',aviso:'Aviso de Dispensa',justvencedor:'Justificativa da escolha do vencedor',edital:'Edital',minuta:'Minuta de Contrato',contrato:'Contrato',aditivo:'Aditivo',dispensa:'Dispensa',inexigibilidade:'Inexigibilidade',credenciamento:'Credenciamento / Chamamento Público',precos:'Pesquisa de Preços',oficio:'Ofício',parecer:'Parecer',parecer_juridico:'Parecer Jurídico',vistoria:'Vistoria',auto:'Auto de Infração',icms:'ICMS Ecológico',processo:'Processo',relatorio:'Relatório',modelo:'Modelo importado'}; return m[t]||t; }
 
 async function registrarDoc(tipo, html){
   // Objeto/secretaria/processo corretos POR TIPO (evita um documento herdar dados de outro)
@@ -7281,6 +7303,185 @@ function camGerarAta(){
 function camGerarPauta(){ var s=camSessaoAtual(); if(!s) return; var c=CAM.config||{}; var b=camHeader()+'<h1>PAUTA DA SESSÃO '+esc((s.tipo||'').toUpperCase())+' Nº '+esc(s.numero)+'</h1><p>'+esc(s.data||'')+' às '+esc(s.hora||'')+'</p>'; b+='<h2>EXPEDIENTE</h2>'+(s.expediente.length?('<ol>'+s.expediente.map(function(it){return '<li>'+esc(it.titulo)+'</li>';}).join('')+'</ol>'):'<p>Sem itens.</p>'); b+='<h2>ORDEM DO DIA</h2>'+(s.ordemDia.length?('<ol>'+s.ordemDia.map(function(it){return '<li>'+esc(it.titulo)+'</li>';}).join('')+'</ol>'):'<p>Sem matérias.</p>'); b+='<p style="text-align:center;margin-top:26pt">_____________________________________<br><strong>'+esc(camMesaNome('presidente')||'')+'</strong><br>Presidente da Câmara Municipal</p>'+camFooter(); camExportarHtml(b,'Pauta_'+s.tipo+'_'+s.numero); toast('Pauta gerada em Word.'); }
 function camGerarConvocacao(){ var s=camSessaoAtual(); if(!s) return; var pautaTxt=''; if(s.expediente.length) pautaTxt+='Expediente: '+s.expediente.map(function(it){return it.titulo;}).join('; ')+'. '; if(s.ordemDia.length) pautaTxt+='Ordem do Dia: '+s.ordemDia.map(function(it){return it.titulo;}).join('; ')+'.'; var tpl=CAM_SEED.edital_convocacao; var v=camValores(); v.numero=camPeekNum('edital_convocacao'); v.tipo_sessao=esc(s.tipo||''); v.data_sessao=esc(s.data||''); v.hora_sessao=esc(s.hora||''); v.pauta=esc(pautaTxt||'a definir'); var b=camHeader()+tplPreencher(tpl,v)+camFooter(); camExportarHtml(b,'Convocacao_'+s.tipo+'_'+s.numero); toast('Edital de convocação gerado em Word.'); }
 // ==================== FIM MODULO CAMARA ====================
+
+// ==================== MODULO JURIDICO (Procuradoria / Assessoria Juridica) ====================
+// O parecer juridico e vinculado ao PROCESSO pela chave OBJETO (a mesma que agrupa os documentos
+// de todos os modulos no card Processos). Salvo como documento tipo 'parecer_juridico', ele entra
+// na Central, na fase B2 da esteira do processo e no Word do processo completo. Ancoras legais
+// conferidas no Planalto nesta sessao: art. 53 (controle previo de legalidade, parecer, §1 I-II,
+// §3 divulgacao apos instrucao tecnica e juridica, §4 contratacao direta, §5 dispensa da analise);
+// art. 72, III (parecer juridico na contratacao direta); art. 25 (conteudo do edital); art. 92 e 89
+// (clausulas e regime do contrato); art. 164 (impugnacao), 165 (recurso), 124 (alteracao), 156 (sancoes).
+var JUR_TIPO_DOC='parecer_juridico';
+var JUR_SUBTIPOS={
+  fase_prep:{t:'Parecer de legalidade da fase preparatória', base:'art. 53, caput e § 1º, da Lei nº 14.133/2021', ic:'i-shield'},
+  minuta_edital:{t:'Análise da minuta do edital', base:'art. 53 (controle prévio) c/c art. 25 da Lei nº 14.133/2021', ic:'i-file'},
+  minuta_contrato:{t:'Análise da minuta do contrato', base:'art. 53 c/c arts. 89 e 92 da Lei nº 14.133/2021', ic:'i-contract'},
+  direta:{t:'Parecer em contratação direta', base:'art. 53, § 4º, c/c art. 72, III, da Lei nº 14.133/2021', ic:'i-gavel'},
+  manifestacao:{t:'Manifestação / Nota jurídica', base:'Lei nº 14.133/2021 (impugnação art. 164, recurso art. 165, alteração art. 124, sanção art. 156)', ic:'i-doc'}
+};
+var JUR_SITUACOES={
+  favoravel:{t:'Favorável', ic:'i-check', cor:'#0A2342', bg:'#e8eefb'},
+  ressalvas:{t:'Favorável com ressalvas / condicionantes', ic:'i-alert', cor:'#8a5a00', bg:'#FFF3D6'},
+  desfavoravel:{t:'Desfavorável', ic:'i-alert', cor:'#7a1020', bg:'#FBE4E4'},
+  diligencia:{t:'Conversão em diligência', ic:'i-alert', cor:'#334155', bg:'#EEF2FB'}
+};
+var JUR_VIEW=null; // null = lista; {objeto, subtipo} = formulario aberto
+function jurEntrar(){
+  var r=document.getElementById('jur-root'); if(!r) return;
+  if(SB && CURRENT_USER && !DB._carregou){ r.innerHTML='<div class="panel"><div style="padding:16px" class="hint">Carregando processos do órgão...</div></div>'; if(typeof carregarDoSupabase==='function'){ carregarDoSupabase().then(function(){ DB._carregou=true; JUR_VIEW=null; renderJuridico(); }); return; } }
+  renderJuridico();
+}
+// Agrupa os documentos do orgao por OBJETO (mesmo criterio do card Processos), incluindo contratacao direta.
+function jurProcessos(){
+  var validos=(typeof esteiraTipos==='function')?esteiraTipos():{};
+  var grupos={};
+  (DB.docs||[]).forEach(function(d){ if(!d||d.tipo==='modelo'||!validos[d.tipo]) return; var o=(d.objeto||'').trim()||'(sem objeto)'; (grupos[o]=grupos[o]||[]).push(d); });
+  return Object.keys(grupos).map(function(o){
+    var docs=grupos[o]; var byTipo={}; docs.forEach(function(d){ (byTipo[d.tipo]=byTipo[d.tipo]||[]).push(d); });
+    var direta=!!(byTipo.dispensa||byTipo.inexigibilidade||byTipo.credenciamento);
+    var sec=''; for(var i=0;i<docs.length;i++){ if(docs[i].secretaria){ sec=docs[i].secretaria; break; } }
+    return {objeto:o, docs:docs, byTipo:byTipo, direta:direta, sec:sec, pareceres:(byTipo[JUR_TIPO_DOC]||[])};
+  });
+}
+// Checklist da instrucao: le as PECAS REAIS presentes no processo e aponta o que falta antes do parecer.
+// Licitacao segue a fase preparatoria (arts. 18 e 53); contratacao direta segue o rol do art. 72.
+function jurChecklistItens(direta){
+  return direta
+    ? [['dfd','Documento de Formalização da Demanda','art. 72, I'],['etp','Estudo Técnico Preliminar','art. 72, I'],['tr','Termo de Referência / Projeto','art. 72, I'],['precos','Estimativa de despesa / pesquisa de preços','art. 72, II'],['declaracao','Adequação orçamentária','art. 72, IV'],['justvencedor','Razão da escolha e justificativa de preço','art. 72, VI e VII']]
+    : [['dfd','Documento de Formalização da Demanda','art. 12, VII'],['etp','Estudo Técnico Preliminar','art. 18, § 1º'],['riscos','Mapa de Análise de Riscos','art. 18, X'],['tr','Termo de Referência','art. 6º, XXIII'],['precos','Pesquisa de Preços','art. 23'],['declaracao','Declaração de Adequação Orçamentária','art. 150'],['minuta','Minuta do Edital / Contrato','art. 25 e 92']];
+}
+function jurBadge(sit){ var s=JUR_SITUACOES[sit]||JUR_SITUACOES.favoravel; return '<span class="jur-badge" style="background:'+s.bg+';color:'+s.cor+'"><svg class="ic" style="width:12px;height:12px;stroke:'+s.cor+'"><use href="#'+s.ic+'"/></svg> '+esc(s.t)+'</span>'; }
+function renderJuridico(){
+  var root=document.getElementById('jur-root'); if(!root) return;
+  if(JUR_VIEW){ jurRenderForm(root); return; }
+  var head='<div class="pagehead"><div><div class="hello">Módulo Jurídico</div><h1>Procuradoria / Assessoria Jurídica</h1><p>Controle prévio de legalidade da contratação (art. 53 da Lei nº 14.133/2021). Emita o parecer da fase preparatória, a análise das minutas de edital e de contrato, o parecer da contratação direta e as manifestações, tudo vinculado ao processo. O sistema aponta; o procurador confere e assina.</p></div></div>';
+  var procs=jurProcessos();
+  var body='';
+  if(!procs.length){
+    body='<div class="panel"><div style="padding:22px" class="emptybox"><svg class="ic"><use href="#i-folder"/></svg><div>Nenhum processo para analisar ainda. Assim que uma secretaria gerar a Solicitação, o DFD ou o ETP em qualquer módulo, o processo aparece aqui para o parecer jurídico.</div></div></div>';
+  } else {
+    body='<div class="panel"><div class="ph"><h3>Processos para análise jurídica</h3></div><div style="padding:16px 20px">';
+    body+=procs.map(function(p){
+      var chk=jurChecklistItens(p.direta);
+      var faltando=chk.filter(function(c){ return !(p.byTipo[c[0]]&&p.byTipo[c[0]].length); });
+      var chkH=chk.map(function(c){
+        var ok=!!(p.byTipo[c[0]]&&p.byTipo[c[0]].length);
+        return '<div class="jur-chk"><span class="jur-badge" style="background:'+(ok?'#e8eefb':'#EEF2FB')+';color:'+(ok?'#0A2342':'#64748b')+'"><svg class="ic" style="width:11px;height:11px;stroke:'+(ok?'#0A2342':'#64748b')+'"><use href="#'+(ok?'i-check':'i-alert')+'"/></svg> '+(ok?'Consta':'Pendente')+'</span> <span style="color:'+(ok?'var(--ink)':'#64748b')+'">'+esc(c[1])+'</span> <span class="hint" style="margin:0">('+esc(c[2])+')</span></div>';
+      }).join('');
+      var aviso = faltando.length ? '<div class="cam-hint" style="margin:10px 0;background:#FFF3D6;border-color:#E8C766;color:#7a5b00"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Faltam '+faltando.length+' peça(s) da instrução. O sistema aponta; a Procuradoria decide se opina, converte em diligência ou devolve para completar.</div>' : '<div class="cam-hint" style="margin:10px 0;background:#e8eefb;border-color:#9db4e0;color:#0A2342"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Instrução aparentemente completa. Confira as peças e emita o parecer.</div>';
+      var pareceresH = p.pareceres.length ? ('<div style="margin:10px 0 4px"><b style="font-size:13px;color:var(--navy)">Pareceres emitidos:</b>'+p.pareceres.map(function(d){ var meta=(d.proc||{}); var sub=JUR_SUBTIPOS[meta.subtipo]||{t:'Parecer'}; return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0;font-size:13px"><span style="cursor:pointer;color:var(--royal);font-weight:600" onclick="abrirDocSalvo(\''+d.id+'\')">'+esc(sub.t)+(d.numero?(' nº '+esc(d.numero)):'')+'</span> '+jurBadge(meta.situacao||'favoravel')+'</div>'; }).join('')+'</div>') : '';
+      var botoes=['fase_prep','minuta_edital','minuta_contrato'];
+      if(p.direta) botoes=['direta','minuta_contrato']; // na contratacao direta nao ha edital
+      botoes.push('manifestacao');
+      var botoesH=botoes.map(function(st){ var s=JUR_SUBTIPOS[st]; return '<button class="jur-btn" onclick="jurAbrir('+jurQ(p.objeto)+',\''+st+'\')"><svg class="ic" style="width:14px;height:14px"><use href="#'+s.ic+'"/></svg> '+esc(s.t)+'</button>'; }).join('');
+      return '<div class="jur-proc"><h4>'+esc(p.objeto)+'</h4><div class="hint" style="margin:0 0 8px">'+p.docs.length+' peça(s)'+(p.sec?' · '+esc(p.sec):'')+(p.direta?' · Contratação direta':'')+'</div>'+
+        '<div style="margin:8px 0 4px"><b style="font-size:13px;color:var(--navy)">Instrução do processo:</b></div>'+chkH+aviso+pareceresH+
+        '<div style="margin-top:8px">'+botoesH+'</div></div>';
+    }).join('');
+    body+='</div></div>';
+  }
+  root.innerHTML=head+body;
+}
+function jurQ(s){ return "'"+String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'"; }
+function jurAbrir(objeto, subtipo){ JUR_VIEW={objeto:objeto, subtipo:subtipo}; renderJuridico(); }
+function jurVoltar(){ JUR_VIEW=null; renderJuridico(); }
+function jurRenderForm(root){
+  var v=JUR_VIEW; var s=JUR_SUBTIPOS[v.subtipo]||JUR_SUBTIPOS.fase_prep;
+  var procs=jurProcessos(); var p=null; for(var i=0;i<procs.length;i++){ if(procs[i].objeto===v.objeto){ p=procs[i]; break; } }
+  var sec=(p&&p.sec)||'';
+  var num=jurProxNum();
+  var matH='';
+  if(v.subtipo==='manifestacao'){
+    matH='<div class="field" style="margin-bottom:12px"><label>Matéria da manifestação</label><select id="jur-materia">'+
+      '<option value="impugnacao">Impugnação / esclarecimento (art. 164)</option>'+
+      '<option value="recurso">Recurso administrativo (art. 165)</option>'+
+      '<option value="alteracao">Alteração / termo aditivo (art. 124)</option>'+
+      '<option value="sancao">Sanção administrativa (art. 156)</option>'+
+      '<option value="outra">Outra matéria</option>'+
+      '</select></div>';
+  }
+  var h='<div class="pagehead"><div><div class="hello">Parecer jurídico</div><h1>'+esc(s.t)+'</h1><p>Processo: <b>'+esc(v.objeto)+'</b>'+(sec?' · '+esc(sec):'')+'. Base legal: '+esc(s.base)+'.</p></div><button class="btn-ghost" onclick="jurVoltar()"><svg class="ic" style="width:16px;height:16px"><use href="#i-arrow"/></svg> Voltar</button></div>';
+  h+='<div class="panel"><div style="padding:18px 22px">';
+  h+=matH;
+  h+='<div class="frow c2" style="margin-bottom:12px"><div class="field"><label>Número do parecer</label><input id="jur-num" value="'+esc(num)+'"></div><div class="field"><label>Processo administrativo nº (opcional)</label><input id="jur-proc" placeholder="ex.: 57/2026"></div></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Situação / conclusão do parecer</label><div id="jur-sit-pills">'+Object.keys(JUR_SITUACOES).map(function(k,i){ var it=JUR_SITUACOES[k]; return '<span class="pill'+(i===0?' on':'')+'" data-v="'+k+'" onclick="jurPickSit(this)"><svg class="ic" style="width:12px;height:12px"><use href="#'+it.ic+'"/></svg> '+esc(it.t)+'</span>'; }).join('')+'</div><input type="hidden" id="jur-sit" value="favoravel"></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Análise e fundamentação jurídica</label><textarea id="jur-fund" style="min-height:120px">'+esc(jurTemplateFund(v.subtipo, p))+'</textarea><div class="hint" style="margin-top:5px">Texto sugerido no padrão do art. 53, § 1º, II (linguagem clara e objetiva). Ajuste conforme o caso concreto.</div></div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Recomendações e condicionantes</label><textarea id="jur-cond" style="min-height:80px" placeholder="Uma por linha. Ex.: Juntar a designação do fiscal do contrato antes da assinatura; corrigir a vigência da cláusula 5ª para 12 meses."></textarea></div>';
+  h+='<div class="frow c2"><div class="field"><label>Procurador(a) / Assessor(a) jurídico(a)</label><input id="jur-resp" placeholder="nome de quem assina"></div><div class="field"><label>OAB</label><input id="jur-oab" placeholder="ex.: OAB/GO 00000"></div></div>';
+  h+='<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn-primary" onclick="jurGerar()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-doc"/></svg> Gerar parecer e vincular ao processo</button><button class="btn-ghost" onclick="jurVoltar()">Cancelar</button></div>';
+  h+='</div></div>';
+  h+='<div class="panel" style="margin-top:16px"><div class="ph"><h3>Pré-visualização</h3></div><div id="jur-preview" class="docpaper empty" style="margin:12px;min-height:120px"><svg class="ic"><use href="#i-doc"/></svg><div>Preencha ao lado e clique em <b>Gerar parecer</b>.</div></div></div>';
+  root.innerHTML=h;
+}
+function jurPickSit(el){ var box=document.getElementById('jur-sit-pills'); if(box) box.querySelectorAll('.pill').forEach(function(p){p.classList.remove('on');}); el.classList.add('on'); var h=document.getElementById('jur-sit'); if(h) h.value=el.getAttribute('data-v'); }
+function jurProxNum(){ var us={}; (DB.docs||[]).forEach(function(d){ if(d.tipo===JUR_TIPO_DOC && d.numero) us[d.numero]=1; }); var n=0,num; do{ n++; num='PAR-'+String(n).padStart(3,'0')+'/'+(new Date().getFullYear()); }while(us[num]); return num; }
+// Texto-base da fundamentacao por tipo de parecer (o procurador ajusta). Cita as pecas REAIS do processo.
+function jurTemplateFund(subtipo, p){
+  var pecas=(p? jurChecklistItens(p.direta).filter(function(c){return p.byTipo[c[0]]&&p.byTipo[c[0]].length;}).map(function(c){return c[1];}) : []);
+  var pecasTxt=pecas.length? ('Integram o processo, entre outras peças: '+pecas.join('; ')+'. ') : '';
+  if(subtipo==='fase_prep') return 'Trata-se de análise jurídica prévia da fase preparatória da contratação, na forma do art. 53, caput e § 1º, da Lei nº 14.133/2021. '+pecasTxt+'Examinada a instrução do processo, verifica-se a presença dos elementos indispensáveis à contratação (documento de formalização da demanda, estudo técnico preliminar, termo de referência, pesquisa de preços e adequação orçamentária), observados os pressupostos de fato e de direito. Encerrada a instrução sob os aspectos técnico e jurídico, o processo poderá seguir para a divulgação do edital (art. 53, § 3º).';
+  if(subtipo==='minuta_edital') return 'Análise da minuta do edital no exercício do controle prévio de legalidade (art. 53). Verifica-se se o instrumento convocatório contém o objeto e as regras de convocação, julgamento, habilitação, recursos, penalidades, fiscalização e gestão do contrato, na forma do art. 25 da Lei nº 14.133/2021, e se guarda coerência com o termo de referência e a minuta contratual anexa.';
+  if(subtipo==='minuta_contrato') return 'Análise da minuta do contrato no exercício do controle prévio de legalidade (art. 53). Verifica-se a presença das cláusulas necessárias exigidas pelo art. 92 da Lei nº 14.133/2021 (objeto, vinculação ao edital e à proposta, prazos, preço, garantias, direitos e responsabilidades, sanções e casos de extinção) e a compatibilidade com o regime jurídico do art. 89.';
+  if(subtipo==='direta') return 'Parecer jurídico em contratação direta, na forma do art. 53, § 4º, e do art. 72, III, da Lei nº 14.133/2021. '+pecasTxt+'Examina-se se o processo está instruído com o documento de formalização da demanda, a estimativa de despesa, a demonstração do enquadramento legal da dispensa ou inexigibilidade, a adequação orçamentária, a razão da escolha do contratado e a justificativa de preço, demonstrado o atendimento dos requisitos exigidos.';
+  return 'Manifestação jurídica sobre a matéria em exame, apreciados os pressupostos de fato e de direito à luz da Lei nº 14.133/2021, com apreciação clara e objetiva dos elementos pertinentes (art. 53, § 1º, II).';
+}
+function jurConclusaoTxt(sit){
+  if(sit==='favoravel') return 'Ante o exposto, esta Procuradoria/Assessoria Jurídica manifesta-se pela LEGALIDADE do processo, opinando FAVORAVELMENTE ao seu prosseguimento.';
+  if(sit==='ressalvas') return 'Ante o exposto, o parecer é FAVORÁVEL, desde que atendidas as recomendações e condicionantes abaixo, cujo cumprimento deverá ser certificado nos autos antes do prosseguimento.';
+  if(sit==='desfavoravel') return 'Ante o exposto, esta Procuradoria/Assessoria Jurídica manifesta-se DESFAVORAVELMENTE ao prosseguimento, pelas razões acima, que devem ser sanadas antes de qualquer continuidade.';
+  return 'Ante o exposto, converte-se o feito em DILIGÊNCIA, para que o setor competente esclareça ou complemente os pontos indicados nas recomendações, retornando os autos a esta Procuradoria/Assessoria Jurídica.';
+}
+function jurParecerHtml(o){
+  var s=JUR_SUBTIPOS[o.subtipo]||JUR_SUBTIPOS.fase_prep;
+  var sit=JUR_SITUACOES[o.situacao]||JUR_SITUACOES.favoravel;
+  var head=docHeader('PARECER JURÍDICO Nº '+esc(o.num), esc((ORG.nome||'').toUpperCase())+'/'+(ORG.uf||'GO')+', CNPJ '+esc(ORG.cnpj||'')+'<br>PROCURADORIA / ASSESSORIA JURÍDICA'+(o.proc?('<br>PROCESSO ADMINISTRATIVO Nº '+esc(o.proc)):''));
+  var H=head;
+  H+='<p style="text-align:right"><b>Assunto:</b> '+esc(s.t)+(o.materia?(' ('+esc(o.materia)+')'):'')+'</p>';
+  H+='<h2>I. RELATÓRIO</h2><p>Vêm os autos a esta Procuradoria/Assessoria Jurídica para '+esc(s.t.toLowerCase())+', referente ao objeto: <b>'+esc(o.objeto)+'</b>'+(o.sec?(', de interesse da '+esc(o.sec)):'')+'. A presente manifestação tem por fundamento o '+esc(s.base)+'.</p>';
+  H+='<h2>II. FUNDAMENTAÇÃO</h2><p style="text-align:justify">'+esc(o.fund).replace(/\n+/g,'</p><p style="text-align:justify">')+'</p>';
+  if(o.cond && o.cond.length){ H+='<h2>III. RECOMENDAÇÕES E CONDICIONANTES</h2><ol>'+o.cond.map(function(c){return '<li style="margin:4px 0">'+esc(c)+'</li>';}).join('')+'</ol>'; }
+  H+='<h2>'+(o.cond&&o.cond.length?'IV':'III')+'. CONCLUSÃO</h2>';
+  H+='<p style="text-align:justify"><b>Situação: '+esc(sit.t)+'.</b> '+esc(jurConclusaoTxt(o.situacao))+'</p>';
+  H+='<p>É o parecer, que se submete à consideração superior. A decisão sobre o prosseguimento compete à autoridade competente.</p>';
+  H+='<div class="assina">'+esc(ORG.nome||'')+'/'+(ORG.uf||'GO')+', '+dataHoje()+'.<br><br>____________________________________________<br>'+esc(o.resp||'Procurador(a) / Assessor(a) Jurídico(a)')+(o.oab?('<br>'+esc(o.oab)):'')+'</div>';
+  H+='<div class="selo"><b>Parecer gerado pelo sistema</b> no padrão do art. 53 da Lei nº 14.133/2021. O sistema aponta e organiza; a análise de mérito, a fundamentação final e a assinatura são do procurador/assessor jurídico responsável.</div>';
+  return H;
+}
+async function jurGerar(){
+  var v=JUR_VIEW; if(!v) return;
+  var g=function(id){ var e=document.getElementById(id); return e?(e.value||'').trim():''; };
+  var procs=jurProcessos(); var p=null; for(var i=0;i<procs.length;i++){ if(procs[i].objeto===v.objeto){ p=procs[i]; break; } }
+  var materiaMap={impugnacao:'impugnação, art. 164',recurso:'recurso, art. 165',alteracao:'alteração contratual, art. 124',sancao:'sanção, art. 156',outra:'outra matéria'};
+  var materia = v.subtipo==='manifestacao' ? (materiaMap[g('jur-materia')||(document.getElementById('jur-materia')&&document.getElementById('jur-materia').value)]||'') : '';
+  var cond=g('jur-cond').split('\n').map(function(x){return x.trim();}).filter(Boolean);
+  var o={ subtipo:v.subtipo, objeto:v.objeto, sec:(p&&p.sec)||'', num:g('jur-num')||jurProxNum(), proc:g('jur-proc'),
+    situacao:g('jur-sit')||'favoravel', fund:g('jur-fund')||jurTemplateFund(v.subtipo,p), cond:cond,
+    resp:g('jur-resp'), oab:g('jur-oab'), materia:materia };
+  var html=jurParecerHtml(o);
+  var pv=document.getElementById('jur-preview'); if(pv){ pv.className='docpaper'; pv.innerHTML=html; pv.scrollTop=0; }
+  await jurPersist(o, html);
+  toast('Parecer '+o.num+' gerado e vinculado ao processo. Ele aparece na Central (Pareceres jurídicos) e na esteira do processo.');
+  JUR_VIEW=null; renderJuridico();
+}
+// Salva o parecer como DOCUMENTO (tipo parecer_juridico) vinculado ao OBJETO do processo: Supabase + cache local.
+async function jurPersist(o, html){
+  var orgao=(CURRENT_USER&&CURRENT_USER.orgao&&CURRENT_USER.orgao!=='*')?CURRENT_USER.orgao:'tur';
+  var meta={subtipo:o.subtipo, situacao:o.situacao, condicionantes:o.cond, oab:o.oab, resp:o.resp, materia:o.materia, procnum:o.proc};
+  var rec={id:null,tipo:JUR_TIPO_DOC,numero:o.num,objeto:o.objeto,secretaria:o.sec,data:dataHoje(),html:html,proc:meta};
+  if(SB && CURRENT_USER){
+    try{
+      var uid=(await SB.auth.getUser()).data.user; uid=uid&&uid.id;
+      var ins=await SB.from('documentos').insert({orgao_id:orgao,tipo:JUR_TIPO_DOC,numero:o.num,objeto:o.objeto,secretaria:o.sec,data:rec.data,html:html,proc:meta,criado_por:uid}).select('id').single();
+      if(!ins.error && ins.data){ rec.id=ins.data.id; }
+      if(typeof registrarAud==='function') registrarAud('Emitiu Parecer Jurídico '+o.num+' ('+(JUR_SUBTIPOS[o.subtipo]||{t:''}).t+', '+(JUR_SITUACOES[o.situacao]||{t:''}).t+')', o.objeto, orgao);
+    }catch(e){}
+  }
+  if(!rec.id){ DB.seq=DB.seq||{}; DB.seq._g=(DB.seq._g||0)+1; rec.id='d'+DB.seq._g; }
+  DB.docs=DB.docs||[]; DB.docs.unshift(rec);
+  if(typeof dbSave==='function') dbSave();
+}
+// ==================== FIM MODULO JURIDICO ====================
 
 dbLoad(); renderContratos(); renderDashboard(); renderAdmin(); camLoad();
 </script>
