@@ -358,6 +358,7 @@ td .modd{font-size:12px;color:var(--slate)}
 .lote-sub{font-family:'Plus Jakarta Sans';font-weight:800;color:var(--navy);white-space:nowrap;font-size:12px}
 .impzone{border:2px dashed var(--royal);background:var(--royal-soft);border-radius:12px;padding:22px;text-align:center;cursor:pointer;transition:.15s}
 .impzone:hover{background:#e4edff}
+.impzone.drag{background:#e4edff;border-color:var(--navy);border-style:solid}
 .impzone .ib{font-weight:800;color:var(--navy);font-size:14px}
 .impzone .is{color:var(--slate);font-size:12px;margin-top:4px}
 .imp-tag{display:inline-block;background:var(--navy);color:#fff;font-weight:700;font-size:10.5px;border-radius:6px;padding:3px 8px;margin:0 6px 6px 0}
@@ -1354,7 +1355,7 @@ function renderFormTR(){
   h += '<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens</div>';
   h += '<div class="field" style="margin-bottom:10px"><label>Esta contratação é dividida por lotes?</label>'+pills('porlote',['Não','Sim'],'Não')+'<div class="hint" style="margin-top:6px">Marque <b>Sim</b> para licitação por lotes (grupos): os itens ficam agrupados e o TR e o Edital saem lote a lote, com subtotal por lote. Ao importar um PDF ou Excel com lotes, isso liga sozinho.</div></div>';
   h += '<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h += '<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="novoLoteManual()"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Adicionar lote</button>';
+  h += '<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="itensMarcarTodos()"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Marcar todos</button> <button class="addline" type="button" onclick="itensExcluirSel()">✕ Excluir selecionados</button> <button class="addline" type="button" onclick="itensExcluirTodos()">✕ Excluir todos</button> <button class="addline" type="button" onclick="novoLoteManual()"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Adicionar lote</button>';
   h += '<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h += '<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h += '<div class="hint" style="margin-top:6px">Um clique: o sistema busca o preço real de cada item no PNCP e preenche a coluna de valor. Ele preenche os que acha com segurança e lista os que você precisa revisar.</div>';
@@ -1710,14 +1711,34 @@ function addLinha(d,u,q,v){
     '<td><input class="i-q" style="width:64px" type="number" value="'+(q||'')+'" oninput="calcTotal()"></td>'+
     '<td><input class="i-v" style="width:80px" type="number" step="0.01" value="'+(v||'')+'" oninput="calcTotal()"></td>'+
     '<td class="tdtot">R$ 0,00</td>'+
-    '<td><button class="del" onclick="this.closest(\'tr\').remove();calcTotal()">✕</button></td>';
+    '<td style="white-space:nowrap"><input type="checkbox" class="i-sel" title="marcar para excluir em grupo" style="width:16px;height:16px;accent-color:var(--royal);vertical-align:middle;margin-right:4px"><button class="del" onclick="this.closest(\'tr\').remove();calcTotal()">✕</button></td>';
   tb.appendChild(tr); calcTotal();
+}
+// Exclusao em grupo: marca a caixinha de cada item e exclui os marcados, ou limpa a tabela inteira
+// (antes era so um a um no X, e planilha grande virava sofrimento).
+function itensMarcarTodos(){
+  var cbs=[].slice.call(document.querySelectorAll('#itab-body .i-sel')); if(!cbs.length){ toast('A tabela está vazia.'); return; }
+  var ligar=cbs.some(function(c){ return !c.checked; });
+  cbs.forEach(function(c){ c.checked=ligar; });
+  toast(ligar? (cbs.length+' item(ns) marcado(s). Agora clique em "Excluir selecionados".') : 'Marcação desfeita.');
+}
+function itensExcluirSel(){
+  var sel=[].slice.call(document.querySelectorAll('#itab-body .i-sel:checked'));
+  if(!sel.length){ toast('Marque a caixinha dos itens que quer excluir (ao lado do ✕) e clique de novo.'); return; }
+  if(!confirm('Excluir os '+sel.length+' item(ns) marcados?')) return;
+  sel.forEach(function(c){ var tr=c.closest('tr'); if(tr) tr.remove(); });
+  calcTotal(); toast(sel.length+' item(ns) excluído(s).');
+}
+function itensExcluirTodos(){
+  var rows=itemRows(); if(!rows.length){ toast('A tabela já está vazia.'); return; }
+  if(!confirm('Excluir TODOS os '+rows.length+' itens da tabela?')) return;
+  var tb=document.getElementById('itab-body'); tb.innerHTML=''; addLinha(); calcTotal(); toast('Tabela limpa.');
 }
 // Importar muitos itens de uma vez: sobe o PDF ou Excel do órgão (relatório de lotes do pregão) e o sistema puxa tudo sozinho, lote por lote. Também aceita colar da planilha.
 function importarItensPlanilha(){
   window._impParsed=null;
   var h='<p style="color:var(--slate);font-size:13px;margin:0 0 12px">Suba o arquivo de itens do órgão (o relatório de lotes do pregão, em <b>PDF</b> ou <b>Excel</b>). O sistema lê tudo sozinho, item a item, lote por lote, e monta a tabela. Confira antes de confirmar.</p>'+
-    '<label class="impzone" for="imp-file"><input type="file" id="imp-file" accept=".pdf,.xlsx,.xls,.csv" multiple style="display:none" onchange="impArquivo(this)"><div class="ib">Escolher arquivo (PDF ou Excel)</div><div class="is">Relatório de lotes em PDF, ou .xlsx / .xls / .csv. Pode selecionar vários lotes de uma vez.</div></label>'+
+    '<label class="impzone" id="imp-zone" for="imp-file"><input type="file" id="imp-file" accept=".pdf,.xlsx,.xls,.csv" multiple style="display:none" onchange="impArquivo(this)"><div class="ib">Escolher arquivo (PDF ou Excel), ou arrastar para cá</div><div class="is">Relatório de lotes ou orçamento sintético em PDF, ou .xlsx / .xls / .csv. Pode soltar vários arquivos de uma vez.</div></label>'+
     '<div id="imp-status" style="margin-top:12px"></div>'+
     '<div id="imp-preview" style="margin-top:12px"></div>'+
     '<div id="imp-confirm" style="margin-top:12px"></div>'+
@@ -1726,6 +1747,14 @@ function importarItensPlanilha(){
     '<textarea id="imp-itens" style="width:100%;height:150px;font-family:monospace;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="LOTE 01 - Gêneros alimentícios&#10;Açúcar cristal 5 kg&#9;UN&#9;640&#9;15,72&#10;Café torrado 500g&#9;UN&#9;1269&#9;41,29"></textarea>'+
     '<button class="btn-ghost" style="width:100%;justify-content:center;margin-top:10px" type="button" onclick="processarImportItens()"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Importar o que foi colado</button></details>';
   abrirModal('Importar itens (PDF ou Excel)', h);
+  dropZoneInit('imp-zone', function(files){ impArquivoFiles(files); });
+}
+// liga arrastar-e-soltar numa caixa de arquivos (o clique continua funcionando normal)
+function dropZoneInit(id, fn){
+  var z=document.getElementById(id); if(!z) return;
+  ['dragover','dragenter'].forEach(function(ev){ z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.add('drag'); }); });
+  ['dragleave','drop'].forEach(function(ev){ z.addEventListener(ev, function(e){ e.preventDefault(); z.classList.remove('drag'); }); });
+  z.addEventListener('drop', function(e){ if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) fn(e.dataTransfer.files); });
 }
 function impNum(s){ if(s==null) return ''; s=String(s).trim(); if(!s) return ''; s=s.replace(/\./g,'').replace(',','.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isNaN(n)?'':n; }
 var RE_LOTE=/^\s*LOTE\s*N?[ºo\.]?\s*0*(\d+)\s*[-\u2013:]\s*(.+)$/i;
@@ -1759,7 +1788,11 @@ async function impLerPDF(file){
     var rules=[]; try{ rules=await _rulesY(page,vp,pdfjs); }catch(e){ rules=[]; }
     pages.push({toks:toks, rules:rules});
   }
-  return parseRelatorioXY(pages);
+  // Dois layouts conhecidos: relatorio de lotes do pregao (PRODUTO/NOME/UNID/QUANT) e ORCAMENTO SINTETICO
+  // de obra (Item/Codigo/Banco/Descricao/Und/Quant/Valor Unit/Total, SINAPI/AGETOP). O leitor de lotes
+  // aplicado no orcamento deslocava as colunas (quantidade inteira nao casava) e inflava o total.
+  var ehOrc=pages.some(function(pg){ return _linhasDe(pg.toks).some(function(ln){ return /Or[çc]amento Sint/i.test(ln.text) || (/Valor Unit/i.test(ln.text) && /Quant/i.test(ln.text) && /Descri/i.test(ln.text) && /Und/i.test(ln.text)); }); });
+  return ehOrc ? parseOrcamentoXY(pages) : parseRelatorioXY(pages);
 }
 // extrai o Y das linhas horizontais da grade (fronteiras das linhas da tabela) via lista de operações do pdf.js
 async function _rulesY(page,vp,pdfjs){
@@ -1866,6 +1899,61 @@ function parseRelatorioXY(pages){
   return _propagaLote(res);
 }
 function _propagaLote(items){ var last='',lastN=''; items.forEach(function(it){ if(it.lote){ last=it.lote; lastN=it.loteNome; } else { it.lote=last; it.loteNome=lastN; } }); return items; }
+// ORCAMENTO SINTETICO de obra (Item | Codigo | Banco | Descricao | Und | Quant | Valor Unit | Total).
+// Regras que diferem do relatorio de lotes: item de verdade tem numero COM PONTO (1.2, 12.5); numero sem
+// ponto e cabecalho de SECAO (ADMINISTRACAO, SERVICOS PRELIMINARES) e nao entra; a quantidade pode ser
+// INTEIRA (40, 20); cada linha se confere por Quant x Valor Unit = Total; e o Total Geral impresso na
+// planilha e devolvido como o VALOR CHEIO, conferido contra a soma dos itens.
+function parseOrcamentoXY(pages){
+  var NUMQ=/^-?[\d.]+(,\d+)?$/;
+  var res=[], totalGeral=0, col=null, avisos=0;
+  pages.forEach(function(pg){ if(col) return; _linhasDe(pg.toks).forEach(function(ln){ if(col) return;
+    if(/Descri/i.test(ln.text) && /Und/i.test(ln.text) && /Quant/i.test(ln.text) && /Valor Unit/i.test(ln.text) && /Total/i.test(ln.text)){
+      var fx=function(re){ var t=ln.toks.filter(function(tk){return re.test(tk.s);}); return t.length? (t[0].x+(t[0].w||0)/2) : null; };
+      var tots=ln.toks.filter(function(tk){ return /^Total$/i.test(tk.s); }).sort(function(a,b){return b.x-a.x;});
+      col={desc:fx(/^Descri/i), und:fx(/^Und\.?$/i), quant:fx(/^Quant\.?$/i), vu:fx(/^Valor$/i)||fx(/Unit/i), tot:tots.length?(tots[0].x+(tots[0].w||0)/2):null};
+    }
+  }); });
+  if(!col || col.und==null || col.quant==null) return parseRelatorioXY(pages);
+  var zonaNum=col.und + (col.quant-col.und)*0.45; // numero de item de verdade vive a direita daqui; numero solto da descricao (ACO 304) fica a esquerda
+  var addItem=function(band){
+    var itemTok=band.filter(function(t){ return /^\d+(\.\d+)+$/.test(t.s) && (t.x+(t.w||0)/2) < (col.desc!=null?col.desc:80); }).sort(function(a,b){return a.x-b.x;})[0];
+    if(!itemTok) return; // sem numero com ponto na coluna Item = secao ou rodape: pula
+    var nums=band.filter(function(t){ return NUMQ.test(t.s) && (t.x+(t.w||0)/2) > zonaNum; }).sort(function(a,b){return a.x-b.x;});
+    if(nums.length<3) return;
+    var tres=nums.slice(-3);
+    var q=brNum(tres[0].s), v=brNum(tres[1].s), tot=brNum(tres[2].s);
+    if(!(q>0)||!(v>0)) return;
+    if(Math.abs(q*v-tot) > Math.max(0.5, tot*0.02)) avisos++;
+    var uzone=band.filter(function(t){ return /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9]{0,6}$/.test(t.s) && Math.abs((t.x+(t.w||0)/2)-col.und)<26; }).sort(function(a,b){return Math.abs((a.x+(a.w||0)/2)-col.und)-Math.abs((b.x+(b.w||0)/2)-col.und);});
+    var u=uzone.length? uzone[0].s.toUpperCase() : 'UN';
+    var descArr=band.filter(function(t){ return t!==itemTok && (t.x+(t.w||0)/2)>=(col.desc!=null?col.desc-60:80) && (t.x+(t.w||0)/2) < col.und-14 && uzone.indexOf(t)<0; }).sort(function(a,b){ return Math.abs(a.y-b.y)>2? a.y-b.y : a.x-b.x; });
+    var d=descArr.map(function(t){return t.s;}).join(' ').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
+    if(!d) return;
+    res.push({d:itemTok.s+' '+d, u:u, q:q, v:v, lote:'', loteNome:''});
+  };
+  pages.forEach(function(pg){
+    _linhasDe(pg.toks).forEach(function(ln){ var m=ln.text.match(/Total Geral\s*R?\$?\s*([\d.]+,\d{2})/i); if(m) totalGeral=brNum(m[1]); });
+    var rules=pg.rules||[];
+    if(rules.length>=4){
+      for(var i=0;i<rules.length-1;i++){ var top=rules[i], bot=rules[i+1]; if(bot-top<8 || bot-top>260) continue;
+        addItem(pg.toks.filter(function(t){ return t.y>top+1 && t.y<bot+1; })); }
+    } else {
+      // sem grade: cada linha com numero de item pontuado vira ancora e leva as linhas de descricao ate a proxima ancora
+      var lines=_linhasDe(pg.toks), grupos=[], cur=null;
+      lines.forEach(function(ln){
+        var temItem=ln.toks.some(function(t){ return /^\d+(\.\d+)+$/.test(t.s) && (t.x+(t.w||0)/2) < (col.desc!=null?col.desc:80); });
+        var temSecao=ln.toks.some(function(t){ return /^\d+$/.test(t.s) && (t.x+(t.w||0)/2) < (col.desc!=null?col.desc:80); });
+        if(temItem){ cur={toks:ln.toks.slice()}; grupos.push(cur); }
+        else if(temSecao || /Total Geral/i.test(ln.text)){ cur=null; }
+        else if(cur){ cur.toks=cur.toks.concat(ln.toks); }
+      });
+      grupos.forEach(function(g){ addItem(g.toks); });
+    }
+  });
+  res.totalGeral=totalGeral; res.eOrcamento=true; res.avisosLinha=avisos;
+  return res;
+}
 // Lê Excel/CSV (SheetJS): detecta cabeçalho e linhas de lote
 async function impLerExcel(file){
   var XLSX=await anEnsureXlsx();
@@ -1924,12 +2012,15 @@ function impNormalizarLotes(items){
   });
   return out;
 }
-async function impArquivo(input){
-  var files=[].slice.call(input.files||[]); if(!files.length) return;
+async function impArquivo(input){ var files=[].slice.call(input.files||[]); input.value=''; return impArquivoFiles(files); }
+// mesmo caminho para arquivo ESCOLHIDO e para arquivo ARRASTADO na caixa de importacao
+async function impArquivoFiles(files){
+  files=[].slice.call(files||[]); if(!files.length) return;
   var st=document.getElementById('imp-status'), pv=document.getElementById('imp-preview'), cf=document.getElementById('imp-confirm');
   pv.innerHTML=''; cf.innerHTML='';
   st.innerHTML='<div class="hint">Lendo '+files.length+' arquivo(s)...</div>';
   var todos=[];
+  window._impTotalGeral=0; window._impFiles=[]; // valor cheio impresso na planilha + arquivos lidos (vao para a documentacao do processo)
   try{
     for(var i=0;i<files.length;i++){
       var f=files[i], nome=f.name.toLowerCase();
@@ -1938,21 +2029,35 @@ async function impArquivo(input){
       if(/\.pdf$/.test(nome)) res=await impLerPDF(f);
       else if(/\.(xlsx|xls|csv)$/.test(nome)) res=await impLerExcel(f);
       else continue;
+      if(res && res.totalGeral>0) window._impTotalGeral+=res.totalGeral;
+      if(res && res.length) window._impFiles.push(f);
       todos=todos.concat(res);
     }
-  }catch(e){ st.innerHTML='<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Não consegui ler automaticamente ('+esc(String((e&&e.message)||e))+'). Se for PDF escaneado (imagem), exporte em Excel ou cole os itens abaixo.</div>'; input.value=''; return; }
+  }catch(e){ st.innerHTML='<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Não consegui ler automaticamente ('+esc(String((e&&e.message)||e))+'). Se for PDF escaneado (imagem), exporte em Excel ou cole os itens abaixo.</div>'; return; }
   todos=impNormalizarLotes(todos);
-  if(!todos.length){ st.innerHTML='<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Não encontrei itens neste arquivo. Se for um PDF escaneado (imagem), exporte em Excel ou cole os itens abaixo.</div>'; input.value=''; return; }
+  if(!todos.length){ st.innerHTML='<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> Não encontrei itens neste arquivo. Se for um PDF escaneado (imagem), exporte em Excel ou cole os itens abaixo.</div>'; return; }
   window._impParsed=todos;
   impMostrarPreview(todos);
-  input.value='';
 }
 function impMostrarPreview(items){
   var st=document.getElementById('imp-status'), pv=document.getElementById('imp-preview'), cf=document.getElementById('imp-confirm');
   var lotes={}, ordem=[], tot=0;
   items.forEach(function(it){ var k=it.lote?('L'+it.lote):'_'; if(!lotes[k]){ lotes[k]={nome:it.loteNome||'',n:0,v:0,lote:it.lote}; ordem.push(k); } var t=(Number(it.q)||0)*(Number(it.v)||0); lotes[k].n++; lotes[k].v+=t; tot+=t; });
   var nLotes=ordem.filter(function(k){return k!=='_';}).length;
-  st.innerHTML='<div class="precos-aviso av-ok" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Encontrei <b>'+items.length+' item(ns)</b>'+(nLotes?(' em <b>'+nLotes+' lote(s)</b>'):'')+', total estimado '+money(tot)+'. Confira abaixo.</div>';
+  // Planilha com Total Geral impresso: a soma dos itens lidos e CONFERIDA contra ele, na cara do usuario.
+  // Importacao que nao bate com a planilha nao pode passar calada (foi o R$ 4,5 milhoes num orcamento de 67 mil).
+  var tg=window._impTotalGeral||0;
+  var conf='';
+  if(tg>0){
+    var dif=Math.abs(tot-tg);
+    if(dif <= Math.max(0.05, 0.02*items.length)){
+      conf=' <b>Soma confere com o Total Geral impresso na planilha ('+money(tg)+').</b>';
+    } else {
+      conf='';
+      st.innerHTML='<div class="precos-aviso av-warn" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-alert"/></svg> <b>A soma dos itens lidos ('+money(tot)+') NÃO bate com o Total Geral impresso na planilha ('+money(tg)+'), diferença de '+money(dif)+'.</b> A leitura pode ter perdido ou trocado itens: confira antes de confirmar, ou corrija na tabela.</div>';
+    }
+  }
+  if(!(tg>0) || conf){ st.innerHTML='<div class="precos-aviso av-ok" style="margin:0"><svg class="ic" style="width:13px;height:13px"><use href="#i-check"/></svg> Encontrei <b>'+items.length+' item(ns)</b>'+(nLotes?(' em <b>'+nLotes+' lote(s)</b>'):'')+', total estimado '+money(tot)+'.'+conf+' Confira abaixo.</div>'; }
   var h='';
   ordem.forEach(function(k){ if(k==='_')return; var g=lotes[k]; h+='<span class="imp-tag">LOTE '+esc(String(g.lote))+(g.nome?' - '+esc(g.nome):'')+' &bull; '+g.n+' itens &bull; '+money(g.v)+'</span>'; });
   h+='<table class="itab" style="margin-top:8px"><thead><tr><th>Lote</th><th style="width:48%">Descrição</th><th>Un</th><th>Qtd</th><th>V. unit.</th></tr></thead><tbody>';
@@ -1970,7 +2075,18 @@ function impConfirmar(){
   fecharModal();
   var nl={}; (base.concat(items)).forEach(function(it){ if(it.lote) nl[it.lote]=1; });
   var q=Object.keys(nl).length;
-  toast(items.length+' item(ns) importado(s)'+(q?(' em '+q+' lote(s)'):'')+'. Confira e busque os preços.');
+  var extra='';
+  // Na dispensa a planilha faz o resto sozinha: o VALOR CHEIO (Total Geral impresso) entra no campo do
+  // valor sem digitar, e o proprio arquivo da planilha ja entra na Documentacao do processo.
+  if(DOC && DOC.tipo==='dispensa'){
+    var tg=window._impTotalGeral||0;
+    if(tg>0){ var dv=document.getElementById('d-valor'); if(dv){ dv.value=tg.toFixed(2); extra=' Valor total preenchido com o Total Geral da planilha ('+money(tg)+').'; } }
+    if(window._impFiles && window._impFiles.length && document.getElementById('anx-list')){
+      anxAddFiles(window._impFiles, 'planilha importada');
+      extra+=' A planilha também entrou na Documentação do processo.';
+    }
+  }
+  toast(items.length+' item(ns) importado(s)'+(q?(' em '+q+' lote(s)'):'')+'.'+extra+' Confira antes de gerar.');
 }
 function processarImportItens(){
   var txt=((document.getElementById('imp-itens')||{}).value||'');
@@ -2288,7 +2404,7 @@ function renderFormPrecos(){
   h+='<div class="field"><label>Objeto</label><input id="f-objeto" placeholder="ex.: Aquisição de material de limpeza"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Itens a pesquisar</div>';
   h+='<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="itensMarcarTodos()"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Marcar todos</button> <button class="addline" type="button" onclick="itensExcluirSel()">✕ Excluir selecionados</button> <button class="addline" type="button" onclick="itensExcluirTodos()">✕ Excluir todos</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">Um clique: o sistema busca o preço real de cada item no PNCP e preenche a coluna de valor. Depois clique em <b>Gerar documento</b> para sair o Mapa de Pesquisa de Preços, com as fontes.</div>';
@@ -2391,7 +2507,29 @@ function exportarWord(){
   var titulo=(DOCMETA[DOC.tipo]?DOCMETA[DOC.tipo].t:'documento');
   var css='body{font-family:Calibri,sans-serif;font-size:12pt;line-height:1.5;color:#000}h1{font-size:14pt;text-align:center}h2{font-size:12pt;color:#0A2342}.dsub{text-align:center;font-size:10pt;color:#444;margin-bottom:18pt}table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:4pt;font-size:10pt}.assina{text-align:center;margin-top:30pt}.selo{border:1px solid #d9b94f;background:#FBF3DF;padding:8pt;font-size:9pt;margin-top:16pt}';
   var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+p.innerHTML+'</body></html>';
+  // Documento com imagem embutida (anexos da dispensa): o Word nao carrega imagem base64 de HTML simples,
+  // entao o arquivo sai como MHT (arquivo web unico), que o Word abre com as imagens dentro.
+  if(html.indexOf('src="data:image/')>=0){ exportarWordMht(titulo, html); return; }
   var blob=new Blob(['﻿'+html],{type:'application/msword'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download=titulo.replace(/[^a-zA-Z0-9]+/g,'_')+'.doc'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url)},1500);
+}
+function exportarWordMht(titulo, htmlDoc){
+  var imgs=[], n=0;
+  var corpo=htmlDoc.replace(/src="data:image\/(jpeg|jpg|png|webp);base64,([^"]+)"/g, function(m,tp,b64){
+    n++; var fn='anexo'+n+'.'+(tp==='png'?'png':'jpg');
+    imgs.push({fn:fn, tp:(tp==='png'?'png':'jpeg'), b64:b64});
+    return 'src="'+fn+'"';
+  });
+  function b64utf8(s){ return btoa(unescape(encodeURIComponent(s))); }
+  function chunk(s){ return s.replace(/.{76}/g, '$&\r\n'); }
+  var B='----=_QM_DOCPART';
+  var m='MIME-Version: 1.0\r\nContent-Type: multipart/related; boundary="'+B+'"; type="text/html"\r\n\r\n';
+  m+='--'+B+'\r\nContent-Type: text/html; charset="utf-8"\r\nContent-Transfer-Encoding: base64\r\nContent-Location: documento.htm\r\n\r\n'+chunk(b64utf8(corpo))+'\r\n\r\n';
+  imgs.forEach(function(im){ m+='--'+B+'\r\nContent-Type: image/'+im.tp+'\r\nContent-Transfer-Encoding: base64\r\nContent-Location: '+im.fn+'\r\n\r\n'+chunk(im.b64)+'\r\n\r\n'; });
+  m+='--'+B+'--\r\n';
+  var blob=new Blob([m],{type:'application/msword'});
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a'); a.href=url; a.download=titulo.replace(/[^a-zA-Z0-9]+/g,'_')+'.doc'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url)},1500);
@@ -2820,6 +2958,63 @@ function gerarContrato(){
 }
 function gerarMinuta(){ return contratoClausulas(null); }
 // ---------- DISPENSA (fluxo direto, módulo Compras) ----------
+// ===== DOCUMENTACAO DO PROCESSO (anexos da contratacao direta: ART do engenheiro, orcamentos, certidoes) =====
+// Cada PDF vira imagem por pagina (pdf.js) e SAI JUNTO no ato de dispensa: no fim do documento e no Word
+// exportado. Arquivo que nao da para visualizar (Excel) entra no rol dos anexos mesmo assim.
+function anxLista(){ DOC.anexos=DOC.anexos||[]; return DOC.anexos; }
+function anxFileDataUrl(f){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(f); }); }
+async function anxPdfImgs(f, st, nome){
+  var pdfjs=await anEnsurePdf();
+  var buf=await f.arrayBuffer();
+  var doc=await pdfjs.getDocument({data:buf}).promise;
+  var out=[];
+  for(var p=1;p<=doc.numPages;p++){
+    if(st) st.innerHTML='<div class="hint">Convertendo <b>'+esc(nome)+'</b>: página '+p+' de '+doc.numPages+'...</div>';
+    var page=await doc.getPage(p);
+    var vp=page.getViewport({scale:1.6});
+    var cv=document.createElement('canvas'); cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+    await page.render({canvasContext:cv.getContext('2d'), viewport:vp, intent:'print'}).promise; // intent print: nao trava em aba oculta
+    out.push(cv.toDataURL('image/jpeg', 0.82));
+  }
+  return out;
+}
+async function anxAddFiles(files, origem){
+  files=[].slice.call(files||[]); if(!files.length) return;
+  var st=document.getElementById('anx-status');
+  var ja={}; anxLista().forEach(function(d){ ja[d.nome]=1; });
+  for(var i=0;i<files.length;i++){
+    var f=files[i], nome=f.name, low=nome.toLowerCase();
+    if(ja[nome]) continue; // mesmo arquivo nao entra duas vezes
+    if(st) st.innerHTML='<div class="hint">Lendo <b>'+esc(nome)+'</b> ('+(i+1)+' de '+files.length+')...</div>';
+    try{
+      if(/\.pdf$/.test(low)){
+        var imgs=await anxPdfImgs(f, st, nome);
+        anxLista().push({nome:nome, tipo:'pdf', paginas:imgs.length, imgs:imgs, origem:origem||''});
+      } else if(/\.(png|jpe?g|webp)$/.test(low)){
+        var du=await anxFileDataUrl(f);
+        anxLista().push({nome:nome, tipo:'imagem', paginas:1, imgs:[du], origem:origem||''});
+      } else {
+        anxLista().push({nome:nome, tipo:(low.split('.').pop()||'arquivo'), paginas:0, imgs:[], origem:origem||''});
+      }
+      ja[nome]=1;
+    }catch(e){ toast('Não consegui ler '+nome+': '+String((e&&e.message)||e)+'. Se for PDF protegido, imprima em PDF de novo e anexe.'); }
+  }
+  if(st) st.innerHTML='';
+  anxRender();
+}
+function anxRemover(i){ if(!confirm('Remover este documento da lista de anexos?')) return; anxLista().splice(i,1); anxRender(); }
+function anxRender(){
+  var box=document.getElementById('anx-list'); if(!box) return;
+  var a=anxLista();
+  if(!a.length){ box.innerHTML='<div class="hint">Nenhum documento anexado ainda.</div>'; return; }
+  box.innerHTML=a.map(function(d,i){
+    return '<div style="display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:8px;background:#FAFBFE">'+
+      '<svg class="ic" style="width:16px;height:16px;flex:none"><use href="#i-file"/></svg>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(d.nome)+'</div>'+
+      '<div class="hint" style="margin:0">'+(d.paginas? (d.paginas+' página(s), sai por inteiro no documento') : 'entra no rol dos anexos (para sair por inteiro, anexe em PDF)')+(d.origem?(' · '+esc(d.origem)):'')+'</div></div>'+
+      '<button class="del" type="button" title="remover" onclick="anxRemover('+i+')">✕</button></div>';
+  }).join('');
+}
 function renderFormDispensa(){
   var h='<div class="fgroup"><button class="btn-ghost" type="button" style="width:100%;justify-content:center" onclick="inserirModeloTipo(\'dispensa\')"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg> Usar um modelo do órgão para a Dispensa</button></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-file"/></svg> Dispensa de licitação (art. 75)</div>';
@@ -2829,15 +3024,21 @@ function renderFormDispensa(){
   h+='<div class="field" style="margin:12px 0"><label>Objeto</label><input id="d-obj" placeholder="o que será adquirido"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens</div>';
   h+='<table class="itab"><thead><tr><th style="width:40%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="itensMarcarTodos()"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Marcar todos</button> <button class="addline" type="button" onclick="itensExcluirSel()">✕ Excluir selecionados</button> <button class="addline" type="button" onclick="itensExcluirTodos()">✕ Excluir todos</button>';
   h+='<div class="totbar"><span>Valor total</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">Os itens entram no ato de dispensa. O valor total é somado da tabela.</div><div id="precos-todos-res"></div><div id="precos-box"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-users"/></svg> Fornecedor e preço</div>';
   h+='<div class="frow c2"><div class="field"><label>Contratada (razão social)</label><input id="d-razao"></div><div class="field"><label>CNPJ</label><input id="d-cnpj"></div></div>';
-  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Valor total (vazio = soma da tabela)</label><input id="d-valor" type="number" step="0.01"></div><div class="field"><label>Endereço da contratada</label><input id="d-end"></div></div>';
+  h+='<div class="frow c2" style="margin-top:12px"><div class="field"><label>Valor total (vazio = soma da tabela; a planilha importada preenche sozinha)</label><input id="d-valor" type="number" step="0.01"></div><div class="field"><label>Endereço da contratada</label><input id="d-end"></div></div>';
   h+='<div class="field" style="margin-top:12px"><label>Justificativa de preço</label><textarea id="d-just" placeholder="por que o preço é compatível com o mercado"></textarea></div></div>';
+  h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg> Documentação do processo (sai junto com a dispensa)</div>';
+  h+='<div class="hint" style="margin-bottom:8px">Anexe aqui a documentação da contratação direta: ART do engenheiro, planilha orçamentária, orçamentos/cotações, certidões. Cada página vira folha anexa no fim do ato de dispensa e no Word exportado. A planilha importada na tabela de itens entra aqui sozinha.</div>';
+  h+='<label class="impzone" id="anx-zone" for="anx-file"><input type="file" id="anx-file" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls" multiple style="display:none" onchange="anxAddFiles(this.files); this.value=&#39;&#39;"><div class="ib">Inserir documentação (clique ou arraste os arquivos para cá)</div><div class="is">PDF ou imagem sai por inteiro; Excel entra no rol dos anexos.</div></label>';
+  h+='<div id="anx-status" style="margin-top:8px"></div><div id="anx-list" style="margin-top:4px"></div></div>';
   document.getElementById('ws-fields').innerHTML=h;
+  dropZoneInit('anx-zone', function(files){ anxAddFiles(files, 'arrastado'); });
+  anxRender();
 }
 function gerarDispensa(){
   var inc=pillVal('dinc'), sec=document.getElementById('d-sec').value, proc=document.getElementById('d-proc').value||'____/2026', cod=document.getElementById('d-cod').value||'____', obj=document.getElementById('d-obj').value||'[objeto]', razao=document.getElementById('d-razao').value||'__________', cnpj=document.getElementById('d-cnpj').value||'__________', end=document.getElementById('d-end').value||'', just=document.getElementById('d-just').value||'';
@@ -2857,6 +3058,18 @@ function gerarDispensa(){
   H+='<div class="assina">'+esc(ORG.nome)+'/'+ORG.uf+', ____ de __________ de 2026.<br><br>____________________________________________<br>'+esc(ORG.ordenador)+'<br>'+esc(ORG.cargo)+'</div>';
   H+='<h2>INSTRUÇÃO DO PROCESSO (art. 72 da Lei nº 14.133/2021)</h2>';
   H+='<p>A contratação direta deve estar instruída com: I documento de formalização da demanda e, se o caso, estudo técnico preliminar, análise de riscos e termo de referência; II estimativa de despesa, pela regra do art. 23; III parecer jurídico e pareceres técnicos, quando exigidos; IV demonstração de compatibilidade com a lei orçamentária; V comprovação da habilitação e da regularidade fiscal, social e trabalhista; VI razão da escolha do contratado; VII justificativa de preço; VIII autorização da autoridade competente.</p>';
+  // Documentacao anexada sai JUNTO: rol numerado + cada pagina reproduzida na sequencia (art. 72: o
+  // processo de contratacao direta e instruido com os documentos, nao so com o ato).
+  var anx=(DOC.anexos||[]);
+  if(anx.length){
+    H+='<h2>DOCUMENTAÇÃO ANEXA DO PROCESSO</h2>';
+    H+='<p>Integram o presente processo de contratação direta os documentos a seguir relacionados'+(anx.some(function(d){return d.paginas>0;})?', reproduzidos na sequência':'')+':</p>';
+    H+='<table><thead><tr><th>Nº</th><th>Documento</th><th>Páginas</th></tr></thead><tbody>'+anx.map(function(d,i){ return '<tr><td>'+(i+1)+'</td><td>'+esc(d.nome)+'</td><td>'+(d.paginas||'juntado em separado')+'</td></tr>'; }).join('')+'</tbody></table>';
+    anx.forEach(function(d){ if(!d.imgs||!d.imgs.length) return;
+      H+='<div style="page-break-before:always"></div><h2 style="font-size:11pt">ANEXO: '+esc(d.nome.toUpperCase())+'</h2>';
+      d.imgs.forEach(function(src,pi){ H+='<div style="text-align:center;margin:6pt 0'+(pi>0?';page-break-before:always':'')+'"><img src="'+src+'" style="max-width:100%"></div>'; });
+    });
+  }
   H+='<div class="selo"><b>Minuta de dispensa gerada pelo sistema</b> no padrão da Lei nº 14.133/2021 (arts. 72 e 75). Limite 2026: inciso I R$ 130.984,20; inciso II R$ 65.492,11. Sujeita à validação do setor e da autoridade competente.</div>';
   return H;
 }
@@ -2915,7 +3128,7 @@ function renderFormCredenciamento(){
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Serviços e valores de referência (vira o Anexo I)</div>';
   h+='<div class="hint" style="margin-bottom:8px">Liste cada serviço/procedimento com o valor unitário da tabela do órgão. No credenciamento não há disputa de preço: o valor do edital vale igual para todos (art. 79, § 1º, III).</div>';
   h+='<table class="itab"><thead><tr><th style="width:40%">Serviço / procedimento</th><th>Unid.</th><th>Qtd estimada</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar serviço</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar serviço</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="itensMarcarTodos()"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Marcar todos</button> <button class="addline" type="button" onclick="itensExcluirSel()">✕ Excluir selecionados</button> <button class="addline" type="button" onclick="itensExcluirTodos()">✕ Excluir todos</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="field" style="margin-top:10px"><label>Norma que aprovou a tabela de valores (se houver)</label><input id="cr-tab" placeholder="ex.: Resolução CMS nº 008/2026"></div></div>';
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-clock"/></svg> Prazos e inscrição</div>';
@@ -3310,7 +3523,7 @@ function renderFormSolicitacao(){
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Descrição e quantidades</div>';
   h+='<table class="itab"><thead><tr><th style="width:44%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit. (estim.)</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="itensMarcarTodos()"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Marcar todos</button> <button class="addline" type="button" onclick="itensExcluirSel()">✕ Excluir selecionados</button> <button class="addline" type="button" onclick="itensExcluirTodos()">✕ Excluir todos</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="hint" style="margin-top:6px">A quantidade e o valor são a estimativa inicial da secretaria. A pesquisa de preços formal (art. 23) é feita depois, na fase preparatória.</div></div>';
 
@@ -3376,7 +3589,7 @@ function renderFormDFD(){
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Descrição e quantidades</div>';
   h+='<table class="itab"><thead><tr><th style="width:44%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit. (estim.)</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="itensMarcarTodos()"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Marcar todos</button> <button class="addline" type="button" onclick="itensExcluirSel()">✕ Excluir selecionados</button> <button class="addline" type="button" onclick="itensExcluirTodos()">✕ Excluir todos</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="hint" style="margin-top:6px">No DFD o valor é uma estimativa inicial da secretaria. A pesquisa de preços formal (art. 23) é feita depois, no ETP e no TR.</div></div>';
 
@@ -3805,7 +4018,7 @@ function renderFormETP(){
 
   h+='<div class="fgroup"><div class="gl"><svg class="ic" style="width:14px;height:14px"><use href="#i-grid"/></svg> Tabela de itens (alimenta os incisos IV e VI)</div>';
   h+='<table class="itab"><thead><tr><th style="width:42%">Descrição / especificação</th><th>Unid.</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th></th></tr></thead><tbody id="itab-body"></tbody></table>';
-  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button>';
+  h+='<button class="addline" onclick="addLinha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Adicionar item</button> <button class="addline" type="button" onclick="importarItensPlanilha()"><svg class="ic" style="width:14px;height:14px"><use href="#i-plus"/></svg> Importar planilha (PDF ou Excel)</button> <button class="addline" type="button" onclick="itensMarcarTodos()"><svg class="ic" style="width:14px;height:14px"><use href="#i-check"/></svg> Marcar todos</button> <button class="addline" type="button" onclick="itensExcluirSel()">✕ Excluir selecionados</button> <button class="addline" type="button" onclick="itensExcluirTodos()">✕ Excluir todos</button>';
   h+='<div class="totbar"><span>Valor total estimado</span><b id="f-total">R$ 0,00</b></div>';
   h+='<div class="frow c2" style="margin-top:10px;align-items:end"><button class="btn-primary" type="button" id="btn-precostodos" style="justify-content:center" onclick="buscarPrecosTodos()"><svg class="ic" style="width:16px;height:16px;stroke:#fff"><use href="#i-money"/></svg> Buscar preço oficial dos itens (PNCP, Governo Federal)</button><div class="field"><label>Estado (vazio = Brasil)</label><input id="f-precos-uf" placeholder="Brasil" style="text-transform:uppercase" maxlength="2"></div></div>';
   h+='<div class="hint" style="margin-top:6px">As quantidades viram a memória de cálculo do inciso IV; o total e as fontes viram o inciso VI (art. 23).</div>';
